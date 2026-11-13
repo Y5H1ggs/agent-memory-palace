@@ -8,6 +8,9 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from memory_palace import MemoryPalace, MutableClock  # noqa: E402
+from memory_palace._console import ensure_utf8_console  # noqa: E402
+
+ensure_utf8_console()  # cp1252 之类的控制台装不下中文，就地切 UTF-8
 
 clock = MutableClock()  # 换成真实时钟就不传 clock；这里为了演示可控时间
 palace = MemoryPalace(clock=clock)

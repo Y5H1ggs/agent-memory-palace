@@ -10,6 +10,9 @@ jobs:
   selfcheck:
     name: ${{ matrix.os }} · py${{ matrix.python }}
     runs-on: ${{ matrix.os }}
+    env:
+      # windows-latest 默认 cp1252，中文输出会炸；代码里也有兜底，这里是双保险
+      PYTHONUTF8: "1"
     strategy:
       fail-fast: false
       matrix:

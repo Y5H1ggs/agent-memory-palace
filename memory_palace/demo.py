@@ -30,6 +30,7 @@ from contextlib import nullcontext
 from unittest import mock
 
 from .affect import Affect, Appraisal, appraise_text
+from ._console import ensure_utf8_console
 from .core import MemoryNode, MutableClock, PalaceConfig
 from .logic import LogicGraph, Relation
 from .memory_model import MemoryKind
@@ -80,6 +81,7 @@ def idempotence_ok(palace: MemoryPalace, now: float, rounds: int = 6) -> bool:
 
 
 def main() -> None:
+    ensure_utf8_console()
     clock = MutableClock(1_800_000_000.0)
     tmp = tempfile.gettempdir()
     path = os.path.join(tmp, "memory_palace_demo.json")
