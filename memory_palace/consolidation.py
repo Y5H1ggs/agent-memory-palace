@@ -183,6 +183,7 @@ class ConsolidationEngine:
             n
             for n in graph.all_nodes()
             if n.tier in ("ephemeral", "event")
+            and not n.is_retired()
             and n.consolidated_into is None
             and not n.pinned
             and n.effective_weight(now) >= cfg.consolidate_min_weight

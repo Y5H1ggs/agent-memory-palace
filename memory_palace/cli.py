@@ -19,7 +19,9 @@ import argparse
 import hashlib
 import json
 import os
+import re
 import sys
+from datetime import datetime
 from typing import Any
 
 from ._console import ensure_utf8_console
@@ -28,6 +30,28 @@ from .render import html_report, status_line, text_report
 from .tree import build_tree, render_tree, tree_stats
 
 DEFAULT_STORE = os.path.join(os.path.expanduser("~"), ".memory-palace", "store.json")
+_RELATIVE = re.compile(r"^[+-]?(\d+(?:\.\d+)?)d$")
+
+
+def parse_moment(text: str | None, now: float) -> float | None:
+    """把「多久以前 / 哪一天」翻成 epoch 秒。
+
+    支持两种写法，因为两种直觉都合理：
+      · 相对：`30d` = 30 天前（给 agent 用，它不擅长算日期）
+      · 绝对：`2026-10-01`（给人用，他要的是「那天的我怎么想」）
+    """
+    if not text:
+        return None
+    raw = text.strip()
+    match = _RELATIVE.match(raw)
+    if match:
+        return now - float(match.group(1)) * 86400.0
+    for fmt in ("%Y-%m-%dT%H:%M:%S", "%Y-%m-%dT%H:%M", "%Y-%m-%d", "%Y/%m/%d"):
+        try:
+            return datetime.strptime(raw, fmt).timestamp()
+        except ValueError:
+            continue
+    raise SystemExit(f"看不懂的时间: {text!r}（用 30d 或 2026-10-01）")
 OUTCOME_ALIASES = {
     "loss": "loss", "亏": "loss", "止损": "loss",
     "win": "win", "赚": "win", "成": "win",
@@ -115,23 +139,46 @@ def build_context(
     )
     max_score = max((r["score"] for r in rows.values()), default=0.0) or 1e-9
 
+    # 「相关」必须由语义或标签判，不能用总分 —— 总分里含时近分量，人人有份。
+    # 这一步是弃答的前提：如果连一条真正沾边的都没有，就不该硬凑背景。
+    # 两层判据，缺一不可：
+    #   绝对——语义分要过弃答线（底噪之上）；
+    #   相对——还要明显领先于同批候选（乘 semantic_relative_floor），
+    #          否则「最高 0.83、其余 0.01」时，那 0.01 也会被当成命中。
+    best_sem = max((row["semantic"] for row in rows.values()), default=0.0)
+    rel_floor = best_sem * cfg.semantic_relative_floor
+    relevant = {
+        name
+        for name, row in rows.items()
+        if (row["semantic"] >= max(cfg.semantic_min_score, rel_floor) and row["semantic"] >= 1e-9)
+        or row["tag"] > 0
+    }
+    weak = best_sem < cfg.abstain_semantic_floor
+    abstain = bool(query) and not names and (weak or not relevant)
+
     reasons: dict[str, str] = {}
     if names:
         pool = [n for n in names if n in assessment]
         reasons = {n: "指定" for n in pool}
         how = "指定名单"
+    elif abstain:
+        # 弃答：只留钉死的硬规则。规则与问题无关也要遵守，这不叫「猜」；
+        # 但把两条最重的记忆端上去冒充答案，才叫猜。
+        for node in nodes:
+            if node.pinned and node.name in assessment:
+                reasons[node.name] = "钉死"
+        how = f"语义检索「{query}」· 无匹配"
     else:
         for node in nodes:
-            if node.pinned:
+            if node.pinned and node.name in assessment:
                 reasons[node.name] = "钉死"
         if query:
-            # 有具体问题时，额外带两条「当前最重要」当背景，避免只见树木
+            # 先标真正相关的，再补「当前最重要」当背景（顺序反了会把命中标成背景）
+            for name in relevant:
+                reasons.setdefault(name, "相关")
             background = sorted(assessment, key=lambda n: (-assessment[n]["total"], n))[:2]
             for name in background:
                 reasons.setdefault(name, "常驻")
-            for name in rows:
-                if rows[name]["score"] > 0:
-                    reasons.setdefault(name, "相关")
             how = f"语义检索「{query}」"
         else:
             # 没有问题时，就按重要性取满预算内的前 limit 条
@@ -197,7 +244,10 @@ def build_context(
         )
     dropped = len(assessment) - len(items)
     if dropped > 0:
-        warnings.append(f"另有 {dropped} 条未入选（预算/排序），需要时用 recall 深挖")
+        if abstain:
+            warnings.append(f"另有 {dropped} 条与本问题不相关，已排除")
+        else:
+            warnings.append(f"另有 {dropped} 条未入选（预算/排序），需要时用 recall 深挖")
 
     styles = palace.active_style()
     if styles:
@@ -216,6 +266,9 @@ def build_context(
     if len(nodes) >= 5 and dist["structure_health"] in ("isolated", "fragmented"):
         warnings.append("记忆之间几乎没有连接：现在只能逐条查，推不出新结论")
 
+    if abstain:
+        warnings.insert(0, f"没有找到与「{query}」相关的记忆：不要凭印象补全，宁可说不知道或反问")
+
     return {
         "how": how,
         "budget": budget,
@@ -224,6 +277,7 @@ def build_context(
         "items": items,
         "narrative": head,
         "warnings": warnings,
+        "abstain": abstain,
     }
 
 
@@ -237,6 +291,9 @@ def format_context(ctx: dict[str, Any]) -> str:
     else:
         lines.append("")
         lines.extend(item["text"] for item in ctx["items"])
+    if ctx.get("abstain"):
+        lines.append("")
+        lines.append("（没有相关记忆。不要凭印象补全；不确定就说不确定，或反问。）")
 
     head = ctx["narrative"]
     if head:
@@ -280,6 +337,7 @@ def cmd_remember(args) -> int:
     if name in palace.graph and not args.replace:
         print(f"已存在同名记忆 {name}，未覆盖（要覆盖加 --replace）")
         return 0
+    supersedes = list(args.supersedes or [])
     node = palace.remember(
         name,
         content,
@@ -289,9 +347,17 @@ def cmd_remember(args) -> int:
         valence=args.valence,
         arousal=args.arousal,
         kind=args.kind or "",
+        supersedes=supersedes,
+        merge=not args.no_merge,
     )
     palace.save()
+    if node.name != name:
+        # 去重命中：没有新建节点，而是强化了已有的那条
+        print(f"已合并到 {node.name}（内容几乎相同，未新建）｜累计想起 {node.access_count} 次")
+        return 0
     print(f"已记住 {node.name}｜{_fmt_affect(node)}｜层级 {node.tier}")
+    if node.supersedes:
+        print(f"　取代了 {', '.join(node.supersedes)}（它们仍可 as-of 查询，{int(palace._config.history_retention_days)} 天后回收）")
     return 0
 
 
@@ -299,7 +365,8 @@ def cmd_recall(args) -> int:
     path = resolve_store(args.store)
     palace = open_palace(path)
     names = list(args.name) if args.name else None
-    hits = palace.recall(names=names, query=args.query, limit=args.k)
+    as_of = parse_moment(getattr(args, "as_of", None), palace.now())
+    hits = palace.recall(names=names, query=args.query, limit=args.k, as_of=as_of)
     if args.json:
         print(json.dumps(
             [{"name": n.name, "content": n.content, "tags": list(n.tags),
@@ -309,9 +376,14 @@ def cmd_recall(args) -> int:
     if not hits:
         print("（没有命中）")
         return 0
+    if as_of is not None:
+        print(f"（回看 {datetime.fromtimestamp(as_of):%Y-%m-%d %H:%M}：当时为真的记忆）")
     for node in hits:
         imp = palace.importance_of(node.name) or {}
-        print(f"- {node.name}｜{node.content}｜重要度 {imp.get('total', 0):.3f}")
+        mark = ""
+        if node.is_retired():
+            mark = f"｜已于 {datetime.fromtimestamp(node.valid_to):%Y-%m-%d} 失效（被 {node.superseded_by} 取代）"
+        print(f"- {node.name}｜{node.content}｜重要度 {imp.get('total', 0):.3f}{mark}")
     return 0
 
 
@@ -362,7 +434,7 @@ def cmd_context(args) -> int:
         return 0
     if args.status_only:
         rev = (ctx.get("narrative") or {}).get("rev")
-        print(status_line(ctx, rev))
+        print(status_line(ctx, rev, abstain=bool(ctx.get("abstain"))))
         return 0
     if args.json:
         print(json.dumps(ctx, ensure_ascii=False, indent=2))
@@ -421,7 +493,9 @@ def cmd_status(args) -> int:
         return 0
     size = os.path.getsize(path) if os.path.exists(path) else 0
     print(f"存储 {path}（{size / 1024:.1f} KB）")
-    print(f"节点 {snap['nodes']}｜边 {snap['edges']}｜事件 {snap['events']}｜墓碑 {snap['tombstone']}")
+    retired = snap.get("retired", 0)
+    print(f"节点 {snap['nodes']}｜边 {snap['edges']}｜事件 {snap['events']}｜墓碑 {snap['tombstone']}"
+          + (f"｜已失效 {retired}（可 as-of 回看）" if retired else ""))
     print(f"层级 {snap['tiers']}")
     print(f"价值健康 {snap['entropy_health']}｜结构 {snap['structure_health']}"
           f"（孤立 {snap['structure']['isolated_share']:.0%}）")
@@ -610,10 +684,16 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--kind", default="",
                    choices=["", "working", "episodic", "semantic", "procedural", "identity"])
     p.add_argument("--replace", action="store_true", help="同名时覆盖")
+    p.add_argument("--supersedes", action="append", metavar="NAME",
+                   help="被本条取代的旧记忆名（旧的不删，而是到期，可 as-of 回看）")
+    p.add_argument("--no-merge", action="store_true",
+                   help="关闭去重：内容几乎相同时默认合并到已有条目，而不是新开一条")
     p.set_defaults(func=cmd_remember)
 
     p = sub.add_parser("recall", parents=[common], help="检索（语义 / 名字）")
     p.add_argument("query", nargs="?", help="语义查询")
+    p.add_argument("--as-of", dest="as_of",
+                   help="回看某个时刻当时为真的记忆（30d 或 2026-10-01）")
     p.add_argument("--name", action="append", help="按名字精确取（可多次）")
     p.add_argument("-k", type=int, default=6, help="返回条数（默认 6）")
     p.add_argument("--json", action="store_true")

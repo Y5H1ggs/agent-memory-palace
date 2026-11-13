@@ -68,7 +68,7 @@ def decay_series(node: MemoryNode, now: float, horizon_days: float, steps: int =
     return [node.effective_weight(now + horizon_days * i / (steps - 1), gain) for i in range(steps)]
 
 
-def status_line(ctx: dict[str, Any], rev: int | None = None) -> str:
+def status_line(ctx: dict[str, Any], rev: int | None = None, abstain: bool = False) -> str:
     items = ctx.get("items") or []
     pinned = sum(1 for i in items if i.get("pinned"))
     shaky = sum(1 for i in items if i.get("fidelity", 1.0) < 0.7)
@@ -78,6 +78,8 @@ def status_line(ctx: dict[str, Any], rev: int | None = None) -> str:
         f"存疑 {shaky}" if shaky else "",
         f"{ctx.get('used', 0)}/{ctx.get('budget', 0)}字",
     ]
+    if abstain:
+        parts.append("无相关记忆")
     if rev:
         parts.append(f"自述 rev{rev}")
     return "[" + " · ".join(p for p in parts if p) + "]"
@@ -96,12 +98,16 @@ def text_report(palace, limit: int = 10, horizon_days: float = 30) -> str:
     cfg = palace._config
     snap = palace.snapshot()
     assessment = palace.assessment(now)
-    nodes = sorted(palace.graph.all_nodes(), key=lambda n: -assessment.get(n.name, {}).get("total", 0.0))
+    # 失效的记忆单列：它们不是「不重要的记忆」，是「已经不作数的记忆」，
+    # 混进重要性排序里会让读者以为「这条不太重要」，其实它只是过期了。
+    live = [n for n in palace.graph.all_nodes() if not n.is_retired()]
+    retired = [n for n in palace.graph.all_nodes() if n.is_retired()]
+    nodes = sorted(live, key=lambda n: -assessment.get(n.name, {}).get("total", 0.0))
     scale = max((assessment.get(n.name, {}).get("total", 0.0) for n in nodes), default=1.0) or 1.0
 
     lines = [
-        f"记忆宫殿 · {snap['nodes']} 节点 / {snap['edges']} 边 / 墓碑 {snap['tombstone']}"
-        f" / 事件 {snap['events']}",
+        f"记忆宫殿 · {snap['nodes']} 节点（失效 {len(retired)}）/ {snap['edges']} 边"
+        f" / 墓碑 {snap['tombstone']} / 事件 {snap['events']}",
         f"价值 {HEALTH_ZH.get(snap['entropy_health'], snap['entropy_health'])}"
         f"（top1 占 {snap['attention']['top_share']:.0%}）"
         f"｜结构 {HEALTH_ZH.get(snap['structure_health'], snap['structure_health'])}"
@@ -146,6 +152,9 @@ def text_report(palace, limit: int = 10, horizon_days: float = 30) -> str:
     if head:
         arcs = " → ".join(f"{c['arc']}「{c['title']}」" for c in head["chapters"])
         lines.append(f"自述 rev{head['rev']}：{arcs}｜单主题 {head['monopoly']:.2f}")
+    if retired:
+        sample = "、".join(f"{n.name}→{n.superseded_by or '?'}" for n in retired[:4])
+        lines.append(f"已失效（被取代，仍可 as-of 回看）：{sample}")
     if palace.tombstone:
         lines.append(f"已遗忘：{'、'.join(sorted(palace.tombstone)[:6])}")
     return "\n".join(lines)
@@ -294,7 +303,11 @@ def html_report(palace, title: str = "记忆宫殿", horizon_days: float = 30) -
     cfg = palace._config
     snap = palace.snapshot()
     assessment = palace.assessment(now)
-    nodes = sorted(palace.graph.all_nodes(), key=lambda n: -assessment.get(n.name, {}).get("total", 0.0))
+    # 失效的记忆单列：它们不是「不重要的记忆」，是「已经不作数的记忆」，
+    # 混进重要性排序里会让读者以为「这条不太重要」，其实它只是过期了。
+    live = [n for n in palace.graph.all_nodes() if not n.is_retired()]
+    retired = [n for n in palace.graph.all_nodes() if n.is_retired()]
+    nodes = sorted(live, key=lambda n: -assessment.get(n.name, {}).get("total", 0.0))
     top = nodes[:7]
     total_mass = sum(max(0.0, v["total"]) for v in assessment.values()) or 1.0
     head = palace.narrative_head()

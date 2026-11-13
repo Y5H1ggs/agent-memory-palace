@@ -57,12 +57,23 @@ class ValueModel:
         }
 
     def assess(
-        self, graph: MemoryGraph, now: float, support_map: dict[str, float] | None = None
+        self,
+        graph: MemoryGraph,
+        now: float,
+        support_map: dict[str, float] | None = None,
+        include_retired: bool = False,
     ) -> dict[str, dict[str, float]]:
+        """当前有效记忆的重要性账本。
+
+        失效（被取代）的记忆默认不进这份账本：它们已经不是「我在乎什么」的一部分，
+        只是历史。把它们算进来会同时污染熵、GC 判决与注入排序 ——
+        一条三个月前就改掉的偏好，不该继续参与「我现在的注意力分布」。
+        """
         support_map = support_map or {}
         return {
             node.name: self.importance(node, now, support_map.get(node.name, 0.0))
             for node in graph.all_nodes()
+            if include_retired or not node.is_retired()
         }
 
     # ---------- 遗忘：一次可审计的取舍 ----------
@@ -156,7 +167,9 @@ class ValueModel:
           · isolated_share  有多少条目一根边都没有（记下了，但从未与任何东西相连）
           · fragmentation   连通分量占节点数的比例（全是孤岛 → 1.0）
         """
-        nodes = graph.all_nodes()
+        # 失效的记忆既不算孤岛，也不算连通分量：它们已经是历史，
+        # 再拿它们去算「现在的图有多散」只会让读数莫名其妙地变差。
+        nodes = [x for x in graph.all_nodes() if not x.is_retired()]
         n = len(nodes)
         if n == 0:
             return {

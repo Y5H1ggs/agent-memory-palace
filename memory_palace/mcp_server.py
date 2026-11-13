@@ -66,6 +66,14 @@ TOOLS: list[dict[str, Any]] = [
                 "name": {"type": "string"},
                 "valence": {"type": "number", "description": "效价 [-1,1]，省略则由文本推断"},
                 "arousal": {"type": "number", "description": "唤醒 [0,1]，省略则由文本推断"},
+                "supersedes": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": (
+                        "被这条取代的旧记忆名。用户改主意时**务必**填（例如「以后用短段落」取代「用表格」）。"
+                        "旧的不会被删，而是标注失效，仍可用 as_of 回看。"
+                    ),
+                },
             },
             "required": ["content"],
         },
@@ -79,6 +87,10 @@ TOOLS: list[dict[str, Any]] = [
                 "query": {"type": "string"},
                 "names": {"type": "array", "items": {"type": "string"}},
                 "limit": {"type": "integer", "default": 6},
+                "as_of": {
+                    "type": "string",
+                    "description": "回看某个时刻当时为真的记忆（30d 或 2026-10-01）。问「以前是怎么定的」时用",
+                },
             },
         },
     },
@@ -193,20 +205,30 @@ def tool_remember(args: dict[str, Any]) -> dict[str, Any]:
         pinned=bool(args.get("pin", False)),
         valence=args.get("valence"),
         arousal=args.get("arousal"),
+        supersedes=list(args.get("supersedes") or []),
+        # agent 入口默认去重：同一句话反复记，不该攒成一堆近义节点
+        merge=True,
     )
     palace.save()
+    extra = ""
+    if node.supersedes:
+        extra = f"｜取代 {', '.join(node.supersedes)}（仍可 as_of 回看）"
     return _text(
         f"已记住 {node.name}｜情绪 v={node.affect.valence:+.2f}/a={node.affect.arousal:.2f}"
-        f"（{node.affect.source}）｜层级 {node.tier}"
+        f"（{node.affect.source}）｜层级 {node.tier}{extra}"
     )
 
 
 def tool_recall(args: dict[str, Any]) -> dict[str, Any]:
+    from .cli import parse_moment
+
     palace = open_palace(_store())
+    as_of = parse_moment(args.get("as_of"), palace.now())
     hits = palace.recall(
         names=args.get("names") or None,
         query=args.get("query"),
         limit=int(args.get("limit", 6)),
+        as_of=as_of,
     )
     if not hits:
         return _text("（没有命中）")
@@ -216,6 +238,10 @@ def tool_recall(args: dict[str, Any]) -> dict[str, Any]:
             "content": n.content,
             "tags": list(n.tags),
             "importance": palace.importance_of(n.name),
+            **(
+                {"retired": True, "superseded_by": n.superseded_by}
+                if n.is_retired() else {}
+            ),
         }
         for n in hits
     ]

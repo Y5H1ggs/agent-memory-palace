@@ -12,7 +12,7 @@
 
 <p align="center"><sub>↑ 由 <code>memory-palace render</code> 从一份 120 天的演示库直接生成（<a href="docs/sample-palace.html">在线样例</a>）。图上的每个数字都能用一条命令复现。</sub></p>
 
-**TL;DR (English)** — A dependency-free Python implementation of a *memory lifecycle*: idempotent decay, affect that both hardens and distorts recall, consolidation with a one-way door, value-based forgetting with a fixed attention budget, self-narrative as a projection, tree-shaped injection to save tokens, and self-correction bounded by whitelist + value ranges + anti-lag verification. Ships MCP / HTTP / CLI. 256 assertions, 18 mutation audits. Not a vector database; not production-ready.
+**TL;DR (English)** — A dependency-free Python implementation of a *memory lifecycle*: idempotent decay, affect that both hardens and distorts recall, consolidation with a one-way door, value-based forgetting with a fixed attention budget, self-narrative as a projection, tree-shaped injection to save tokens, and self-correction bounded by whitelist + value ranges + anti-lag verification. Ships MCP / HTTP / CLI. 280 assertions, 18 mutation audits. Not a vector database; not production-ready.
 
 ---
 
@@ -25,6 +25,9 @@
 | 十条碎片什么时候变成一条结论？ | 不会 | 结构 + 语义双通道结晶，单向门 |
 | 我「选择」忘掉什么，凭什么？ | 不涉及 | 四分量重要性 + 审计理由 + 固定预算 |
 | 「我是谁」是图里的一个节点吗？ | 是 | 不是。自述是读图的方式，是投影 |
+| 我上个月的主张，现在还算数吗？ | 两句话一起端给你，自己猜 | 旧事实**到期**而不是被删：默认只取现在的，`as_of` 能回看当时的 |
+| 我问的东西它其实没记过，会怎样？ | 把最像的几条凑上来 | **弃答**：明确说「没有相关记忆」，只保留钉死的硬规则 |
+| 同一句话记了三次呢？ | 三个近似条目互相挤预算 | 几乎一字不差就合并；补了新内容的不合并（长度比把关） |
 | 记忆多了，注入会不会撑爆上下文？ | 会 | 树状注入：根常驻、枝按需展开、其余折叠 |
 | 系统能不能自己调参？到哪停？ | 不涉及 | 12 个白名单参数，超范围只能上报给人 |
 
@@ -168,7 +171,7 @@ memory-palace-mcp --profile full    # 8 个（默认）
 
 | 模块 | 管什么 | 关键不变量 |
 |---|---|---|
-| `core` | 节点 / 图 / 幂等衰减 / 原子持久化 | 状态版本 v5，兼容读 v4 |
+| `core` | 节点 / 图 / 幂等衰减 / 双时态 / 原子持久化 | 状态版本 v6，兼容读 v4/v5；事实有有效期 |
 | `affect` | 潮水 / 河床 / 失真代价 + 评价器 | 写情绪 ≠ 强化记忆 |
 | `logic` | 有向带类型的推理边 | 共现不是凭据，相似不是推出 |
 | `consolidation` | 碎片 → 结论 | 单向门；碎片降级为溯源窗口 |
@@ -180,13 +183,15 @@ memory-palace-mcp --profile full    # 8 个（默认）
 | `selfcorrect` | 自修正 | 白名单 + 值域 + 回滚 + 拒绝滞后指标 |
 | `semantics` | 语义检索 | 多义词按上下文裁决；词典从语料自学 |
 | `tree` | 树状注入 | 折叠必须显式标注「另有 N 条」 |
+| `cli` | agent 入口（注入 / 写入 / 代谢） | 无关查询必须弃答；钉死规则永远在 |
 
 ## 证据
 
 ```bash
 python -m memory_palace.demo        # 215 项断言 + 18 条突变审计（剧本 21 幕）
-python tests/test_cli.py            # 24 项 CLI 契约（含树状注入 / 宿主配置 / 三层展现）
+python tests/test_cli.py            # 25 项 CLI 契约（含树状注入 / 宿主配置 / 三层展现）
 python tests/test_integrations.py   # 17 项 MCP / HTTP 协议层契约（含 slim 档）
+python tests/test_temporal.py       # 23 项 双时态 / 去重 / 弃答（含反事实）
 python -m memory_palace.bench       # 性能与 token 基准
 ```
 
@@ -194,17 +199,31 @@ python -m memory_palace.bench       # 性能与 token 基准
 假语义全零向量、白名单失效、结构熵写死……），断言必须变红。其中一条自己写错过 ——
 用 `lr=1.0` 制造「无惯性」，结果一步撞天花板，饱和伪装成惯性；已改成常数学习率的反事实并写进注释。
 
+## 与同类项目的取舍
+
+Mem0 / Zep(Graphiti) / Letta / Cognee / TencentDB Agent Memory / progressive-memory 都看过一遍，
+结论写在 [docs/COMPETITIVE_ANALYSIS.md](docs/COMPETITIVE_ANALYSIS.md)。摘要：
+
+- **融合了三处**（都是补语义漏洞，零新依赖）：Zep 式**双时态**、LongMemEval 单列一档的**弃答**、
+  Mem0 式**写入去重**（外加一条它们也没写的长度比约束）。
+- **拒绝了五项**：LLM 抽取事实、上图数据库、换真实 embedding、core memory 全量常驻、多租户面板。
+  理由分别是：破坏零依赖 / 只换来"看起来专业" / 放弃离线可审计 / 预算会被吃光 / 那是服务端产品的事。
+- **还缺一件**：**组件级评测集**。业界那三个 benchmark 已经出现"评测腐化"——LoCoMo 全文仅约 26k tokens，
+  128k 上下文的模型直接塞进去就能得高分；独立审计发现它约 6.4% 的答案键是错的。
+  所以下一步不是加功能，是建一个 50 条真实记忆 + 20 条查询、能测**遗忘正确性**与**弃答假阳性率**的评测。
+
 ## 成熟度自评（先说不好听的）
 
 | 维度 | 分数 | 依据 |
 |---|---|---|
 | 设计完整度 | 9/10 | 机制闭环，次序有理由，边界写在 docstring 里 |
 | 工程实现 | 7/10 | 原子写、RLock、零依赖、状态迁移、基准；但**没有跨进程文件锁** |
-| 测试可信度 | 7/10 | 256 断言 + 18 突变；但断言是作者自证，无覆盖率门槛、无 property-based |
+| 测试可信度 | 7/10 | 280 断言 + 18 突变 + 3 条反事实；但断言是作者自证，无覆盖率门槛、无语义评测集 |
 | 可维护性 | 6/10 | `palace.py` 1300+ 行、`demo.py` 2100+ 行；剧本兼任测试 |
 | 生产就绪 | 3/10 | 单写者、无性能 SLA、无语义评测集、API 未冻结 |
 
-**四个最大风险**：① 语义层不是 embedding（概念种子 + 字符 bigram + 语料学习），语料上万条会退化；
+**五个最大风险**：① 语义层不是 embedding（概念种子 + 字符 bigram + 语料学习），语料上万条会退化；
+⑤ **没有组件级评测集** —— 弃答线与去重阈值都是基于实测底噪选的，换个语料就会漂；
 ② 测试通过 = 我写的断言通过；③ 自修正的「变好」仍是单指标；④ 单写者（写是原子的，锁不跨进程）。
 
 **不适用**：生产级记忆后端、向量检索替代品、存不可再生数据、多进程并发写同一份记忆。
@@ -238,7 +257,9 @@ examples/make_images.py  重新生成 README 配图（截图脚本）
 docs/ARCHITECTURE.md     设计细节与次序的理由
 docs/INTEGRATIONS.md     各宿主接入配置（含 DSH）
 docs/AGENT_INTEGRATION.md 三种时机、成本、不该用的场景
+docs/COMPETITIVE_ANALYSIS.md 同类项目调研：融合了什么、拒绝了什么、还缺什么
 AGENTS.md                agent 读得懂的约定
+tests/test_temporal.py   双时态 / 去重 / 弃答（含反事实断言）
 ```
 
 ## 版本

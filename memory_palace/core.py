@@ -82,6 +82,22 @@ class PalaceConfig:
     # 纯净度：这个词出现的篇目里，有多少篇属于同一个概念。低于它说明是跨主题的泛用词。
     semantic_learn_min_purity: float = 0.75
     style_adjudication_margin: float = 0.05
+    # —— 双时态：失效的事实还留多久可供「当时是什么」的回溯 ——
+    # 不是永久保留：历史也要占预算，且越长越容易在无关查询里被翻出来当现状。
+    history_retention_days: float = 90.0
+    # —— 写入去重：几乎一字不差的不必新开一条 ——
+    # 阈值定得很高（0.92）是刻意的：去重只该抓「同一句话说了两遍」，
+    # 不该抓「意思相近但补充了新信息」—— 后者合并会丢内容。
+    dedupe_similarity: float = 0.92
+    # 去重还要看长度比。余弦对「短句是长句的子集」不敏感：
+    # 「单笔不超过总资金三分之一」vs「…三分之一，且最多同时持三只」余弦 0.927，
+    # 但后者补了新约束，合并就把约束吃掉了。长度差超过 15% 一律不合并。
+    dedupe_length_ratio: float = 0.85
+    # —— 弃答线：低于它就不硬凑，宁可说「没有相关记忆」——
+    # 这个数不是拍出来的：本库用字符 bigram 编码，实测无关查询的语义分底噪在 0.13 以内，
+    # 真匹配在 0.5 以上（相差一个量级）。0.30 落在两者中间的空档里。
+    # 它随语料规模与语言漂移，所以是**配置**而不是常数，且调用方可用 --no-abstain 关掉。
+    abstain_semantic_floor: float = 0.30
 
     # —— 情感权重：潮水（唤醒）、河床（刻痕）、失真代价 ——
     affect_arousal_half_life_days: float = 3.0
@@ -217,6 +233,14 @@ class PalaceConfig:
             raise ValueError("config.semantic_learn_min_purity 必须落在 [0.5, 1]")
         if not 0 <= self.style_adjudication_margin <= 1:
             raise ValueError("config.style_adjudication_margin 必须落在 [0, 1]")
+        if self.history_retention_days <= 0:
+            raise ValueError("config.history_retention_days 必须为正")
+        if not 0 <= self.dedupe_similarity <= 1:
+            raise ValueError("config.dedupe_similarity 必须落在 [0, 1]")
+        if not 0 <= self.abstain_semantic_floor <= 1:
+            raise ValueError("config.abstain_semantic_floor 必须落在 [0, 1]")
+        if not 0.1 <= self.dedupe_length_ratio <= 1:
+            raise ValueError("config.dedupe_length_ratio 必须落在 [0.1, 1]")
         # —— 情感 ——
         for key in ("affect_arousal_half_life_days", "affect_valence_half_life_days"):
             if getattr(self, key) <= 0:
@@ -357,9 +381,33 @@ class MemoryNode:
     narrative_heat: float = 0.0
     narrated_at: float = 0.0
     kind: str = ""  # 记忆类型（空 = 未分类，由 MemoryModel 推断并写回）
+    # —— 双时态：事实有有效期，不是「有没有」而是「什么时候为真」——
+    # 用户改主意是最高频的真实事件。直接删掉旧的，会毁掉「上个月我确实这么想过」；
+    # 不删又不标，检索会把两句话一起端上去，让模型自己猜哪句作数。
+    # 所以：旧的不是消失，是**到期**。仍可 as-of 查询，但默认不再参与检索与评估。
+    valid_from: float = 0.0  # 0 = 从 created_at 起
+    valid_to: float | None = None  # None = 仍然有效
+    superseded_by: str = ""  # 取代它的那条记忆
+    supersedes: tuple[str, ...] = ()  # 它取代了谁（审计用）
 
     MAX_W: ClassVar[float] = 10.0
     AFFECT_GAIN: ClassVar[float] = 1.8
+
+    def effective_valid_from(self) -> float:
+        return self.valid_from if self.valid_from > 0 else self.created_at
+
+    def is_valid_at(self, moment: float) -> bool:
+        """这条记忆在某个时刻是否为真。
+
+        左闭右开：valid_from <= t < valid_to。同一秒内被取代的旧事实立刻失效，
+        不会出现「两句同时为真」的窗口 —— 那正是让模型左右为难的来源。
+        """
+        if moment < self.effective_valid_from() - 1e-9:
+            return False
+        return self.valid_to is None or moment < self.valid_to
+
+    def is_retired(self) -> bool:
+        return self.valid_to is not None
 
     def narrative_status(
         self, now: float, cap: int, half_life_days: float
@@ -473,6 +521,22 @@ class MemoryNode:
             or self.narrative_hits < 0
         ):
             raise ValueError(f"{self.name}.narrative_hits 非法: {self.narrative_hits!r}")
+        if self.valid_to is not None:
+            if isinstance(self.valid_to, bool) or not isinstance(self.valid_to, (int, float)):
+                raise ValueError(f"{self.name}.valid_to 非法: {self.valid_to!r}")
+            if not math.isfinite(float(self.valid_to)):
+                raise ValueError(f"{self.name}.valid_to 不是有限数: {self.valid_to!r}")
+            # 到期不能早于生效：那会造出一条「从来没为真过」的记忆，是数据坏了
+            if float(self.valid_to) < self.effective_valid_from() - 1e-9:
+                raise ValueError(
+                    f"{self.name}.valid_to={self.valid_to} 早于生效时刻 {self.effective_valid_from()}"
+                )
+        if self.superseded_by == self.name:
+            raise ValueError(f"{self.name}.superseded_by 不能指向自己")
+        if self.valid_from and self.valid_from < 0:
+            raise ValueError(f"{self.name}.valid_from 不能为负: {self.valid_from!r}")
+        if not isinstance(self.supersedes, tuple):
+            raise ValueError(f"{self.name}.supersedes 必须是 tuple: {self.supersedes!r}")
         if (
             isinstance(self.narrative_heat, bool)
             or not isinstance(self.narrative_heat, (int, float))
@@ -492,6 +556,7 @@ class MemoryNode:
         d = asdict(self)
         d["tags"] = list(self.tags)
         d["consolidated_from"] = list(self.consolidated_from)
+        d["supersedes"] = list(self.supersedes)
         return d
 
     @classmethod
@@ -499,6 +564,8 @@ class MemoryNode:
         d = dict(d)
         d["tags"] = tuple(d.get("tags", ()))
         d["consolidated_from"] = tuple(d.get("consolidated_from", ()))
+        d["supersedes"] = tuple(d.get("supersedes", ()))
+        d["valid_to"] = d.get("valid_to")
         d["affect"] = Affect.from_dict(d.get("affect"))
         known = {k: v for k, v in d.items() if k in dataclass_field_names(cls)}
         node = cls(**known)

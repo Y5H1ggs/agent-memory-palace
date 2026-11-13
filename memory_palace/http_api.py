@@ -60,11 +60,14 @@ def api_remember(body: dict[str, Any]) -> dict[str, Any]:
         pinned=bool(body.get("pin", False)),
         valence=body.get("valence"),
         arousal=body.get("arousal"),
+        supersedes=list(body.get("supersedes") or []),
+        merge=bool(body.get("merge", True)),
     )
     palace.save()
     return {
         "name": node.name,
         "tier": node.tier,
+        "supersedes": list(node.supersedes),
         "affect": {"valence": round(node.affect.valence, 4),
                    "arousal": round(node.affect.arousal, 4),
                    "source": node.affect.source},
@@ -72,18 +75,24 @@ def api_remember(body: dict[str, Any]) -> dict[str, Any]:
 
 
 def api_recall(body: dict[str, Any]) -> dict[str, Any]:
+    from .cli import parse_moment
+
     palace = open_palace(_store())
+    as_of = parse_moment(body.get("as_of"), palace.now())
     hits = palace.recall(
         names=body.get("names") or None,
         query=body.get("query"),
         limit=int(body.get("limit", 6)),
+        as_of=as_of,
     )
     return {
+        "as_of": as_of,
         "items": [
             {"name": n.name, "content": n.content, "tags": list(n.tags),
-             "importance": palace.importance_of(n.name)}
+             "importance": palace.importance_of(n.name),
+             **({"retired": True, "superseded_by": n.superseded_by} if n.is_retired() else {})}
             for n in hits
-        ]
+        ],
     }
 
 
@@ -178,11 +187,17 @@ def openapi_spec(host: str, port: int) -> dict[str, Any]:
                 "pin": {"type": "boolean"},
                 "valence": {"type": "number"},
                 "arousal": {"type": "number"},
+                "supersedes": {"type": "array", "items": {"type": "string"},
+                               "description": "被本条取代的旧记忆名（旧的标注失效，不删除）"},
+                "merge": {"type": "boolean", "default": True,
+                          "description": "内容几乎相同时合并到已有条目"},
             }, ["content"])},
             "/recall": {"post": op("memory_recall", "检索记忆", {
                 "query": {"type": "string"},
                 "names": {"type": "array", "items": {"type": "string"}},
                 "limit": {"type": "integer", "default": 6},
+                "as_of": {"type": "string",
+                          "description": "回看某个时刻为真的记忆（30d 或 2026-10-01）"},
             }, [])},
             "/outcome": {"post": op("memory_outcome", "把结果反馈成情绪证据", {
                 "name": {"type": "string"},

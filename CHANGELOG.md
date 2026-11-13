@@ -14,6 +14,45 @@ SemVer 里 `1.0.0` 的含义是「公开 API 已稳定，可以放心依赖」�
 
 ---
 
+## [0.6.0] - 2026-11-13
+
+看完同类项目之后补的三处**语义漏洞**（不是新功能），以及一份调研结论。
+
+### Added
+
+- **双时态（事实有有效期）**：`MemoryNode` 新增 `valid_from` / `valid_to` / `superseded_by` / `supersedes`。
+  `remember(..., supersedes=["旧名"])` 让旧事实**到期**而不是被删：默认检索只给当前有效的，
+  `recall(as_of=...)` / `recall --as-of 30d|2026-10-01` 回看"当时为真的是什么"。
+  失效节点不进重要性账本、不进结构读数、不参与沉淀；不按价值 GC，而是按
+  `history_retention_days`（默认 90 天）回收并进墓碑（仍可 restore）。
+  这是 Zep/Graphiti 的核心赌注，本库用四个字段 + 一处过滤就拿到，无新依赖。
+- **弃答（abstention）**：`context` 在无关查询下不再把"最重要的两条"端上去凑数，
+  而是输出「没有相关记忆，不要凭印象补全」，同时**保留钉死的硬规则**（规则与问题无关也要遵守）。
+  判据两层：绝对线 `abstain_semantic_floor`（0.30，实测底噪 ≤0.13 / 真匹配 ≥0.5）+ 相对线
+  `semantic_relative_floor`。`--status-only` 会显示「无相关记忆」。
+- **写入去重**：`remember(..., merge=True)`（CLI / MCP / HTTP 默认开，库层默认关）——
+  余弦 ≥0.92 **且长度比 ≥0.85** 才算重复，合并为"强化 + 标签并集"，不新建节点。
+- **`docs/COMPETITIVE_ANALYSIS.md`**：Mem0 / Zep / Letta / Cognee / LangMem / TencentDB Agent Memory /
+  progressive-memory / mcp-memory-service 的逐项对照，含"为什么拒绝"与"还缺什么"。
+- **`tests/test_temporal.py`**：23 项断言，其中 3 条是**反事实**（把有效期判定改恒真、把弃答线降到 0，
+  对应断言必须变红）。
+
+### Changed
+
+- `STATE_VERSION` 5→6，`SUPPORTED_STATE_VERSIONS = (4, 5, 6)`。
+  `PalaceConfig.from_dict(strict=...)` 现在按快照版本决定严格度：旧快照缺新字段用默认值补齐，
+  本版快照出现未知字段仍然拒绝 —— 两种错误不能混为一谈（旧版会把前者也当坏数据，升级即失联）。
+- `context` 的"相关"改由语义/标签判，不再用总分（总分含时近分量，人人有份，判不出无关）。
+- MCP / HTTP 暴露 `supersedes` 与 `as_of`；`recall` 返回里带 `retired` / `superseded_by`。
+
+### Fixed
+
+- 去重阈值只按余弦会**静默吃掉新内容**：`"单笔不超过总资金三分之一"` 与
+  `"…三分之一，且最多同时持三只"` 余弦 0.927，后者补了新约束却会被合并。加长度比（≥0.85）后分开。
+- `view` / `status` 里失效记忆混进重要性排序，看起来像"不太重要"，其实只是过期了 —— 现在单列。
+
+---
+
 ## [0.5.1] - 2026-11-13
 
 修 CI 抓到的一个真 bug。

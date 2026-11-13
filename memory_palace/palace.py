@@ -51,13 +51,13 @@ from .persona import (
 )
 from .reflection import ReflectionEngine, ReflectionReport
 from .selfcorrect import SelfCorrector
-from .semantics import Encoder, SemanticIndex
+from .semantics import Encoder, SemanticIndex, cosine
 from .style import StyleEngine
 from .value import ValueModel
 
-STATE_VERSION = 5
+STATE_VERSION = 6
 # v4 快照没有叙事热度与情绪来源字段，但节点结构兼容（缺字段走默认值），可直接迁移。
-SUPPORTED_STATE_VERSIONS = (4, 5)
+SUPPORTED_STATE_VERSIONS = (4, 5, 6)
 
 # amend_foundation 的哨兵：traits={"__remove__": ["playfulness"]} 表示删除维度
 _REMOVE = "__remove__"
@@ -161,8 +161,19 @@ class MemoryPalace:
         valence: float | None = None,
         arousal: float | None = None,
         kind: str = "",
+        supersedes: tuple[str, ...] | list[str] | str = (),
+        merge: bool = False,
     ) -> MemoryNode:
         """写入一条记忆。情绪是**写入时**的属性，不是事后贴的标签。
+
+        两个和「时间」有关的参数：
+
+        `supersedes` 命中旧记忆时，旧记忆**不被删除，而是到期**（valid_to = now），
+        并记下 `superseded_by`。这样「现在是什么」与「当时是什么」都能回答 ——
+        直接删掉会把「我确实这么想过」也一起抹了，不删又会两句话一起端给模型。
+
+        `merge=True` 时，与现有记忆几乎一字不差（≥ dedupe_similarity）就不新开节点，
+        而是强化旧节点并把标签并进去。默认关闭：库层要可预测，CLI/agent 入口才默认开。
 
         不传 valence / arousal 时，由评价器从内容与标签推断 —— 这是「情绪从哪来」
         的答案：不是凭空一个 0.9，而是「因为文本里出现了『重挫』和『极其』」。
@@ -173,6 +184,25 @@ class MemoryPalace:
         """
         with self._lock:
             now = self.now()
+            if merge:
+                twin = self._find_duplicate(content, now)
+                if twin is not None:
+                    before = twin.access_count
+                    twin.access(now, self._config.access_gain)
+                    if tags:
+                        twin.tags = tuple(dict.fromkeys(twin.tags + tuple(tags)))
+                    self._log(
+                        "merge",
+                        {
+                            "into": twin.name,
+                            "skipped": name,
+                            "access_before": before,
+                            "access_after": twin.access_count,
+                        },
+                        now,
+                    )
+                    self._maybe_save()
+                    return twin
             node = MemoryNode(
                 name=name,
                 content=content,
@@ -199,12 +229,60 @@ class MemoryPalace:
                         {"name": name, **appraisal.to_dict()},
                         now,
                     )
+            # 旧的不是消失，是到期。必须在 validate 之前写，才能被一起校验。
+            retired: list[str] = []
+            requested = [supersedes] if isinstance(supersedes, str) else list(supersedes or ())
+            for old_name in dict.fromkeys(requested):
+                old = self.graph.get(old_name)
+                if old is None or old_name == name or old.is_retired():
+                    continue
+                old.valid_to = now
+                old.superseded_by = name
+                retired.append(old_name)
+                self._log(
+                    "supersede",
+                    {"old": old_name, "by": name, "valid_to": now},
+                    now,
+                )
+            node.supersedes = tuple(retired)
+
             self.memory.enroll(node)
             node.validate()  # 类型名拼错必须当场炸
             self.graph.add_node(node)
             self.semantics.upsert(node)
             self._maybe_save()
             return node
+
+    def _find_duplicate(self, content: str, now: float) -> MemoryNode | None:
+        """找一条「几乎就是同一句话」的现有记忆。
+
+        用字符 bigram 余弦而不是语义分：去重要的是**字面几乎相同**，
+        语义相近恰恰是不该合并的情况（补充了新信息）。
+        """
+        text = (content or "").strip()
+        if not text:
+            return None
+        try:
+            fresh = self.semantics.encoder.encode(text)
+        except ValueError:
+            return None
+        best_sim, best_node = -1.0, None
+        for node in self.graph.all_nodes():
+            if node.is_retired() or not node.is_valid_at(now):
+                continue
+            # 长度比是硬门槛：包含新内容的更长句子，余弦仍然很高，但绝不能合并。
+            span = max(len(text), len(node.content))
+            if span and min(len(text), len(node.content)) / span < self._config.dedupe_length_ratio:
+                continue
+            vec = self.semantics.vector(node.name)
+            if vec is None:
+                continue
+            sim = cosine(fresh, vec)
+            if sim > best_sim:
+                best_sim, best_node = sim, node
+        if best_node is None or best_sim < self._config.dedupe_similarity:
+            return None
+        return best_node
 
     # ---------- 情感 ----------
 
@@ -437,6 +515,8 @@ class MemoryPalace:
         sem_scores = self.semantics.scores(text) if text else {}
         rows: list[dict[str, Any]] = []
         for node in self.graph.all_nodes():
+            if not node.is_valid_at(now):
+                continue  # 已到期的旧事实不参与现在的检索
             sem = sem_scores.get(node.name, 0.0)
             tag = len(wanted & set(node.tags)) / max(1, len(wanted)) if wanted else 0.0
             rec = min(1.0, max(0.0, node.effective_weight(now)))
@@ -472,10 +552,16 @@ class MemoryPalace:
         limit: int = 8,
         query: str | None = None,
         min_score: float | None = None,
+        as_of: float | None = None,
     ) -> list[MemoryNode]:
-        """三种入口：精确名字 / 语义查询 / 标签。语义与标签可叠加为混合打分。"""
+        """三种入口：精确名字 / 语义查询 / 标签。语义与标签可叠加为混合打分。
+
+        `as_of` 回看某个时刻「当时哪些记忆为真」—— 双时态查询。
+        默认只返回现在有效的：一条已经被取代的旧偏好，不该和新的并排出现。
+        """
         with self._lock:
             now = self.now()
+            moment = now if as_of is None else float(as_of)
             retrieval = "names"
             top_score = 0.0
             decisive: list[str] = []
@@ -491,19 +577,20 @@ class MemoryPalace:
                     # 无查询条件 = 按显著度召回，等价于「现在最容易被想起的是什么」。
                     # 这里才用得上记忆类型偏向：没有具体目标时，手上的与身份性的先浮上来。
                     retrieval = "salience"
+                    live = [n for n in self.graph.all_nodes() if n.is_valid_at(moment)]
                     ranked = sorted(
-                        self.graph.all_nodes(),
-                        key=lambda n: (-n.effective_weight(now) * self.memory.bias(n), n.name),
+                        live,
+                        key=lambda n: (-n.effective_weight(moment) * self.memory.bias(n), n.name),
                     )[:limit]
                     hits = ranked
                     top_score = (
-                        round(hits[0].effective_weight(now) * self.memory.bias(hits[0]), 6)
+                        round(hits[0].effective_weight(moment) * self.memory.bias(hits[0]), 6)
                         if hits
                         else 0.0
                     )
                 else:
                     retrieval = "semantic" if text else "tags"
-                    rows = self._score_components(text, query_tags, now)
+                    rows = self._score_components(text, query_tags, moment)
                     above = [r for r in rows if r["score"] >= gate]
                     # 相对门槛：低于最高分一半的命中只是「字面沾边」，一并挡掉。
                     floor = above[0]["score"] * self._config.semantic_relative_floor if above else 0.0
@@ -931,10 +1018,33 @@ class MemoryPalace:
                 {"count": len(demoted), "names": [d["name"] for d in demoted]},
                 now,
             )
+        # 失效的记忆不按价值判：它的去留由「历史保留期」决定。
+        # 否则一条曾经很重要的旧偏好会靠高重要性永远赖着，检索就会不停翻旧账。
+        retired = {n.name: n for n in self.graph.all_nodes() if n.is_retired()}
+        horizon = self._config.history_retention_days * DAY
+        expired = [
+            name
+            for name, node in retired.items()
+            if node.valid_to is not None and now - float(node.valid_to) >= horizon
+        ]
         decisions = self.value.gc_decisions(self.graph, now, self.logic.support_map())
-        victims: list[str] = []
+        victims: list[str] = list(expired)
         protected: list[str] = []
+        for name in expired:
+            self._log(
+                "history_expire",
+                {
+                    "name": name,
+                    "valid_to": float(retired[name].valid_to or 0.0),
+                    "kept_days": round((now - float(retired[name].valid_to or now)) / DAY, 2),
+                },
+                now,
+            )
         for d in decisions:
+            if d["name"] in retired:
+                d["verdict"] = "retired"
+                d["reason"] = "superseded_by:" + (retired[d["name"]].superseded_by or "?")
+                continue
             if d["verdict"] != "forgotten":
                 continue
             node = self.graph.get(d["name"])
@@ -1192,6 +1302,7 @@ class MemoryPalace:
                 "demoted": [d["name"] for d in demoted],
                 "forgotten": victims,
                 "nodes": len(self.graph),
+            "retired": sum(1 for n in self.graph.all_nodes() if n.is_retired()),
                 "narrative": revision.to_dict(),
                 "persona": {
                     "health": persona_state["drift"]["health"],
@@ -1383,7 +1494,12 @@ class MemoryPalace:
     ) -> None:
         state = read_json(path)
         self._validate_state(state, path)
-        cfg = PalaceConfig.from_dict(state["config"])
+        # 严格校验只对「本版快照」生效：v4/v5 快照缺的是本版新增字段，
+        # 用默认值补齐才是正确的迁移方向；反过来，v6 快照里出现未知字段
+        # 说明是别的版本写的，必须当场拒绝 —— 两种错误不能混为一谈。
+        cfg = PalaceConfig.from_dict(
+            state["config"], strict=int(state.get("version", 0)) >= STATE_VERSION
+        )
         if config_override is not None:
             # 快照是权威，但显式传入的 config 代表用户的覆写意图，不能被静默吞掉。
             override = config_override.to_dict()
