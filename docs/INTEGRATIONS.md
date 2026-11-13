@@ -71,6 +71,46 @@ Codex 还会读仓库根目录的 `AGENTS.md` —— 本仓库自带一份，写
 { "mcpServers": { "memory-palace": { "command": "memory-palace-mcp" } } }
 ```
 
+### DSH（DeepSeek Harness）
+
+DSH 不直接读 `mcp.json`，而是通过官方桥接插件 `@deepseek-ai/dsh-mcp-client`，
+配置写在 **每个 profile 一份** 的 `cordis.patch.yml` 里，保存后约 1 秒热重载（`patchReload: live`）。
+
+```yaml
+# ~/.dsh/profiles/<profile>/cordis.patch.yml
+- insert:
+    - id: mcp-memory-palace
+      name: '@deepseek-ai/dsh-mcp-client'
+      config:
+        serverName: memory-palace
+        transport: stdio
+        command: python
+        args: ['-u', '-m', 'memory_palace.mcp_server', '--profile', 'slim']
+        cwd: /path/to/memory-palace
+        env:
+          MEMORY_PALACE_STORE: /Users/you/.memory-palace/store.json
+          PYTHONPATH: /path/to/memory-palace
+        toolCallTimeoutMs: 30000
+```
+
+不想手算出绝对路径，直接打印：
+
+```bash
+memory-palace config --for dsh            # slim 档（推荐）
+memory-palace config --for dsh --profile full
+memory-palace config --for claude|codex|cursor|http
+```
+
+三条 DSH 特有的坑，都踩过：
+
+1. **工具名会变成 `mcp__memory-palace__memory_context`**。`serverName` 里的连字符会保留，
+   会话历史与权限规则按这个名字记 —— 改名会断开旧记录，起名后别改。
+2. **子进程的环境变量会被清洗**：名字里含 `KEY` / `PASSWORD` / `SECRET` / `TOKEN` / `DSH_*` 的都会被剥掉，
+   再合并你显式写的 `env`。所以 `MEMORY_PALACE_STORE` 必须显式写进 `env`，别指望从 shell 继承。
+3. **工具定义全量常驻上下文**（DSH 当前不支持 Tool Search）。8 个工具约 1.2k token，每轮都付。
+   用 `--profile slim` 只暴露 `context / remember / cycle` 三个，省掉约 60% 的工具 schema。
+   想看清单：`python -m memory_palace.mcp_server --list-tools`。
+
 ### Cline / Windsurf / Gemini CLI / Zed
 
 都是同一套 `command + args + env`，只是 JSON 位置不同：

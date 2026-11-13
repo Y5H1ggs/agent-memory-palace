@@ -88,17 +88,55 @@ class ConsolidationEngine:
             return structural
         return max(structural, 0.85 * cosine(va, vb))
 
+    def _pairs(self, candidates: list[MemoryNode]) -> list[tuple[MemoryNode, MemoryNode]]:
+        """要比较的候选对。
+
+        小规模（≤ block_threshold）全对比较 —— 语义聚类必须能跨标签发现同义碎片，
+        分桶会把「换了说法」的碎片拆开（`第 2.5 幕` 就是要防这个）。
+        大规模才分桶：按标签分，无标签按层级分。这是**有损**的近似 ——
+        代价是「完全不同的标签、但内容同义」的碎片在超大库里可能沉淀不到一起。
+        我们选择显式承认这个代价：一次 run_cycle 从 1.6 秒降到几十毫秒，
+        比偶尔漏掉一对同义碎片更值。
+        """
+        cfg = self.config
+        n = len(candidates)
+        if n <= cfg.consolidate_block_threshold:
+            return [
+                (a, b)
+                for i, a in enumerate(candidates)
+                for b in candidates[i + 1 :]
+            ]
+
+        buckets: dict[str, list[MemoryNode]] = {}
+        for node in candidates:
+            keys = set(node.tags) or {f"tier:{node.tier}"}
+            for key in keys:
+                buckets.setdefault(key, []).append(node)
+        pairs: list[tuple[MemoryNode, MemoryNode]] = []
+        seen: set[tuple[str, str]] = set()
+        budget = cfg.consolidate_max_pairs
+        for members in buckets.values():
+            for i, a in enumerate(members):
+                for b in members[i + 1 :]:
+                    key = (a.name, b.name) if a.name < b.name else (b.name, a.name)
+                    if key in seen:
+                        continue
+                    seen.add(key)
+                    pairs.append((a, b))
+                    if len(pairs) >= budget:
+                        return pairs
+        return pairs
+
     def _clusters(
         self, candidates: list[MemoryNode], graph: MemoryGraph
     ) -> list[list[MemoryNode]]:
         """在「语义相似 + 共现」构成的邻接图上取连通分量。"""
         by_name = {n.name: n for n in candidates}
         adj: dict[str, set[str]] = {n.name: set() for n in candidates}
-        for i, a in enumerate(candidates):
-            for b in candidates[i + 1 :]:
-                if self._similarity(a, b, graph) >= self.config.consolidate_similarity:
-                    adj[a.name].add(b.name)
-                    adj[b.name].add(a.name)
+        for a, b in self._pairs(candidates):
+            if self._similarity(a, b, graph) >= self.config.consolidate_similarity:
+                adj[a.name].add(b.name)
+                adj[b.name].add(a.name)
         seen: set[str] = set()
         clusters: list[list[MemoryNode]] = []
         for name in adj:
@@ -149,6 +187,10 @@ class ConsolidationEngine:
             and not n.pinned
             and n.effective_weight(now) >= cfg.consolidate_min_weight
         ]
+        # 候选封顶：只沉淀最强的那批。弱碎片本来就该先被遗忘，而不是先被聚类。
+        if len(candidates) > cfg.consolidate_max_candidates:
+            candidates.sort(key=lambda n: (-n.effective_weight(now), n.name))
+            candidates = candidates[: cfg.consolidate_max_candidates]
         result = ConsolidationResult()
         clusters = self._clusters(candidates, graph)
         result.clusters_seen = len(clusters)

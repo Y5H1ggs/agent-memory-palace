@@ -140,17 +140,49 @@ def main() -> None:
         rendered = run(store, "render", "--out", out)
         html = open(out, encoding="utf-8").read() if os.path.exists(out) else ""
         check(
-            "render 生成自包含 HTML（有卡片与衰减曲线，无外链）",
+            "render 生成自包含 HTML（卡片 + 两张 SVG 图，无外链）",
             rendered.returncode == 0
             and "<article" in html
-            and "<svg" in html
-            and "衰减曲线" in html
+            and html.count("<svg") >= 2
+            and "还能记住多久" in html
+            and "进出账" in html
             and "http" not in html.split("<style>")[0],
             f"{len(html.encode())} 字节",
         )
         check(
             "HTML 里有墓碑区与自述章节（被遗忘的也看得见）",
             "墓碑" in html and "自述" in html,
+        )
+
+        # ★ 树状注入：根常驻、折叠必须标出来、并给出与扁平的用量对比
+        tree_store = os.path.join(tmp, "tree.json")
+        run(tree_store, "init")
+        run(tree_store, "remember", "禁止编造版本号，不确定就说不确定",
+            "--tags", "硬规则", "--tier", "core", "--pin")
+        for i, topic in enumerate(("复盘", "仓位", "选股", "输出", "风险", "板块", "偏好", "杂记")):
+            run(tree_store, "remember", f"{topic}的一条记录 {i}", "--tags", topic)
+        tree = run(tree_store, "context", "--tree", "--query", "仓位", "--budget", "600",
+                   "--compare", "--json")
+        payload = json.loads(tree.stdout)
+        check(
+            "树状注入：钉死的根永远在，且显式标注折叠了多少条",
+            payload["roots"] >= 1 and payload["folded_nodes"] >= 1 and payload["branches"] >= 5,
+            f"根 {payload['roots']} / 枝 {payload['branches']} / 折叠 {payload['folded_nodes']}",
+        )
+        check(
+            "树状模式给出与扁平的用量对比（省字要能被验证，不能只靠嘴说）",
+            "flat_used" in payload and "saving" in payload,
+            f"树 {payload['used']} / 扁平 {payload.get('flat_used')} / 省 {payload.get('saving')}",
+        )
+
+        # ★ 一键打印宿主配置（DSH 等）
+        conf = run(store, "config", "--for", "dsh")
+        check(
+            "config --for dsh 给出可直接粘贴的桥接配置，且路径无转义坑",
+            "dsh-mcp-client" in conf.stdout
+            and "serverName: memory-palace" in conf.stdout
+            and "\\U" not in conf.stdout,
+            conf.stdout.splitlines()[3] if conf.stdout else "",
         )
 
         empty = os.path.join(tmp, "empty.json")

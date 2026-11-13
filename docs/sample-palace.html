@@ -1,169 +1,357 @@
 <!DOCTYPE html>
 <html lang="zh-CN"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>记忆宫殿 · 演示库</title>
+<title>记忆宫殿 · 120 天演化</title>
 <style>
-:root{--bg:#f6f6f3;--card:#fff;--ink:#1d1d1b;--muted:#6d6d66;--line:#e3e2dc;--accent:#2f6f5e;--warn:#b3462f}
-@media (prefers-color-scheme:dark){:root{--bg:#16171a;--card:#1e2024;--ink:#eceae4;--muted:#9b9b93;--line:#2e3138;--accent:#6fbfa6;--warn:#e0705b}}
+:root{--bg:#f7f6f3;--card:#fff;--ink:#1c1c1a;--muted:#71716a;--line:#e6e4dd;
+ --accent:#2f6f5e;--warn:#b3462f;--shadow:0 1px 2px rgba(28,28,26,.04),0 8px 24px rgba(28,28,26,.05)}
+@media (prefers-color-scheme:dark){:root{--bg:#141518;--card:#1c1e22;--ink:#ecebe5;--muted:#9a9a92;
+ --line:#2b2e34;--accent:#6fbfa6;--warn:#e0705b;--shadow:none}}
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--ink);
- font:15px/1.6 system-ui,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif}
-.wrap{max-width:1000px;margin:0 auto;padding:28px 20px 64px}
-h1{font-size:22px;margin:0 0 4px;letter-spacing:.5px}
-.sub{color:var(--muted);font-size:13px;margin-bottom:22px}
-.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:26px}
-.stat{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px 14px}
-.stat b{display:block;font-size:20px;line-height:1.2}
-.stat span{color:var(--muted);font-size:12px}
-h2{font-size:15px;margin:30px 0 12px;letter-spacing:.4px}
-h2 small{color:var(--muted);font-weight:400;letter-spacing:0;margin-left:8px;font-size:12px}
-.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px}
-.card{background:var(--card);border:1px solid var(--line);border-left:3px solid var(--line);
- border-radius:10px;padding:12px 14px}
-.card.t-core{border-left-color:#b3462f}.card.t-fact{border-left-color:#2f6f5e}
-.card.t-event{border-left-color:#4a6fa5}.card.t-ephemeral{border-left-color:#8a8a80}
-.card.t-trace{border-left-color:#a08a5a}
-.card header{display:flex;justify-content:space-between;gap:8px;font-size:11px;color:var(--muted)}
-.tier{font-weight:600;letter-spacing:.5px}
-.content{margin:8px 0 10px;font-size:14px;line-height:1.5;word-break:break-word}
-.meter{height:4px;background:var(--line);border-radius:2px;overflow:hidden}
-.meter>div{height:100%;background:var(--accent)}
-.card footer{display:flex;justify-content:space-between;gap:6px;font-size:11px;color:var(--muted);margin-top:7px}
-.badges{margin-top:6px;display:flex;gap:6px;flex-wrap:wrap}
-.badge{font-size:11px;border:1px solid var(--line);border-radius:999px;padding:1px 8px;color:var(--muted)}
-.badge.pin{border-color:var(--warn);color:var(--warn)}
-.badge.warn{border-color:var(--warn);color:var(--warn)}
-.affect{font-size:11px;color:var(--muted);margin-top:6px}
-.panel{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px 16px}
-svg.decay{width:100%;height:auto;display:block}
+ font:14px/1.65 system-ui,-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+ -webkit-font-smoothing:antialiased}
+.wrap{max-width:1080px;margin:0 auto;padding:36px 24px 72px}
+.hero{margin-bottom:26px}
+.hero h1{font-size:26px;margin:0 0 6px;letter-spacing:.3px;font-weight:650}
+.hero p{margin:0;color:var(--muted);font-size:13px}
+.chips{margin-top:12px;display:flex;gap:8px;flex-wrap:wrap}
+.chip-h{font-size:12px;border:1px solid var(--line);background:var(--card);border-radius:999px;
+ padding:3px 11px;color:var(--muted)}
+.chip-h b{color:var(--ink);font-weight:600}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin:22px 0 30px}
+.kpi{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px 16px;box-shadow:var(--shadow)}
+.kpi .v{font-size:23px;font-weight:650;line-height:1.15;font-variant-numeric:tabular-nums}
+.kpi .l{color:var(--muted);font-size:12px;margin-top:2px}
+section{margin:0 0 30px}
+h2{font-size:15px;margin:0 0 4px;letter-spacing:.2px}
+h2 small{font-weight:400;color:var(--muted);font-size:12px;margin-left:8px}
+.panel{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px 18px;
+ box-shadow:var(--shadow);margin-top:10px}
+svg.chart{width:100%;height:auto;display:block}
 .axis{stroke:var(--line);stroke-width:1}
-.grid{stroke:var(--line);stroke-width:.6;stroke-dasharray:2 4;opacity:.7}
-.tick{fill:var(--muted);font-size:10px}
-.legend{display:flex;flex-wrap:wrap;gap:10px;margin-top:8px;font-size:11px;color:var(--muted)}
-.lg i{display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:4px}
-.row{display:flex;align-items:center;gap:10px;margin:6px 0;font-size:12px}
-.row .name{width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--muted)}
-.row .track{flex:1;height:6px;background:var(--line);border-radius:3px;overflow:hidden}
-.row .track>div{height:100%;background:var(--accent)}
-.row .pct{width:38px;text-align:right;color:var(--muted)}
+.bar-value{fill:var(--ink);font-size:11px;font-weight:600;text-anchor:middle;font-variant-numeric:tabular-nums}
+.chart-note{margin:10px 0 0;font-size:12px;color:var(--muted)}
+.grid{stroke:var(--line);stroke-width:.7;stroke-dasharray:2 5}
+.floor{stroke:var(--warn);stroke-width:1;stroke-dasharray:5 4;opacity:.75}
+.floor-label{fill:var(--warn);font-size:9.5px}
+.tick{fill:var(--muted);font-size:10px;font-variant-numeric:tabular-nums}
+.tick.end{text-anchor:end}.tick.mid{text-anchor:middle}
+.series-label{fill:var(--muted);font-size:10px}
+.legend{display:flex;flex-wrap:wrap;gap:14px;margin-top:10px;font-size:11.5px;color:var(--muted)}
+.lg i{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:5px;vertical-align:-1px}
+.grid2{display:grid;grid-template-columns:1.35fr 1fr;gap:14px}
+@media (max-width:820px){.grid2{grid-template-columns:1fr}}
+.cards{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
+@media (max-width:820px){.cards{grid-template-columns:1fr}}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:13px 15px;
+ box-shadow:var(--shadow);display:flex;flex-direction:column;min-height:132px}
+.card-top{display:flex;align-items:baseline;gap:8px;font-size:11px;color:var(--muted)}
+.tier{font-weight:650;letter-spacing:.3px}
+.tags{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.score{margin-left:auto;font-variant-numeric:tabular-nums;color:var(--ink);font-weight:600;font-size:12px}
+.content{margin:9px 0 11px;font-size:13.5px;line-height:1.55;display:-webkit-box;
+ -webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.meter{height:3px;background:var(--line);border-radius:2px;overflow:hidden}
+.card-foot{display:flex;justify-content:space-between;gap:8px;font-size:11px;color:var(--muted);margin-top:8px}
+.life.warn{color:var(--warn)}
+.life.pin{color:var(--ink);font-weight:600}
+.affect{font-size:11px;color:var(--muted);margin-top:6px}
+.affect .dot{display:inline-block;width:6px;height:6px;border-radius:50%;margin-right:5px}
+.badges{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.badge{font-size:10.5px;border:1px solid var(--line);border-radius:999px;padding:1px 8px;color:var(--muted)}
+.badge.pin{border-color:var(--ink);color:var(--ink)}
+.badge.warn{border-color:var(--warn);color:var(--warn)}
+.row{display:flex;align-items:center;gap:10px;margin:7px 0;font-size:12px}
+.row .name{width:132px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--muted)}
+.row .track{flex:1;height:5px;background:var(--line);border-radius:3px;overflow:hidden;display:block}
+.row .track>span{display:block;height:100%;background:var(--accent);border-radius:3px}
+.row .pct{width:36px;text-align:right;color:var(--muted);font-variant-numeric:tabular-nums}
 ol.chapters{list-style:none;padding:0;margin:0}
-ol.chapters li{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px dashed var(--line);font-size:13px}
+ol.chapters li{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px dashed var(--line);font-size:13px}
 ol.chapters li:last-child{border-bottom:0}
-.arc{font-size:11px;color:var(--accent);border:1px solid var(--accent);border-radius:4px;padding:0 5px}
+.arc{font-size:10.5px;color:var(--accent);border:1px solid var(--accent);border-radius:5px;padding:0 6px}
 ol.chapters .n{color:var(--muted);font-size:12px}
-ol.chapters .share{margin-left:auto;color:var(--muted);font-size:12px}
+ol.chapters .share{margin-left:auto;color:var(--muted);font-size:12px;font-variant-numeric:tabular-nums}
 ul.grave{list-style:none;padding:0;margin:0;font-size:12px;color:var(--muted)}
-ul.grave li{display:flex;gap:10px;padding:5px 0;border-bottom:1px dashed var(--line)}
-ul.grave li b{color:var(--ink);font-weight:500;min-width:110px}
-.chip{display:inline-block;border:1px solid var(--line);border-radius:999px;padding:2px 10px;font-size:12px;margin:0 6px 6px 0}
+ul.grave li{display:flex;gap:12px;padding:7px 0;border-bottom:1px dashed var(--line)}
+ul.grave li:last-child{border-bottom:0}
+ul.grave li b{color:var(--ink);font-weight:500;min-width:120px;flex:none}
+.chips-row{display:flex;flex-wrap:wrap;gap:8px}
+.chip{border:1px solid var(--line);border-radius:999px;padding:3px 11px;font-size:12px}
 .muted{color:var(--muted)}.empty{color:var(--muted)}
-.note{margin-top:26px;color:var(--muted);font-size:12px;line-height:1.7}
+.note{margin-top:34px;padding-top:18px;border-top:1px solid var(--line);color:var(--muted);
+ font-size:12px;line-height:1.8}
+.note b{color:var(--ink);font-weight:600}
 </style></head><body><div class="wrap">
-<h1>记忆宫殿 · 演示库</h1>
-<div class="sub">生成于 2026-11-13 16:23｜9 条记忆、3 条关联、3 条已遗忘</div>
 
-<div class="stats">
-  <div class="stat"><b>9</b><span>在册记忆</span></div>
-  <div class="stat"><b>flat</b><span>价值分布（top1 15%）</span></div>
-  <div class="stat"><b>isolated</b><span>结构（孤立 67%）</span></div>
-  <div class="stat"><b>3</b><span>30 天内将跌破遗忘线</span></div>
-  <div class="stat"><b>12</b><span>累计事件</span></div>
+<div class="hero">
+  <h1>记忆宫殿 · 120 天演化</h1>
+  <p>17 条记忆里 4 条永不衰减，3 条会在一个月内跌破遗忘线，32 条已经被主动放下。</p>
+  <div class="chips">
+    <span class="chip-h">价值分布 <b>无梯度</b>
+      　前三条占 34%</span>
+    <span class="chip-h">结构 <b>碎裂</b>
+      　孤岛 35%</span>
+    <span class="chip-h">自述 <b>rev 8</b></span>
+    <span class="chip-h">事件 <b>117</b></span>
+  </div>
 </div>
 
-<h2>记忆卡片<small>按重要度排序；条形是重要度，不是相似度</small></h2>
-<div class="grid"><article class="card t-event">
-  <header><span class="tier">经历</span>
-  <span class="tags">复盘 · 教训</span></header>
-  <p class="content">追高汉缆后逆板块阴跌，亏三个点，很后悔</p>
-  <div class="meter"><div style="width:100.0%"></div></div>
-  <footer><span>重要度 1.55</span><span>预计 29 天后跌破线</span>
-  <span class="fidelity">可靠 0.76</span></footer>
-  <div class="affect">情绪 v-0.46 / a0.70｜来源 text</div><div class="badges"></div>
-</article><article class="card t-core">
-  <header><span class="tier">核心</span>
-  <span class="tags">硬规则 · 措辞</span></header>
-  <p class="content">禁止绝对化措辞，所有判断都带概率</p>
-  <div class="meter"><div style="width:73.3%"></div></div>
-  <footer><span>重要度 1.14</span><span>钉死 · 永不衰减</span>
-  <span class="fidelity">可靠 1.00</span></footer>
-  <div class="badges"><span class="badge pin">钉死</span></div>
-</article><article class="card t-core">
-  <header><span class="tier">核心</span>
-  <span class="tags">硬规则 · 格式</span></header>
-  <p class="content">输出优先表格化，不要长篇大论</p>
-  <div class="meter"><div style="width:73.3%"></div></div>
-  <footer><span>重要度 1.14</span><span>钉死 · 永不衰减</span>
-  <span class="fidelity">可靠 1.00</span></footer>
-  <div class="badges"><span class="badge pin">钉死</span></div>
-</article><article class="card t-fact">
-  <header><span class="tier">事实</span>
-  <span class="tags">仓位 · 交易口径</span></header>
-  <p class="content">半凯利仓位：单笔不超过总资金三分之一</p>
-  <div class="meter"><div style="width:73.3%"></div></div>
-  <footer><span>重要度 1.14</span><span>预计 74 天后跌破线</span>
-  <span class="fidelity">可靠 1.00</span></footer>
+<div class="kpis">
+  <div class="kpi"><div class="v">17</div><div class="l">在册记忆</div></div>
+  <div class="kpi"><div class="v">32</div><div class="l">已主动放下</div></div>
+  <div class="kpi"><div class="v">3</div><div class="l">30 天内将跌破遗忘线</div></div>
+  <div class="kpi"><div class="v">129<span style="font-size:13px"> 天</span></div>
+    <div class="l">平均剩余寿命（不含钉死）</div></div>
+</div>
+
+<section>
+  <h2>还能记住多久<small>按剩余寿命分桶；跨过遗忘线就会被放手</small></h2>
+  <div class="panel"><svg viewBox="0 0 820 200" role="img" aria-label="记忆剩余寿命分布"><line x1="34" y1="154" x2="804" y2="154" class="axis"/><rect x="68.7" y="130.7" width="59.0" height="23.3" rx="3" fill="#b3462f" opacity="0.92"/><text x="98.2" y="124.7" class="bar-value">1</text><text x="98.2" y="174" class="tick mid">< 7 天</text><text x="98.2" y="190" class="tick mid">6%</text><rect x="197.0" y="107.3" width="59.0" height="46.7" rx="3" fill="#c9764f" opacity="0.92"/><text x="226.5" y="101.3" class="bar-value">2</text><text x="226.5" y="174" class="tick mid">7–30 天</text><text x="226.5" y="190" class="tick mid">12%</text><rect x="325.3" y="14.0" width="59.0" height="140.0" rx="3" fill="#c9a227" opacity="0.92"/><text x="354.8" y="8.0" class="bar-value">6</text><text x="354.8" y="174" class="tick mid">1–3 个月</text><text x="354.8" y="190" class="tick mid">35%</text><rect x="453.6" y="84.0" width="59.0" height="70.0" rx="3" fill="#5c8a6f" opacity="0.92"/><text x="483.2" y="78.0" class="bar-value">3</text><text x="483.2" y="174" class="tick mid">3–12 个月</text><text x="483.2" y="190" class="tick mid">18%</text><rect x="582.0" y="130.7" width="59.0" height="23.3" rx="3" fill="#2f6f5e" opacity="0.92"/><text x="611.5" y="124.7" class="bar-value">1</text><text x="611.5" y="174" class="tick mid">> 1 年</text><text x="611.5" y="190" class="tick mid">6%</text><rect x="710.3" y="60.7" width="59.0" height="93.3" rx="3" fill="#1c1c1a" opacity="0.92"/><text x="739.8" y="54.7" class="bar-value">4</text><text x="739.8" y="174" class="tick mid">钉死</text><text x="739.8" y="190" class="tick mid">24%</text></svg><p class="chart-note">未来 30 天内会掉 3 条（占 18%）；钉死的 4 条永远不会掉。</p></div>
+</section>
+
+<section>
+  <h2>进出账<small>近 12 周：每周新增多少、遗忘多少</small></h2>
+  <div class="panel"><svg viewBox="0 0 820 190" role="img" aria-label="每周新增与遗忘"><line x1="34" y1="150" x2="804" y2="150" class="axis"/><rect x="45.8" y="122.8" width="19.2" height="27.2" rx="2" fill="#2f6f5e" opacity="0.9"/><text x="66.1" y="180" class="tick mid">-12w</text><rect x="110.0" y="113.7" width="19.2" height="36.3" rx="2" fill="#2f6f5e" opacity="0.9"/><rect x="174.2" y="122.8" width="19.2" height="27.2" rx="2" fill="#2f6f5e" opacity="0.9"/><rect x="238.3" y="104.7" width="19.2" height="45.3" rx="2" fill="#2f6f5e" opacity="0.9"/><rect x="259.6" y="14.0" width="19.2" height="136.0" rx="2" fill="#b3462f" opacity="0.9"/><text x="258.6" y="180" class="tick mid">-9w</text><rect x="302.5" y="122.8" width="19.2" height="27.2" rx="2" fill="#2f6f5e" opacity="0.9"/><rect x="366.7" y="122.8" width="19.2" height="27.2" rx="2" fill="#2f6f5e" opacity="0.9"/><text x="451.1" y="180" class="tick mid">-6w</text><rect x="516.2" y="68.4" width="19.2" height="81.6" rx="2" fill="#b3462f" opacity="0.9"/><text x="643.6" y="180" class="tick mid">-3w</text><rect x="772.9" y="113.7" width="19.2" height="36.3" rx="2" fill="#b3462f" opacity="0.9"/><text x="6" y="24" class="tick">15</text><text x="6" y="150" class="tick">0</text></svg><div class="legend"><span class="lg"><i style="background:#2f6f5e"></i>新增</span><span class="lg"><i style="background:#b3462f"></i>遗忘</span></div></div>
+</section>
+
+<section>
+  <h2>记忆卡片<small>按重要度排序；条形是重要度，数字是四分量加权后的总分</small></h2>
+  <div class="cards"><article class="card">
+  <div class="card-top">
+    <span class="tier" style="color:#b3462f">核心</span>
+    <span class="tags">硬规则 · 工程</span>
+    <span class="score">2.91</span>
+  </div>
+  <p class="content">说「完成」之前先跑一遍自测，绿了才算完成</p>
+  <div class="meter"><div style="width:100.0%;background:#b3462f"></div></div>
+  <div class="card-foot"><span class="life pin">钉死 · 永不衰减</span>
+  <span class="fidelity">可靠度 0.77</span></div>
+  <div class="affect"><span class="dot" style="background:#b3462f"></span>情绪 负 0.25 · 唤醒 0.65 · outcome</div>
   <div class="badges"></div>
-</article><article class="card t-fact">
-  <header><span class="tier">事实</span>
-  <span class="tags">选股 · 方法</span></header>
-  <p class="content">板块资金接力看主线与连板基因，首板后分歧票容易被抛弃</p>
-  <div class="meter"><div style="width:73.3%"></div></div>
-  <footer><span>重要度 1.14</span><span>预计 155 天后跌破线</span>
-  <span class="fidelity">可靠 1.00</span></footer>
+</article><article class="card">
+  <div class="card-top">
+    <span class="tier" style="color:#b3462f">核心</span>
+    <span class="tags">硬规则 · 工程</span>
+    <span class="score">2.73</span>
+  </div>
+  <p class="content">改数据结构必须同时升状态版本并写迁移，否则旧快照会加载失败</p>
+  <div class="meter"><div style="width:93.9%;background:#b3462f"></div></div>
+  <div class="card-foot"><span class="life pin">钉死 · 永不衰减</span>
+  <span class="fidelity">可靠度 0.76</span></div>
+  <div class="affect"><span class="dot" style="background:#b3462f"></span>情绪 负 0.35 · 唤醒 0.70 · text</div>
   <div class="badges"></div>
-</article><article class="card t-fact">
-  <header><span class="tier">事实</span>
-  <span class="tags">硬规则 · 合规</span></header>
-  <p class="content">风险提示必须放在末尾，不构成投资建议</p>
-  <div class="meter"><div style="width:73.3%"></div></div>
-  <footer><span>重要度 1.14</span><span>极稳（&gt;5年）</span>
-  <span class="fidelity">可靠 1.00</span></footer>
+</article><article class="card">
+  <div class="card-top">
+    <span class="tier" style="color:#4a6fa5">经历</span>
+    <span class="tags">踩坑 · 教训</span>
+    <span class="score">2.52</span>
+  </div>
+  <p class="content">漏了一个空输入的分支，整个批处理挂掉</p>
+  <div class="meter"><div style="width:86.6%;background:#4a6fa5"></div></div>
+  <div class="card-foot"><span class="life steady">58 天后跌破线</span>
+  <span class="fidelity">可靠度 0.76</span></div>
+  <div class="affect"><span class="dot" style="background:#4a6fa5"></span>情绪 负 0.35 · 唤醒 0.70 · explicit</div>
   <div class="badges"></div>
-</article><article class="card t-event">
-  <header><span class="tier">经历</span>
-  <span class="tags">复盘 · 教训</span></header>
-  <p class="content">缩量反弹不追高，等放量确认再动手</p>
-  <div class="meter"><div style="width:73.3%"></div></div>
-  <footer><span>重要度 1.14</span><span>预计 10 天后跌破线</span>
-  <span class="fidelity">可靠 1.00</span></footer>
+</article><article class="card">
+  <div class="card-top">
+    <span class="tier" style="color:#4a6fa5">经历</span>
+    <span class="tags">踩坑 · 教训</span>
+    <span class="score">2.49</span>
+  </div>
+  <p class="content">搜了半小时才发现官方文档里就写着</p>
+  <div class="meter"><div style="width:85.8%;background:#4a6fa5"></div></div>
+  <div class="card-foot"><span class="life steady">55 天后跌破线</span>
+  <span class="fidelity">可靠度 0.79</span></div>
+  <div class="affect"><span class="dot" style="background:#4a6fa5"></span>情绪 负 0.30 · 唤醒 0.60 · explicit</div>
   <div class="badges"></div>
-</article><article class="card t-fact">
-  <header><span class="tier">事实</span>
-  <span class="tags">偏好 · 格式</span></header>
-  <p class="content">语言要克制，券商研报精简风</p>
-  <div class="meter"><div style="width:73.3%"></div></div>
-  <footer><span>重要度 1.14</span><span>预计 36 天后跌破线</span>
-  <span class="fidelity">可靠 1.00</span></footer>
+</article><article class="card">
+  <div class="card-top">
+    <span class="tier" style="color:#2f6f5e">事实</span>
+    <span class="tags">偏好 · 格式</span>
+    <span class="score">2.49</span>
+  </div>
+  <p class="content">能用表格就不用段落</p>
+  <div class="meter"><div style="width:85.7%;background:#2f6f5e"></div></div>
+  <div class="card-foot"><span class="life steady">318 天后跌破线</span>
+  </div>
+  
   <div class="badges"></div>
-</article><article class="card t-event">
-  <header><span class="tier">经历</span>
-  <span class="tags">琐事</span></header>
-  <p class="content">随手记的一条：下午要开会</p>
-  <div class="meter"><div style="width:73.2%"></div></div>
-  <footer><span>重要度 1.14</span><span>预计 7 天后跌破线</span>
-  <span class="fidelity">可靠 1.00</span></footer>
+</article><article class="card">
+  <div class="card-top">
+    <span class="tier" style="color:#b3462f">核心</span>
+    <span class="tags">硬规则 · 诚实</span>
+    <span class="score">1.93</span>
+  </div>
+  <p class="content">不要编造版本号或 API 参数，不确定就说不确定</p>
+  <div class="meter"><div style="width:66.4%;background:#b3462f"></div></div>
+  <div class="card-foot"><span class="life pin">钉死 · 永不衰减</span>
+  </div>
+  
+  <div class="badges"></div>
+</article><article class="card">
+  <div class="card-top">
+    <span class="tier" style="color:#2f6f5e">事实</span>
+    <span class="tags">硬规则 · 格式</span>
+    <span class="score">1.93</span>
+  </div>
+  <p class="content">正式文档不用 emoji 装饰</p>
+  <div class="meter"><div style="width:66.4%;background:#2f6f5e"></div></div>
+  <div class="card-foot"><span class="life pin">钉死 · 永不衰减</span>
+  </div>
+  
+  <div class="badges"></div>
+</article><article class="card">
+  <div class="card-top">
+    <span class="tier" style="color:#2f6f5e">事实</span>
+    <span class="tags">偏好 · 格式</span>
+    <span class="score">1.93</span>
+  </div>
+  <p class="content">先给结论再给理由，不要铺垫</p>
+  <div class="meter"><div style="width:66.4%;background:#2f6f5e"></div></div>
+  <div class="card-foot"><span class="life steady">320 天后跌破线</span>
+  </div>
+  
+  <div class="badges"></div>
+</article><article class="card">
+  <div class="card-top">
+    <span class="tier" style="color:#b3462f">核心</span>
+    <span class="tags">复盘 · 教训</span>
+    <span class="score">1.93</span>
+  </div>
+  <p class="content">[沉淀] 主题=复盘、教训（交集）| 来源=4条 | 要点：CI 在 Windows 上因为控制台编码炸了，排查两小时；测试用例自己写错了：用常数学习率制造「无惯性」，结果测不出来；把并发测试的断言写成「没报错」，等于没测；把配置项逐字段对拍了一遍，发现两个字段被静默吞掉</p>
+  <div class="meter"><div style="width:66.4%;background:#b3462f"></div></div>
+  <div class="card-foot"><span class="life steady">437 天后跌破线</span>
+  </div>
+  
+  <div class="badges"><span class="badge">4 条沉淀而来</span></div>
+</article><article class="card">
+  <div class="card-top">
+    <span class="tier" style="color:#4a6fa5">经历</span>
+    <span class="tags">流程 · 教训</span>
+    <span class="score">1.14</span>
+  </div>
+  <p class="content">周五的发布推迟到下周一，因为周五出事没人修</p>
+  <div class="meter"><div style="width:39.1%;background:#4a6fa5"></div></div>
+  <div class="card-foot"><span class="life steady">311 天后跌破线</span>
+  <span class="fidelity">可靠度 0.79</span></div>
+  <div class="affect"><span class="dot" style="background:#4a6fa5"></span>情绪 正 0.18 · 唤醒 0.60 · explicit</div>
+  <div class="badges"></div>
+</article><article class="card">
+  <div class="card-top">
+    <span class="tier" style="color:#4a6fa5">经历</span>
+    <span class="tags">测试 · 教训</span>
+    <span class="score">0.86</span>
+  </div>
+  <p class="content">发现测试里有依赖执行顺序的用例，改成各自独立</p>
+  <div class="meter"><div style="width:29.4%;background:#4a6fa5"></div></div>
+  <div class="card-foot"><span class="life steady">36 天后跌破线</span>
+  <span class="fidelity">可靠度 0.81</span></div>
+  
+  <div class="badges"></div>
+</article><article class="card">
+  <div class="card-top">
+    <span class="tier" style="color:#4a6fa5">经历</span>
+    <span class="tags">流程 · 工程</span>
+    <span class="score">0.23</span>
+  </div>
+  <p class="content">给回滚写了脚本，演练了两次才敢上线</p>
+  <div class="meter"><div style="width:7.9%;background:#4a6fa5"></div></div>
+  <div class="card-foot"><span class="life steady">34 天后跌破线</span>
+  <span class="fidelity">可靠度 0.81</span></div>
+  
+  <div class="badges"></div>
+</article><article class="card">
+  <div class="card-top">
+    <span class="tier" style="color:#4a6fa5">经历</span>
+    <span class="tags">流程 · 方法</span>
+    <span class="score">0.21</span>
+  </div>
+  <p class="content">把「先问清楚再动手」写进了团队约定</p>
+  <div class="meter"><div style="width:7.1%;background:#4a6fa5"></div></div>
+  <div class="card-foot"><span class="life steady">32 天后跌破线</span>
+  <span class="fidelity">可靠度 0.84</span></div>
+  
+  <div class="badges"></div>
+</article><article class="card">
+  <div class="card-top">
+    <span class="tier" style="color:#4a6fa5">经历</span>
+    <span class="tags">性能 · 方法</span>
+    <span class="score">0.17</span>
+  </div>
+  <p class="content">给关键路径加了埋点，终于知道慢在哪了</p>
+  <div class="meter"><div style="width:5.7%;background:#4a6fa5"></div></div>
+  <div class="card-foot"><span class="life warn">20 天后跌破线</span>
+  <span class="fidelity">可靠度 0.82</span></div>
+  
+  <div class="badges"></div>
+</article><article class="card">
+  <div class="card-top">
+    <span class="tier" style="color:#b3462f">核心</span>
+    <span class="tags">工程 · 性能</span>
+    <span class="score">0.15</span>
+  </div>
+  <p class="content">[沉淀] 主题=工程、性能（交集）| 来源=3条 | 要点：压测时连接池打满，扩了一倍才稳住；批量任务改成流式处理，内存占用从 2G 降到 200M；把一次慢查询从 1.2 秒压到 90 毫秒，加了索引</p>
+  <div class="meter"><div style="width:5.2%;background:#b3462f"></div></div>
+  <div class="card-foot"><span class="life steady">48 天后跌破线</span>
+  </div>
+  
+  <div class="badges"><span class="badge">3 条沉淀而来</span></div>
+</article><article class="card">
+  <div class="card-top">
+    <span class="tier" style="color:#4a6fa5">经历</span>
+    <span class="tags">工程 · 方法</span>
+    <span class="score">0.14</span>
+  </div>
+  <p class="content">给定时任务加了幂等，重跑不会再重复写入</p>
+  <div class="meter"><div style="width:4.7%;background:#4a6fa5"></div></div>
+  <div class="card-foot"><span class="life warn">4 天后跌破线</span>
+  <span class="fidelity">可靠度 0.82</span></div>
+  
+  <div class="badges"></div>
+</article><article class="card">
+  <div class="card-top">
+    <span class="tier" style="color:#4a6fa5">经历</span>
+    <span class="tags">文档 · 方法</span>
+    <span class="score">0.13</span>
+  </div>
+  <p class="content">发现自己在重复解释同一个概念，写成了短文档</p>
+  <div class="meter"><div style="width:4.5%;background:#4a6fa5"></div></div>
+  <div class="card-foot"><span class="life warn">8 天后跌破线</span>
+  <span class="fidelity">可靠度 0.84</span></div>
+  
   <div class="badges"></div>
 </article></div>
+</section>
 
-<h2>衰减曲线<small>未来 60 天，每条记忆的有效强度（虚线 = 钉死/碎片）</small></h2>
-<div class="panel"><svg viewBox="0 0 760 240" role="img" aria-label="未来 60 天的衰减曲线" class="decay"><line x1="44" y1="16" x2="44" y2="212" class="axis"/><line x1="44" y1="212" x2="744" y2="212" class="axis"/><line x1="44" y1="163.0" x2="744" y2="163.0" class="grid"/><text x="36" y="167.0" class="tick" text-anchor="end">0.70</text><line x1="44" y1="114.0" x2="744" y2="114.0" class="grid"/><text x="36" y="118.0" class="tick" text-anchor="end">1.40</text><line x1="44" y1="65.0" x2="744" y2="65.0" class="grid"/><text x="36" y="69.0" class="tick" text-anchor="end">2.10</text><line x1="44" y1="16.0" x2="744" y2="16.0" class="grid"/><text x="36" y="20.0" class="tick" text-anchor="end">2.80</text><text x="44.0" y="232" class="tick" text-anchor="middle">现在</text><text x="394.0" y="232" class="tick" text-anchor="middle">+30天</text><text x="744.0" y="232" class="tick" text-anchor="middle">+60天</text><polyline points="44.0,16.1 80.8,16.1 117.7,16.1 154.5,16.1 191.4,16.1 228.2,16.1 265.1,16.1 301.9,16.1 338.7,16.1 375.6,16.1 412.4,16.1 449.3,16.1 486.1,16.1 522.9,16.1 559.8,16.1 596.6,16.1 633.5,16.1 670.3,16.1 707.2,16.1 744.0,16.1" fill="none" stroke="#4a6fa5" stroke-width="2" opacity="0.9"/><polyline points="44.0,142.0 80.8,142.0 117.7,142.0 154.5,142.0 191.4,142.0 228.2,142.0 265.1,142.0 301.9,142.0 338.7,142.0 375.6,142.0 412.4,142.0 449.3,142.0 486.1,142.0 522.9,142.0 559.8,142.0 596.6,142.0 633.5,142.0 670.3,142.0 707.2,142.0 744.0,142.0" fill="none" stroke="#b3462f" stroke-width="2" stroke-dasharray="4 3" opacity="0.9"/><polyline points="44.0,142.0 80.8,142.0 117.7,142.0 154.5,142.0 191.4,142.0 228.2,142.0 265.1,142.0 301.9,142.0 338.7,142.0 375.6,142.0 412.4,142.0 449.3,142.0 486.1,142.0 522.9,142.0 559.8,142.0 596.6,142.0 633.5,142.0 670.3,142.0 707.2,142.0 744.0,142.0" fill="none" stroke="#b3462f" stroke-width="2" stroke-dasharray="4 3" opacity="0.9"/><polyline points="44.0,16.0 80.8,16.0 117.7,16.0 154.5,16.0 191.4,16.0 228.2,16.0 265.1,16.0 301.9,16.0 338.7,16.0 375.6,16.0 412.4,16.0 449.3,16.0 486.1,16.0 522.9,16.0 559.8,16.0 596.6,16.0 633.5,16.0 670.3,16.0 707.2,16.0 744.0,16.0" fill="none" stroke="#2f6f5e" stroke-width="2" opacity="0.9"/><polyline points="44.0,37.0 80.8,37.0 117.7,37.0 154.5,37.0 191.4,37.0 228.2,37.0 265.1,37.0 301.9,37.0 338.7,37.0 375.6,37.0 412.4,37.0 449.3,37.0 486.1,37.0 522.9,37.0 559.8,37.0 596.6,37.0 633.5,37.0 670.3,37.0 707.2,37.0 744.0,37.0" fill="none" stroke="#2f6f5e" stroke-width="2" opacity="0.9"/><polyline points="44.0,142.0 80.8,142.0 117.7,142.0 154.5,142.0 191.4,142.0 228.2,142.0 265.1,142.0 301.9,142.0 338.7,142.0 375.6,142.0 412.4,142.0 449.3,142.0 486.1,142.0 522.9,142.0 559.8,142.0 596.6,142.0 633.5,142.0 670.3,142.0 707.2,142.0 744.0,142.0" fill="none" stroke="#2f6f5e" stroke-width="2" opacity="0.9"/><polyline points="44.0,121.1 80.8,121.1 117.7,121.1 154.5,121.1 191.4,121.1 228.2,121.1 265.1,121.1 301.9,121.1 338.7,121.1 375.6,121.1 412.4,121.1 449.3,121.1 486.1,121.1 522.9,121.1 559.8,121.1 596.6,121.1 633.5,121.1 670.3,121.1 707.2,121.1 744.0,121.1" fill="none" stroke="#4a6fa5" stroke-width="2" opacity="0.9"/><polyline points="44.0,142.0 80.8,142.0 117.7,142.0 154.5,142.0 191.4,142.0 228.2,142.0 265.1,142.0 301.9,142.0 338.7,142.0 375.6,142.0 412.4,142.0 449.3,142.0 486.1,142.0 522.9,142.0 559.8,142.0 596.6,142.0 633.5,142.0 670.3,142.0 707.2,142.0 744.0,142.0" fill="none" stroke="#2f6f5e" stroke-width="2" opacity="0.9"/></svg><div class="legend"><span class="lg"><i style="background:#4a6fa5"></i>追高汉缆后逆板块阴…</span><span class="lg"><i style="background:#b3462f"></i>禁止绝对化措辞，所…</span><span class="lg"><i style="background:#b3462f"></i>输出优先表格化，不…</span><span class="lg"><i style="background:#2f6f5e"></i>半凯利仓位：单笔不…</span><span class="lg"><i style="background:#2f6f5e"></i>板块资金接力看主线…</span><span class="lg"><i style="background:#2f6f5e"></i>风险提示必须放在末…</span><span class="lg"><i style="background:#4a6fa5"></i>缩量反弹不追高，等…</span><span class="lg"><i style="background:#2f6f5e"></i>语言要克制，券商研…</span></div></div>
+<section>
+  <div class="grid2">
+    <div>
+      <h2>自述<small>第 8 版 · 可靠度 0.90 · 单主题占比 0.46</small></h2>
+      <div class="panel"><ol class="chapters"><li><span class="arc">起源</span><b>硬规则</b><span class="n">4 条</span><span class="share">46%</span></li><li><span class="arc">转折</span><b>偏好</b><span class="n">2 条</span><span class="share">21%</span></li><li><span class="arc">转折</span><b>踩坑</b><span class="n">2 条</span><span class="share">24%</span></li><li><span class="arc">当下</span><b>复盘</b><span class="n">1 条</span><span class="share">9%</span></li></ol></div>
+    </div>
+    <div>
+      <h2>注意力份额<small>谁在占据「我在乎的东西」</small></h2>
+      <div class="panel"><div class="row"><span class="name">rule:test-first</span><span class="track"><span style="width:12.2%"></span></span><span class="pct">12%</span></div><div class="row"><span class="name">rule:schema</span><span class="track"><span style="width:11.4%"></span></span><span class="pct">11%</span></div><div class="row"><span class="name">d044:23</span><span class="track"><span style="width:10.5%"></span></span><span class="pct">11%</span></div><div class="row"><span class="name">d040:21</span><span class="track"><span style="width:10.4%"></span></span><span class="pct">10%</span></div><div class="row"><span class="name">pref:table</span><span class="track"><span style="width:10.4%"></span></span><span class="pct">10%</span></div><div class="row"><span class="name">rule:no-fabricate</span><span class="track"><span style="width:8.1%"></span></span><span class="pct">8%</span></div><div class="row"><span class="name">rule:no-emoji</span><span class="track"><span style="width:8.1%"></span></span><span class="pct">8%</span></div><div class="row"><span class="name">pref:concise</span><span class="track"><span style="width:8.1%"></span></span><span class="pct">8%</span></div></div>
+    </div>
+  </div>
+</section>
 
-<h2>注意力份额<small>谁在占据「我在乎的东西」</small></h2>
-<div class="panel"><div class="row"><span class="name">loss:0914</span><div class="track"><div style="width:14.6%"></div></div><span class="pct">15%</span></div><div class="row"><span class="name">rule:no-abs</span><div class="track"><div style="width:10.7%"></div></div><span class="pct">11%</span></div><div class="row"><span class="name">rule:table</span><div class="track"><div style="width:10.7%"></div></div><span class="pct">11%</span></div><div class="row"><span class="name">kelly</span><div class="track"><div style="width:10.7%"></div></div><span class="pct">11%</span></div><div class="row"><span class="name">sector</span><div class="track"><div style="width:10.7%"></div></div><span class="pct">11%</span></div><div class="row"><span class="name">style:risk</span><div class="track"><div style="width:10.7%"></div></div><span class="pct">11%</span></div><div class="row"><span class="name">lesson:win</span><div class="track"><div style="width:10.7%"></div></div><span class="pct">11%</span></div><div class="row"><span class="name">pref:lang</span><div class="track"><div style="width:10.7%"></div></div><span class="pct">11%</span></div></div>
+<section>
+  <h2>生效风格</h2>
+  <div class="panel chips-row"><span class="chip">能用表格就用表格</span></div>
+</section>
 
-<h2>自述<small>第 1 版</small></h2>
-<div class="panel"><ol class="chapters"><li><span class="arc">起源</span><b>硬规则</b><span class="n">3 条</span><span class="share">32%</span></li><li><span class="arc">转折</span><b>仓位</b><span class="n">1 条</span><span class="share">11%</span></li><li><span class="arc">转折</span><b>其他</b><span class="n">3 条</span><span class="share">32%</span></li><li><span class="arc">当下</span><b>复盘</b><span class="n">2 条</span><span class="share">26%</span></li></ol></div>
-
-<h2>生效风格</h2>
-<div class="panel"><span class="muted">暂无（证据不足）</span></div>
-
-<h2>墓碑<small>被主动放下的东西，仍可溯源</small></h2>
-<div class="panel"><ul class="grave"><li><b>noise:2</b><span>周末带娃去公园晒太阳</span></li><li><b>old:1</b><span>三个月前的一次判断失误，情绪很重</span></li><li><b>tmp:1</b><span>临时记一下：明天再看</span></li></ul></div>
+<section>
+  <h2>墓碑<small>被主动放下的东西，仍可溯源</small></h2>
+  <div class="panel"><ul class="grave"><li><b>d000:1</b><span>写了一个把 JSON 拆成树的小工具，比想象中好用</span></li><li><b>d002:2</b><span>把长函数拆开之后可读性明显变好</span></li><li><b>d004:3</b><span>给接口加了超时，之前卡住是因为默认无限等</span></li><li><b>d006:4</b><span>缓存键忘了带用户名，两个账号互相串数据</span></li><li><b>d008:5</b><span>日志里打了完整凭据，被安全扫描抓出来</span></li><li><b>d010:6</b><span>线上回滚了一次，原因是迁移脚本没在测试库跑过，很痛</span></li><li><b>d012:7</b><span>CI 在 Windows 上因为控制台编码炸了，排查两小时</span></li><li><b>d014:8</b><span>把并发测试的断言写成「没报错」，等于没测</span></li><li><b>d016:9</b><span>测试用例自己写错了：用常数学习率制造「无惯性」，结果测不出来</span></li><li><b>d018:10</b><span>把配置项逐字段对拍了一遍，发现两个字段被静默吞掉</span></li></ul></div>
+</section>
 
 <p class="note">
-这不是仪表盘，是一张「记忆的体检报告」。三条读法：<br>
-① 卡片条形很长但寿命很短 = 现在很亮，但很快会被忘掉 —— 如果不重要，这是对的。<br>
-② 衰减曲线里最先触底的，就是系统认为「最该放手」的；钉死的线是平的，它永远不会掉下去。<br>
-③ 墓碑不是失败，是取舍。全部保留等于没有取舍。
+这不是仪表盘，是一张<b>记忆的体检报告</b>。三条读法：<br>
+① 曲线最先触底的那几条，就是系统认为最该放手的 —— 如果你觉得不对，把它们钉死。<br>
+② 条形长但寿命短 = 现在很亮、但很快会淡；这不一定是坏事，多数琐事本该如此。<br>
+③ 墓碑不是失败，是取舍。全部保留，等于没有取舍。
 </p>
 </div></body></html>

@@ -25,6 +25,7 @@ from typing import Any
 from ._console import ensure_utf8_console
 from .palace import MemoryPalace
 from .render import html_report, status_line, text_report
+from .tree import build_tree, render_tree, tree_stats
 
 DEFAULT_STORE = os.path.join(os.path.expanduser("~"), ".memory-palace", "store.json")
 OUTCOME_ALIASES = {
@@ -324,6 +325,41 @@ def cmd_context(args) -> int:
         budget=args.budget,
         names=list(args.name) if args.name else None,
     )
+    if args.tree:
+        scores = {
+            r["name"]: r["score"]
+            for r in palace.score_breakdown(args.query)
+        } if args.query else {}
+        tree = build_tree(palace, scores=scores)
+        rendered = render_tree(
+            tree,
+            expand=args.expand,
+            budget=args.budget,
+            leaf_limit=max(1, args.k // 2 or 1),
+        )
+        head = ctx.get("narrative")
+        if head and rendered["used"] + 80 <= args.budget:
+            # 自述压成一行：预算够就带上，不够就让位给记忆本身
+            tail = (
+                f"— 自述 rev{head['rev']} · 单主题 {head['monopoly']:.2f}"
+                f" · 可靠度 {head['reliability']:.2f}"
+            )
+            rendered["text"] = rendered["text"] + "\n" + tail
+            rendered["used"] += len(tail)
+        if args.compare:
+            flat = format_context(ctx)
+            rendered["flat_used"] = len(flat)
+            rendered["saving"] = round(1 - len(rendered["text"]) / max(1, len(flat)), 4)
+        if args.json:
+            print(json.dumps({**rendered, "shape": tree_stats(tree)}, ensure_ascii=False, indent=2))
+        else:
+            print(rendered["text"])
+            if args.compare:
+                print(
+                    f"\n[对比] 扁平 {rendered['flat_used']} 字 → 树 {rendered['used']} 字，"
+                    f"省 {rendered['saving']:.0%}"
+                )
+        return 0
     if args.status_only:
         rev = (ctx.get("narrative") or {}).get("rev")
         print(status_line(ctx, rev))
@@ -454,6 +490,77 @@ def cmd_forget(args) -> int:
     return 0
 
 
+def _slash(path: str) -> str:
+    """配置里统一用正斜杠：YAML/TOML 的双引号字符串会把反斜杠当转义符。"""
+    return path.replace("\\", "/")
+
+
+def _paths() -> tuple[str, str, str]:
+    """打印配置时要给绝对路径：宿主的工作目录不是仓库根，相对路径必然踩坑。"""
+    repo = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    return sys.executable, repo, resolve_store(None)
+
+
+def cmd_config(args) -> int:
+    """打印可直接粘贴的宿主配置。绝对路径都算好了，不用手改。"""
+    python, repo, store = _paths()
+    if args.for_ == "dsh":
+        print(f"""# DSH（DeepSeek Harness）· ~/.dsh/profiles/<profile>/cordis.patch.yml
+# 保存后约 1 秒热重载；工具名会变成 mcp__memory-palace__memory_context
+- insert:
+    - id: mcp-memory-palace
+      name: '@deepseek-ai/dsh-mcp-client'
+      config:
+        serverName: memory-palace
+        transport: stdio
+        command: "{_slash(python)}"
+        args: ["-u", "-m", "memory_palace.mcp_server", "--profile", "{args.profile}"]
+        cwd: "{_slash(repo)}"
+        env:
+          MEMORY_PALACE_STORE: "{_slash(store)}"
+          PYTHONPATH: "{_slash(repo)}"
+        toolCallTimeoutMs: 30000
+# 注意：DSH 启动子进程前会剥掉名字含 KEY/PASSWORD/SECRET/TOKEN/DSH_* 的环境变量，
+# 所以存储路径必须显式写进 env，别指望从 shell 继承。""")
+    elif args.for_ == "claude":
+        print(f"""// Claude Code · 项目根 .mcp.json（或 claude mcp add）
+{{
+  "mcpServers": {{
+    "memory-palace": {{
+      "command": {json.dumps(python, ensure_ascii=False)},
+      "args": ["-m", "memory_palace.mcp_server", "--profile", "{args.profile}"],
+      "env": {{ "MEMORY_PALACE_STORE": {json.dumps(store, ensure_ascii=False)}, "PYTHONPATH": {json.dumps(repo, ensure_ascii=False)} }}
+    }}
+  }}
+}}""")
+    elif args.for_ == "codex":
+        print(f"""# Codex CLI · ~/.codex/config.toml
+[mcp_servers.memory-palace]
+command = "{_slash(python)}"
+args = ["-m", "memory_palace.mcp_server", "--profile", "{args.profile}"]
+env = {{ MEMORY_PALACE_STORE = "{_slash(store)}", PYTHONPATH = "{_slash(repo)}" }}""")
+    elif args.for_ == "cursor":
+        print(f"""// Cursor · ~/.cursor/mcp.json
+{{
+  "mcpServers": {{
+    "memory-palace": {{
+      "command": {json.dumps(python, ensure_ascii=False)},
+      "args": ["-m", "memory_palace.mcp_server", "--profile", "{args.profile}"],
+      "env": {{ "MEMORY_PALACE_STORE": {json.dumps(store, ensure_ascii=False)}, "PYTHONPATH": {json.dumps(repo, ensure_ascii=False)} }}
+    }}
+  }}
+}}""")
+    else:  # http
+        print(f"""# 任意支持 OpenAPI 的平台（Dify / Coze / n8n / GPT Actions）
+# 1) 起服务（默认只绑 127.0.0.1，无鉴权）
+"{python}" -m memory_palace.http_api --port 8765
+# 2) 导入 OpenAPI
+http://127.0.0.1:8765/openapi.json
+# 3) 记忆库位置
+MEMORY_PALACE_STORE={_slash(store)}""")
+    return 0
+
+
 def cmd_style(args) -> int:
     path = resolve_store(args.store)
     palace = open_palace(path)
@@ -520,6 +627,9 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--json", action="store_true")
     p.add_argument("--status-only", action="store_true",
                    help="只输出一行状态（记忆 5/12 · 钉死1 · 存疑2 · 412/800字），用于贴给用户看")
+    p.add_argument("--tree", action="store_true", help="改用树状注入（根常驻、枝按需展开、其余折叠）")
+    p.add_argument("--expand", type=int, default=1, help="树状模式下展开几个枝（默认 1）")
+    p.add_argument("--compare", action="store_true", help="同时算出扁平注入的用量，报告省了多少字")
     p.set_defaults(func=cmd_context)
 
     p = sub.add_parser("view", parents=[common], help="终端视图：谁重要、谁快被忘掉")
@@ -560,6 +670,13 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("name")
     p.add_argument("--reason", default="user_requested")
     p.set_defaults(func=cmd_forget)
+
+    p = sub.add_parser("config", parents=[common], help="打印宿主配置（dsh / claude / codex / cursor / http）")
+    p.add_argument("--for", dest="for_", default="dsh",
+                   choices=["dsh", "claude", "codex", "cursor", "http"])
+    p.add_argument("--profile", default="slim", choices=["slim", "full"],
+                   help="工具档位：slim 三个工具（省 token）/ full 八个")
+    p.set_defaults(func=cmd_config)
 
     p = sub.add_parser("style", parents=[common], help="风格证据与生效状态")
     p.add_argument("action", choices=["observe", "active"])

@@ -103,6 +103,10 @@ class MemoryPalace:
         self.last_gc: list[dict[str, Any]] = []
         # None = 本轮根本没抓过（不能据此判「预算不足」）；[] = 抓过但一条没抓到。
         self._last_grasp: list[dict[str, Any]] | None = None
+        # 评估缓存：一次 context 里 assess 会被 entropy / snapshot / 排序各要一遍，
+        # 不缓存就是同一份 O(n log n) 算三四次。键里带「1 秒桶」，代价 <1 秒的衰减误差。
+        self._assess_cache: tuple[tuple, dict[str, dict[str, float]]] | None = None
+        self._logic_rev = 0
         self._last_persona_health: tuple[str, bool, bool] | None = None
 
         if path and os.path.exists(path):
@@ -264,6 +268,9 @@ class MemoryPalace:
 
     # ---------- 逻辑关联 ----------
 
+    def _bump_logic(self) -> None:
+        self._logic_rev += 1
+
     def assert_relation(
         self,
         src: str,
@@ -278,6 +285,7 @@ class MemoryPalace:
                     raise KeyError(f"关系端点不存在: {name}")
             now = self.now()
             edge = self.logic.assert_relation(src, dst, kind, strength, now)
+            self._bump_logic()
             self._log(
                 "assert_relation",
                 {
@@ -315,6 +323,35 @@ class MemoryPalace:
             head = self.narrative.head
             return head.to_dict() if head else None
 
+    def _state_stamp(self, now: float) -> tuple:
+        """缓存键：节点规模 + 访问计数和 + 最后访问时刻和 + 逻辑版本 + 秒级时间桶。
+
+        不用「内容哈希」：那要扫全部文本；这四个整数足以捕捉「权重/结构变了」。
+        """
+        nodes = self.graph.all_nodes()
+        return (
+            len(nodes),
+            sum(n.access_count for n in nodes),
+            int(sum(n.last_accessed for n in nodes)),
+            self._logic_rev,
+            int(now),
+        )
+
+    def assessment(self, now: float | None = None) -> dict[str, dict[str, float]]:
+        """一次计算、多处复用的重要性账本（context / 树 / 熵 / 快照共用）。"""
+        with self._lock:
+            moment = self.now() if now is None else now
+            stamp = self._state_stamp(moment)
+            if self._assess_cache is not None and self._assess_cache[0] == stamp:
+                return self._assess_cache[1]
+            result = self.value.assess(self.graph, moment, self.logic.support_map())
+            self._assess_cache = (stamp, result)
+            return result
+
+    def structural(self, now: float | None = None) -> dict[str, float]:
+        with self._lock:
+            return self.value.structural(self.graph, self.now() if now is None else now)
+
     def importance_of(self, name: str) -> dict[str, float] | None:
         """一条记忆为什么值得留 / 该被放手：四个分量逐一列出。"""
         with self._lock:
@@ -328,9 +365,9 @@ class MemoryPalace:
         全是孤岛=记下了却彼此无关。三个读数分开报，不合成一个自我安慰的总分。"""
         with self._lock:
             now = self.now()
-            assessment = self.value.assess(self.graph, now, self.logic.support_map())
+            assessment = self.assessment(now)
             dist = self.value.distribution(assessment)
-            struct = self.value.structural(self.graph, now)
+            struct = self.structural(now)
             return {
                 **dist,
                 "structure": struct,
@@ -383,6 +420,7 @@ class MemoryPalace:
             self.graph.remove_nodes_from([name])
             self.semantics.forget(name)
             self.logic.prune([name])
+            self._bump_logic()
             self._log("drop", {"name": name, "reason": reason}, self.now())
             self._maybe_save()
             return True
@@ -916,6 +954,7 @@ class MemoryPalace:
         for name in victims:
             self.semantics.forget(name)  # 幽灵向量会让检索命中已死记忆
         pruned = self.logic.prune(victims)  # 节点没了，指向它的断言也必须消失
+        self._bump_logic()
         self._log(
             "gc",
             {
@@ -944,7 +983,7 @@ class MemoryPalace:
         return out
 
     def _narrate_unlocked(self, now: float) -> NarrativeRevision:
-        assessment = self.value.assess(self.graph, now, self.logic.support_map())
+        assessment = self.assessment(now)
         revision = self.narrative.compose(
             self.graph,
             assessment,
@@ -1020,9 +1059,9 @@ class MemoryPalace:
         return {"settled": settled, "applied": applied, "escalations": escalations}
 
     def _reflect_unlocked(self, now: float) -> ReflectionReport:
-        assessment = self.value.assess(self.graph, now, self.logic.support_map())
+        assessment = self.assessment(now)
         dist = self.value.distribution(assessment)
-        struct = self.value.structural(self.graph, now)
+        struct = self.structural(now)
         head = self.narrative.head
         grasp_log = self._last_grasp
         grabbed = {row["name"] for row in (grasp_log or [])}
@@ -1208,9 +1247,9 @@ class MemoryPalace:
             now = self.now()
             graph_nodes = self.graph.all_nodes()
             tiers = Counter(n.tier for n in graph_nodes)
-            assessment = self.value.assess(self.graph, now, self.logic.support_map())
+            assessment = self.assessment(now)
             dist = self.value.distribution(assessment)
-            struct = self.value.structural(self.graph, now)
+            struct = self.structural(now)
             head = self.narrative.head
             return {
                 "now": now,

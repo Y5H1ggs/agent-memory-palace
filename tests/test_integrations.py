@@ -105,6 +105,43 @@ def test_mcp(store: str) -> None:
     check("stdin 关闭后进程正常退出", proc.returncode == 0, str(proc.returncode))
 
 
+def test_mcp_slim(store: str) -> None:
+    """DSH 这类宿主会把工具定义常驻上下文，slim 档只留三个动词。"""
+    env = dict(os.environ)
+    env["MEMORY_PALACE_STORE"] = store
+    env["PYTHONPATH"] = ROOT + os.pathsep + env.get("PYTHONPATH", "")
+    proc = subprocess.Popen(
+        [sys.executable, "-m", "memory_palace.mcp_server", "--profile", "slim"],
+        stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+        text=True, encoding="utf-8", env=env, cwd=ROOT,
+    )
+
+    def rpc(message: dict) -> dict:
+        proc.stdin.write(json.dumps(message, ensure_ascii=False) + "\n")
+        proc.stdin.flush()
+        return json.loads(proc.stdout.readline())
+
+    try:
+        rpc({"jsonrpc": "2.0", "id": 1, "method": "initialize",
+             "params": {"protocolVersion": "2025-06-18", "capabilities": {}}})
+        tools = rpc({"jsonrpc": "2.0", "id": 2, "method": "tools/list"})["result"]["tools"]
+        check(
+            "slim 档只暴露 3 个工具（省掉约 60% 的工具 schema）",
+            sorted(t["name"] for t in tools) == ["memory_context", "memory_cycle", "memory_remember"],
+            f"{len(tools)} 个：{[t['name'] for t in tools]}",
+        )
+        hidden = rpc({"jsonrpc": "2.0", "id": 3, "method": "tools/call",
+                      "params": {"name": "memory_recall", "arguments": {}}})
+        check(
+            "slim 档下未启用的工具显式报错，而不是静默成功",
+            hidden.get("error", {}).get("code") == -32601,
+            str(hidden.get("error", {}).get("message"))[:40],
+        )
+    finally:
+        proc.stdin.close()
+        proc.wait(timeout=15)
+
+
 def test_http(store: str) -> None:
     os.environ["MEMORY_PALACE_STORE"] = store
     server = ThreadingHTTPServer(("127.0.0.1", 0), http_api.Handler)
@@ -164,6 +201,8 @@ def main() -> None:
     with tempfile.TemporaryDirectory(prefix="mp-int-") as tmp:
         print("MCP（stdio）")
         test_mcp(os.path.join(tmp, "mcp.json"))
+        print("MCP（slim 档）")
+        test_mcp_slim(os.path.join(tmp, "mcp-slim.json"))
         print("HTTP + OpenAPI")
         test_http(os.path.join(tmp, "http.json"))
     print("\n接入层契约自测通过 ✅")
@@ -172,6 +211,7 @@ def main() -> None:
 def test_mcp_contract() -> None:
     with tempfile.TemporaryDirectory(prefix="mp-mcp-") as tmp:
         test_mcp(os.path.join(tmp, "mcp.json"))
+        test_mcp_slim(os.path.join(tmp, "mcp-slim.json"))
 
 
 def test_http_contract() -> None:

@@ -23,7 +23,7 @@ from typing import Any, Callable
 
 from .cli import DEFAULT_STORE, build_context, format_context, open_palace, parse_tags
 
-SERVER_INFO = {"name": "memory-palace", "version": "0.3.0"}
+SERVER_INFO = {"name": "memory-palace", "version": "0.5.0"}
 PROTOCOL_DEFAULT = "2024-11-05"
 
 # 工具描述是写给模型看的：说清「什么时候该用」，比说清参数更重要。
@@ -42,6 +42,11 @@ TOOLS: list[dict[str, Any]] = [
                 "budget": {"type": "integer", "description": "字符预算，默认 900", "default": 900},
                 "limit": {"type": "integer", "description": "最多几条，默认 6", "default": 6},
                 "names": {"type": "array", "items": {"type": "string"}, "description": "必须包含的记忆名"},
+                "tree": {
+                    "type": "boolean",
+                    "description": "用树状注入（根常驻、枝按需展开、其余折叠）。记忆多于 ~30 条时更省 token",
+                    "default": False,
+                },
             },
         },
     },
@@ -146,12 +151,27 @@ def _fail(message: str) -> dict[str, Any]:
 
 
 def tool_context(args: dict[str, Any]) -> dict[str, Any]:
+    from .tree import build_tree, render_tree
+
     palace = open_palace(_store())
+    query = args.get("query")
+    budget = int(args.get("budget", 900))
+    if args.get("tree"):
+        scores = (
+            {r["name"]: r["score"] for r in palace.score_breakdown(query)} if query else {}
+        )
+        rendered = render_tree(
+            build_tree(palace, scores=scores),
+            expand=int(args.get("expand", 1)),
+            budget=budget,
+            leaf_limit=max(1, int(args.get("limit", 6)) // 2),
+        )
+        return _text(rendered["text"])
     ctx = build_context(
         palace,
-        query=args.get("query"),
+        query=query,
         limit=int(args.get("limit", 6)),
-        budget=int(args.get("budget", 900)),
+        budget=budget,
         names=args.get("names") or None,
     )
     return _text(format_context(ctx))
@@ -263,6 +283,22 @@ def tool_cycle(_args: dict[str, Any]) -> dict[str, Any]:
     )
 
 
+# 工具档位：DSH 这类宿主会把**全部工具定义**常驻进上下文（不支持 Tool Search），
+# 8 个工具的定义≈1.2k token，每轮都付。slim 只留三个动词：取、记、代谢。
+PROFILES: dict[str, tuple[str, ...]] = {
+    "slim": ("memory_context", "memory_remember", "memory_cycle"),
+    "full": tuple(t["name"] for t in TOOLS),
+}
+ACTIVE: set[str] = set(PROFILES["full"])
+
+
+def set_profile(name: str) -> None:
+    global ACTIVE
+    if name not in PROFILES:
+        raise SystemExit(f"未知 profile: {name}（可选 {sorted(PROFILES)}）")
+    ACTIVE = set(PROFILES[name])
+
+
 HANDLERS: dict[str, Callable[[dict[str, Any]], dict[str, Any]]] = {
     "memory_context": tool_context,
     "memory_remember": tool_remember,
@@ -299,16 +335,26 @@ def handle(request: dict[str, Any]) -> dict[str, Any] | None:
         return None if is_notification else {"jsonrpc": "2.0", "id": request_id, "result": {}}
 
     if method == "tools/list":
+        visible = [t for t in TOOLS if t["name"] in ACTIVE]
         return (
             None
             if is_notification
-            else {"jsonrpc": "2.0", "id": request_id, "result": {"tools": TOOLS}}
+            else {"jsonrpc": "2.0", "id": request_id, "result": {"tools": visible}}
         )
 
     if method == "tools/call":
         params = request.get("params") or {}
         name = params.get("name")
         handler = HANDLERS.get(str(name))
+        if handler is not None and str(name) not in ACTIVE:
+            return {
+                "jsonrpc": "2.0",
+                "id": request_id,
+                "error": {
+                    "code": -32601,
+                    "message": f"当前 profile 未启用 {name}（用 --profile full 启动）",
+                },
+            }
         if handler is None:
             return {
                 "jsonrpc": "2.0",
@@ -331,8 +377,24 @@ def handle(request: dict[str, Any]) -> dict[str, Any] | None:
     }
 
 
-def main() -> int:
-    """stdio 主循环：一行一条 JSON-RPC。EOF 即退出。"""
+def main(argv: list[str] | None = None) -> int:
+    """stdio 主循环：一行一条 JSON-RPC。EOF 即退出。
+
+    `--profile slim` 只暴露 context/remember/cycle 三个工具，给「工具定义常驻上下文」
+    的宿主（DSH 等）省 token；默认 full。
+    """
+    import argparse
+
+    parser = argparse.ArgumentParser(prog="memory-palace-mcp", description="MCP 记忆服务（stdio）")
+    parser.add_argument("--profile", choices=sorted(PROFILES), default="full")
+    parser.add_argument("--list-tools", action="store_true", help="打印工具清单后退出（排障用）")
+    ns = parser.parse_args(argv)
+    set_profile(ns.profile)
+    if ns.list_tools:
+        for tool in TOOLS:
+            mark = "on " if tool["name"] in ACTIVE else "off"
+            print(f"[{mark}] {tool['name']}: {tool['description'].splitlines()[0][:60]}")
+        return 0
     for line in sys.stdin:
         line = line.strip()
         if not line:

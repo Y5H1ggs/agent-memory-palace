@@ -33,3 +33,7 @@ jobs:
         run: python tests/test_cli.py
       - name: MCP / HTTP 接入层自测
         run: python tests/test_integrations.py
+      - name: 基准冒烟（200 条）
+        run: python -m memory_palace.bench 200
+      - name: 演示库可生成
+        run: python examples/showcase.py --days 60

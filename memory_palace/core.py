@@ -54,6 +54,10 @@ class PalaceConfig:
     consolidate_min_shared_tags: int = 2
     consolidate_min_weight: float = 0.2
     consolidate_similarity: float = 0.5
+    # 沉淀是维护动作，不能把一次 run_cycle 拖成秒级：候选封顶 + 大规模时分桶配对。
+    consolidate_max_candidates: int = 600
+    consolidate_block_threshold: int = 120
+    consolidate_max_pairs: int = 60000
     style_crystallize_confidence: float = 0.70
     style_min_observations: int = 3
     style_min_span_days: float = 1.0
@@ -140,6 +144,9 @@ class PalaceConfig:
     INT_FIELDS: ClassVar[tuple[str, ...]] = (
         "consolidate_min_group",
         "consolidate_min_shared_tags",
+        "consolidate_max_candidates",
+        "consolidate_block_threshold",
+        "consolidate_max_pairs",
         "style_min_observations",
         "max_events",
         "logic_max_hops",
@@ -185,6 +192,10 @@ class PalaceConfig:
             raise ValueError("半衰期与反思窗口必须为正")
         if self.consolidate_min_group < 2 or self.consolidate_min_shared_tags < 0:
             raise ValueError("沉淀分组阈值非法")
+        if self.consolidate_max_candidates < self.consolidate_min_group:
+            raise ValueError("consolidate_max_candidates 不能小于分组下限")
+        if self.consolidate_block_threshold < 2 or self.consolidate_max_pairs < 1:
+            raise ValueError("沉淀分桶阈值与配对上限必须为正")
         if self.style_min_observations < 1 or self.max_events < 1:
             raise ValueError("证据数下限与事件上限非法")
         if self.style_min_span_days < 0:

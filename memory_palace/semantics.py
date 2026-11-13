@@ -271,7 +271,8 @@ class SemanticIndex:
         self.learned: dict[str, tuple[str, ...]] = {}
         self._vectors: dict[str, list[float]] = {}
         self._dim: int | None = getattr(self.encoder, "dim", None)
-        self._signature: bytes | None = None
+        # 脏标记代替「每次查询都哈希全语料」：写入/遗忘即脏，重建一次后转干净。
+        self._dirty = True
 
     def __len__(self) -> int:
         return len(self._vectors)
@@ -345,9 +346,11 @@ class SemanticIndex:
 
     def upsert(self, node: MemoryNode) -> None:
         self._vectors[node.name] = self._validate(self.encoder.encode(node.content))
+        self._dirty = True  # 语料变了，概念词典可能要重学
 
     def forget(self, name: str) -> None:
-        self._vectors.pop(name, None)
+        if self._vectors.pop(name, None) is not None:
+            self._dirty = True
 
     def vector(self, name: str) -> list[float] | None:
         """给沉淀聚类等外部模块取用；未建索引的节点返回 None 而不是零向量。"""
@@ -357,12 +360,16 @@ class SemanticIndex:
         self._learn_lexicon([n.content for n in graph.all_nodes()])
         self._vectors.clear()
         for node in graph.all_nodes():
-            self.upsert(node)
-        self._signature = self._graph_signature(graph)
+            self._vectors[node.name] = self._validate(self.encoder.encode(node.content))
+        self._dirty = False
 
     def sync(self, graph: MemoryGraph) -> None:
-        """检索前对齐：语料变了就重学词典并重建，保证索引与图不会各说各话。"""
-        if self._signature != self._graph_signature(graph):
+        """检索前对齐：脏了（或向量数与图不符）才重建。
+
+        以前是每次查询都算一遍全语料哈希 —— 1000 条记忆每次查询要扫 30KB 文本。
+        现在只读一个布尔量，重建由写入方负责置脏。
+        """
+        if self._dirty or len(self._vectors) != len(graph):
             self.rebuild(graph)
 
     def ghosts(self, graph: MemoryGraph) -> list[str]:

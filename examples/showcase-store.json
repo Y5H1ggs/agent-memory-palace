@@ -1,0 +1,6231 @@
+{
+  "version": 5,
+  "saved_at": 1794472363.0455482,
+  "config": {
+    "forget_w": 0.02,
+    "access_gain": 0.5,
+    "consolidate_min_group": 3,
+    "consolidate_min_shared_tags": 2,
+    "consolidate_min_weight": 0.2,
+    "consolidate_similarity": 0.294,
+    "consolidate_max_candidates": 600,
+    "consolidate_block_threshold": 120,
+    "consolidate_max_pairs": 60000,
+    "style_crystallize_confidence": 0.7,
+    "style_min_observations": 3,
+    "style_min_span_days": 1.0,
+    "style_decrystallize_confidence": 0.5,
+    "style_half_life_days": 30.0,
+    "reflection_window_days": 30.0,
+    "max_events": 5000,
+    "semantic_alpha": 1.0,
+    "semantic_tag_beta": 0.6,
+    "semantic_recency_gamma": 0.1,
+    "semantic_min_score": 0.12,
+    "semantic_relative_floor": 0.55,
+    "semantic_ambiguity_floor": 0.15,
+    "semantic_learn_min_df_ratio": 0.12,
+    "semantic_learn_max_df_ratio": 0.6,
+    "semantic_learn_min_lift": 1.6,
+    "semantic_learn_min_purity": 0.75,
+    "style_adjudication_margin": 0.05,
+    "affect_arousal_half_life_days": 3.0,
+    "affect_valence_half_life_days": 10.0,
+    "affect_stability_gain": 1.8,
+    "affect_distortion": 0.35,
+    "logic_hop_decay": 0.55,
+    "logic_max_hops": 2,
+    "logic_spread_threshold": 0.12,
+    "importance_w_weight": 1.0,
+    "importance_w_affect": 0.9,
+    "importance_w_support": 0.8,
+    "importance_w_central": 1.1,
+    "importance_forget": 0.084,
+    "grasp_budget": 4.0,
+    "grasp_gain": 0.3,
+    "narrative_max_nodes": 9,
+    "narrative_max_chapters": 4,
+    "narrative_select_importance": 0.12,
+    "narrative_relative_floor": 0.25,
+    "narrative_centrality_cap": 8,
+    "narrative_heat_half_life_days": 21.0,
+    "narrative_monopoly_warn": 0.7,
+    "narrative_reliability_warn": 0.7,
+    "entropy_flat_below": 0.45,
+    "entropy_narrow_above": 0.6,
+    "structure_isolated_warn": 0.5,
+    "structure_fragment_warn": 0.45,
+    "structure_hub_below": 0.35,
+    "persona_learning_rate": 0.3,
+    "persona_inertia": 0.8,
+    "persona_recent_limit": 64,
+    "persona_drift_warn": 0.18,
+    "persona_drift_rupture": 0.35,
+    "persona_peak_weight": 0.65,
+    "persona_velocity_window_days": 3.0,
+    "persona_velocity_warn": 0.06,
+    "persona_consistency_tolerance": 0.3,
+    "persona_churn_per_hour": 0.5,
+    "persona_churn_min_switches": 3,
+    "persona_history_limit": 200,
+    "selfcorrect_max_step_ratio": 0.3,
+    "selfcorrect_verify_hours": 24.0,
+    "selfcorrect_max_per_cycle": 1,
+    "selfcorrect_max_reverts": 2,
+    "selfcorrect_effect_min": 0.05,
+    "selfcorrect_max_extensions": 2,
+    "selfcorrect_settle_ratio": 0.5
+  },
+  "graph": {
+    "nodes": [
+      {
+        "name": "rule:no-fabricate",
+        "content": "不要编造版本号或 API 参数，不确定就说不确定",
+        "tier": "core",
+        "tags": [
+          "硬规则",
+          "诚实"
+        ],
+        "created_at": 1784104363.0455482,
+        "last_accessed": 1794126763.0455482,
+        "base_weight": 10.0,
+        "access_count": 31,
+        "pinned": true,
+        "origin": "external",
+        "consolidated_from": [],
+        "consolidated_into": null,
+        "fingerprint": null,
+        "revision": 0,
+        "affect": {
+          "valence": 0.0,
+          "arousal": 0.0,
+          "peak_arousal": 0.0,
+          "felt_at": 1784104363.0455482,
+          "arousal_half_life": 3.0,
+          "valence_half_life": 10.0,
+          "source": "neutral",
+          "drivers": []
+        },
+        "narrative_hits": 8,
+        "narrative_heat": 0.6563910841941833,
+        "narrated_at": 1794472363.0455482,
+        "kind": "identity"
+      },
+      {
+        "name": "rule:schema",
+        "content": "改数据结构必须同时升状态版本并写迁移，否则旧快照会加载失败",
+        "tier": "core",
+        "tags": [
+          "硬规则",
+          "工程"
+        ],
+        "created_at": 1784104363.0455482,
+        "last_accessed": 1794126763.0455482,
+        "base_weight": 10.0,
+        "access_count": 31,
+        "pinned": true,
+        "origin": "external",
+        "consolidated_from": [],
+        "consolidated_into": null,
+        "fingerprint": null,
+        "revision": 0,
+        "affect": {
+          "valence": -0.35,
+          "arousal": 0.7,
+          "peak_arousal": 0.7,
+          "felt_at": 1784104363.0455482,
+          "arousal_half_life": 3.0,
+          "valence_half_life": 10.0,
+          "source": "text",
+          "drivers": [
+            "失败"
+          ]
+        },
+        "narrative_hits": 8,
+        "narrative_heat": 0.6563910841941833,
+        "narrated_at": 1794472363.0455482,
+        "kind": "identity"
+      },
+      {
+        "name": "rule:test-first",
+        "content": "说「完成」之前先跑一遍自测，绿了才算完成",
+        "tier": "core",
+        "tags": [
+          "硬规则",
+          "工程"
+        ],
+        "created_at": 1784104363.0455482,
+        "last_accessed": 1794126763.0455482,
+        "base_weight": 10.0,
+        "access_count": 31,
+        "pinned": true,
+        "origin": "external",
+        "consolidated_from": [],
+        "consolidated_into": null,
+        "fingerprint": null,
+        "revision": 0,
+        "affect": {
+          "valence": -0.25,
+          "arousal": 0.65,
+          "peak_arousal": 0.65,
+          "felt_at": 1794472363.0455482,
+          "arousal_half_life": 3.0,
+          "valence_half_life": 10.0,
+          "source": "outcome",
+          "drivers": [
+            "结果:contradicted",
+            "被反证推翻"
+          ]
+        },
+        "narrative_hits": 8,
+        "narrative_heat": 0.6563910841941833,
+        "narrated_at": 1794472363.0455482,
+        "kind": "identity"
+      },
+      {
+        "name": "rule:no-emoji",
+        "content": "正式文档不用 emoji 装饰",
+        "tier": "fact",
+        "tags": [
+          "硬规则",
+          "格式"
+        ],
+        "created_at": 1784104363.0455482,
+        "last_accessed": 1794385963.0455482,
+        "base_weight": 10.0,
+        "access_count": 49,
+        "pinned": true,
+        "origin": "external",
+        "consolidated_from": [],
+        "consolidated_into": null,
+        "fingerprint": null,
+        "revision": 0,
+        "affect": {
+          "valence": 0.0,
+          "arousal": 0.0,
+          "peak_arousal": 0.0,
+          "felt_at": 1784104363.0455482,
+          "arousal_half_life": 3.0,
+          "valence_half_life": 10.0,
+          "source": "neutral",
+          "drivers": []
+        },
+        "narrative_hits": 8,
+        "narrative_heat": 0.6563910841941833,
+        "narrated_at": 1794472363.0455482,
+        "kind": "identity"
+      },
+      {
+        "name": "pref:table",
+        "content": "能用表格就不用段落",
+        "tier": "fact",
+        "tags": [
+          "偏好",
+          "格式"
+        ],
+        "created_at": 1784104363.0455482,
+        "last_accessed": 1794472363.0455482,
+        "base_weight": 8.788347145946274,
+        "access_count": 51,
+        "pinned": false,
+        "origin": "external",
+        "consolidated_from": [],
+        "consolidated_into": null,
+        "fingerprint": null,
+        "revision": 0,
+        "affect": {
+          "valence": 0.0,
+          "arousal": 0.0,
+          "peak_arousal": 0.0,
+          "felt_at": 1784104363.0455482,
+          "arousal_half_life": 3.0,
+          "valence_half_life": 10.0,
+          "source": "neutral",
+          "drivers": []
+        },
+        "narrative_hits": 8,
+        "narrative_heat": 0.6563910841941833,
+        "narrated_at": 1794472363.0455482,
+        "kind": "semantic"
+      },
+      {
+        "name": "pref:concise",
+        "content": "先给结论再给理由，不要铺垫",
+        "tier": "fact",
+        "tags": [
+          "偏好",
+          "格式"
+        ],
+        "created_at": 1784104363.0455482,
+        "last_accessed": 1794385963.0455482,
+        "base_weight": 9.232809422669083,
+        "access_count": 53,
+        "pinned": false,
+        "origin": "external",
+        "consolidated_from": [],
+        "consolidated_into": null,
+        "fingerprint": null,
+        "revision": 0,
+        "affect": {
+          "valence": 0.0,
+          "arousal": 0.0,
+          "peak_arousal": 0.0,
+          "felt_at": 1784104363.0455482,
+          "arousal_half_life": 3.0,
+          "valence_half_life": 10.0,
+          "source": "neutral",
+          "drivers": []
+        },
+        "narrative_hits": 8,
+        "narrative_heat": 0.6563910841941833,
+        "narrated_at": 1794472363.0455482,
+        "kind": "semantic"
+      },
+      {
+        "name": "core:e90f9cad",
+        "content": "[沉淀] 主题=复盘、教训（交集）| 来源=4条 | 要点：CI 在 Windows 上因为控制台编码炸了，排查两小时；测试用例自己写错了：用常数学习率制造「无惯性」，结果测不出来；把并发测试的断言写成「没报错」，等于没测；把配置项逐字段对拍了一遍，发现两个字段被静默吞掉",
+        "tier": "core",
+        "tags": [
+          "复盘",
+          "教训"
+        ],
+        "created_at": 1786696363.0455482,
+        "last_accessed": 1794472363.0455482,
+        "base_weight": 3.1445850554021173,
+        "access_count": 17,
+        "pinned": false,
+        "origin": "consolidated",
+        "consolidated_from": [
+          "d012:7",
+          "d016:9",
+          "d014:8",
+          "d018:10"
+        ],
+        "consolidated_into": null,
+        "fingerprint": "c:e90f9cad4dcf",
+        "revision": 0,
+        "affect": {
+          "valence": 0.0,
+          "arousal": 0.0,
+          "peak_arousal": 0.0,
+          "felt_at": 0.0,
+          "arousal_half_life": 3.0,
+          "valence_half_life": 10.0,
+          "source": "neutral",
+          "drivers": []
+        },
+        "narrative_hits": 8,
+        "narrative_heat": 0.6563910841941833,
+        "narrated_at": 1794472363.0455482,
+        "kind": "semantic"
+      },
+      {
+        "name": "d040:21",
+        "content": "搜了半小时才发现官方文档里就写着",
+        "tier": "event",
+        "tags": [
+          "踩坑",
+          "教训"
+        ],
+        "created_at": 1787560363.0455482,
+        "last_accessed": 1794472363.0455482,
+        "base_weight": 1.556675711463034,
+        "access_count": 21,
+        "pinned": false,
+        "origin": "external",
+        "consolidated_from": [],
+        "consolidated_into": null,
+        "fingerprint": null,
+        "revision": 0,
+        "affect": {
+          "valence": -0.3,
+          "arousal": 0.6,
+          "peak_arousal": 0.6,
+          "felt_at": 1787560363.0455482,
+          "arousal_half_life": 3.0,
+          "valence_half_life": 10.0,
+          "source": "explicit",
+          "drivers": []
+        },
+        "narrative_hits": 7,
+        "narrative_heat": 0.6073040962219238,
+        "narrated_at": 1794472363.0455482,
+        "kind": "episodic"
+      },
+      {
+        "name": "d044:23",
+        "content": "漏了一个空输入的分支，整个批处理挂掉",
+        "tier": "event",
+        "tags": [
+          "踩坑",
+          "教训"
+        ],
+        "created_at": 1787905963.0455482,
+        "last_accessed": 1794472363.0455482,
+        "base_weight": 1.5908781604977051,
+        "access_count": 20,
+        "pinned": false,
+        "origin": "external",
+        "consolidated_from": [],
+        "consolidated_into": null,
+        "fingerprint": null,
+        "revision": 0,
+        "affect": {
+          "valence": -0.35,
+          "arousal": 0.7,
+          "peak_arousal": 0.7,
+          "felt_at": 1787905963.0455482,
+          "arousal_half_life": 3.0,
+          "valence_half_life": 10.0,
+          "source": "explicit",
+          "drivers": []
+        },
+        "narrative_hits": 7,
+        "narrative_heat": 0.6073040962219238,
+        "narrated_at": 1794472363.0455482,
+        "kind": "episodic"
+      },
+      {
+        "name": "d046:24",
+        "content": "给定时任务加了幂等，重跑不会再重复写入",
+        "tier": "event",
+        "tags": [
+          "工程",
+          "方法"
+        ],
+        "created_at": 1788078763.0455482,
+        "last_accessed": 1788078763.0455482,
+        "base_weight": 1.0,
+        "access_count": 1,
+        "pinned": false,
+        "origin": "external",
+        "consolidated_from": [],
+        "consolidated_into": null,
+        "fingerprint": null,
+        "revision": 0,
+        "affect": {
+          "valence": 0.15,
+          "arousal": 0.5,
+          "peak_arousal": 0.5,
+          "felt_at": 1788078763.0455482,
+          "arousal_half_life": 3.0,
+          "valence_half_life": 10.0,
+          "source": "explicit",
+          "drivers": []
+        },
+        "narrative_hits": 0,
+        "narrative_heat": 0.0,
+        "narrated_at": 0.0,
+        "kind": "procedural"
+      },
+      {
+        "name": "d052:27",
+        "content": "发现自己在重复解释同一个概念，写成了短文档",
+        "tier": "event",
+        "tags": [
+          "文档",
+          "方法"
+        ],
+        "created_at": 1788597163.0455482,
+        "last_accessed": 1788597163.0455482,
+        "base_weight": 1.0,
+        "access_count": 1,
+        "pinned": false,
+        "origin": "external",
+        "consolidated_from": [],
+        "consolidated_into": null,
+        "fingerprint": null,
+        "revision": 0,
+        "affect": {
+          "valence": 0.135,
+          "arousal": 0.45,
+          "peak_arousal": 0.45,
+          "felt_at": 1788597163.0455482,
+          "arousal_half_life": 3.0,
+          "valence_half_life": 10.0,
+          "source": "explicit",
+          "drivers": []
+        },
+        "narrative_hits": 0,
+        "narrative_heat": 0.0,
+        "narrated_at": 0.0,
+        "kind": "procedural"
+      },
+      {
+        "name": "core:b665353e",
+        "content": "[沉淀] 主题=工程、性能（交集）| 来源=3条 | 要点：压测时连接池打满，扩了一倍才稳住；批量任务改成流式处理，内存占用从 2G 降到 200M；把一次慢查询从 1.2 秒压到 90 毫秒，加了索引",
+        "tier": "core",
+        "tags": [
+          "工程",
+          "性能"
+        ],
+        "created_at": 1789288363.0455482,
+        "last_accessed": 1789288363.0455482,
+        "base_weight": 1.9,
+        "access_count": 1,
+        "pinned": false,
+        "origin": "consolidated",
+        "consolidated_from": [
+          "d056:29",
+          "d060:31",
+          "d058:30"
+        ],
+        "consolidated_into": null,
+        "fingerprint": "c:b665353e38db",
+        "revision": 0,
+        "affect": {
+          "valence": 0.0,
+          "arousal": 0.0,
+          "peak_arousal": 0.0,
+          "felt_at": 0.0,
+          "arousal_half_life": 3.0,
+          "valence_half_life": 10.0,
+          "source": "neutral",
+          "drivers": []
+        },
+        "narrative_hits": 0,
+        "narrative_heat": 0.0,
+        "narrated_at": 0.0,
+        "kind": "semantic"
+      },
+      {
+        "name": "d062:32",
+        "content": "给关键路径加了埋点，终于知道慢在哪了",
+        "tier": "event",
+        "tags": [
+          "性能",
+          "方法"
+        ],
+        "created_at": 1789461163.0455482,
+        "last_accessed": 1789461163.0455482,
+        "base_weight": 1.0,
+        "access_count": 1,
+        "pinned": false,
+        "origin": "external",
+        "consolidated_from": [],
+        "consolidated_into": null,
+        "fingerprint": null,
+        "revision": 0,
+        "affect": {
+          "valence": 0.15,
+          "arousal": 0.5,
+          "peak_arousal": 0.5,
+          "felt_at": 1789461163.0455482,
+          "arousal_half_life": 3.0,
+          "valence_half_life": 10.0,
+          "source": "explicit",
+          "drivers": []
+        },
+        "narrative_hits": 0,
+        "narrative_heat": 0.0,
+        "narrated_at": 0.0,
+        "kind": "procedural"
+      },
+      {
+        "name": "d070:36",
+        "content": "发现测试里有依赖执行顺序的用例，改成各自独立",
+        "tier": "event",
+        "tags": [
+          "测试",
+          "教训"
+        ],
+        "created_at": 1790152363.0455482,
+        "last_accessed": 1794040363.0455482,
+        "base_weight": 1.1946794842477106,
+        "access_count": 11,
+        "pinned": false,
+        "origin": "external",
+        "consolidated_from": [],
+        "consolidated_into": null,
+        "fingerprint": null,
+        "revision": 0,
+        "affect": {
+          "valence": 0.165,
+          "arousal": 0.55,
+          "peak_arousal": 0.55,
+          "felt_at": 1790152363.0455482,
+          "arousal_half_life": 3.0,
+          "valence_half_life": 10.0,
+          "source": "explicit",
+          "drivers": []
+        },
+        "narrative_hits": 0,
+        "narrative_heat": 0.0,
+        "narrated_at": 0.0,
+        "kind": "episodic"
+      },
+      {
+        "name": "d072:37",
+        "content": "周五的发布推迟到下周一，因为周五出事没人修",
+        "tier": "event",
+        "tags": [
+          "流程",
+          "教训"
+        ],
+        "created_at": 1790325163.0455482,
+        "last_accessed": 1794040363.0455482,
+        "base_weight": 3.5188060370211414,
+        "access_count": 10,
+        "pinned": false,
+        "origin": "external",
+        "consolidated_from": [],
+        "consolidated_into": null,
+        "fingerprint": null,
+        "revision": 0,
+        "affect": {
+          "valence": 0.18,
+          "arousal": 0.6,
+          "peak_arousal": 0.6,
+          "felt_at": 1790325163.0455482,
+          "arousal_half_life": 3.0,
+          "valence_half_life": 10.0,
+          "source": "explicit",
+          "drivers": []
+        },
+        "narrative_hits": 0,
+        "narrative_heat": 0.0,
+        "narrated_at": 0.0,
+        "kind": "procedural"
+      },
+      {
+        "name": "d074:38",
+        "content": "给回滚写了脚本，演练了两次才敢上线",
+        "tier": "event",
+        "tags": [
+          "流程",
+          "工程"
+        ],
+        "created_at": 1790497963.0455482,
+        "last_accessed": 1790497963.0455482,
+        "base_weight": 1.0,
+        "access_count": 1,
+        "pinned": false,
+        "origin": "external",
+        "consolidated_from": [],
+        "consolidated_into": null,
+        "fingerprint": null,
+        "revision": 0,
+        "affect": {
+          "valence": 0.165,
+          "arousal": 0.55,
+          "peak_arousal": 0.55,
+          "felt_at": 1790497963.0455482,
+          "arousal_half_life": 3.0,
+          "valence_half_life": 10.0,
+          "source": "explicit",
+          "drivers": []
+        },
+        "narrative_hits": 0,
+        "narrative_heat": 0.0,
+        "narrated_at": 0.0,
+        "kind": "procedural"
+      },
+      {
+        "name": "d076:39",
+        "content": "把「先问清楚再动手」写进了团队约定",
+        "tier": "event",
+        "tags": [
+          "流程",
+          "方法"
+        ],
+        "created_at": 1790670763.0455482,
+        "last_accessed": 1790670763.0455482,
+        "base_weight": 1.0,
+        "access_count": 1,
+        "pinned": false,
+        "origin": "external",
+        "consolidated_from": [],
+        "consolidated_into": null,
+        "fingerprint": null,
+        "revision": 0,
+        "affect": {
+          "valence": 0.135,
+          "arousal": 0.45,
+          "peak_arousal": 0.45,
+          "felt_at": 1790670763.0455482,
+          "arousal_half_life": 3.0,
+          "valence_half_life": 10.0,
+          "source": "explicit",
+          "drivers": []
+        },
+        "narrative_hits": 0,
+        "narrative_heat": 0.0,
+        "narrated_at": 0.0,
+        "kind": "procedural"
+      }
+    ],
+    "edges": [
+      [
+        "rule:no-fabricate",
+        "rule:schema",
+        {
+          "weight": 30.0,
+          "coactivations": 30,
+          "last_coactivated": 1794126763.0455482
+        }
+      ],
+      [
+        "rule:no-fabricate",
+        "rule:test-first",
+        {
+          "weight": 30.0,
+          "coactivations": 30,
+          "last_coactivated": 1794126763.0455482
+        }
+      ],
+      [
+        "rule:no-emoji",
+        "rule:no-fabricate",
+        {
+          "weight": 30.0,
+          "coactivations": 30,
+          "last_coactivated": 1794126763.0455482
+        }
+      ],
+      [
+        "pref:table",
+        "rule:no-fabricate",
+        {
+          "weight": 30.0,
+          "coactivations": 30,
+          "last_coactivated": 1794126763.0455482
+        }
+      ],
+      [
+        "pref:concise",
+        "rule:no-fabricate",
+        {
+          "weight": 30.0,
+          "coactivations": 30,
+          "last_coactivated": 1794126763.0455482
+        }
+      ],
+      [
+        "rule:schema",
+        "rule:test-first",
+        {
+          "weight": 30.0,
+          "coactivations": 30,
+          "last_coactivated": 1794126763.0455482
+        }
+      ],
+      [
+        "rule:no-emoji",
+        "rule:schema",
+        {
+          "weight": 30.0,
+          "coactivations": 30,
+          "last_coactivated": 1794126763.0455482
+        }
+      ],
+      [
+        "pref:table",
+        "rule:schema",
+        {
+          "weight": 30.0,
+          "coactivations": 30,
+          "last_coactivated": 1794126763.0455482
+        }
+      ],
+      [
+        "pref:concise",
+        "rule:schema",
+        {
+          "weight": 30.0,
+          "coactivations": 30,
+          "last_coactivated": 1794126763.0455482
+        }
+      ],
+      [
+        "rule:no-emoji",
+        "rule:test-first",
+        {
+          "weight": 30.0,
+          "coactivations": 30,
+          "last_coactivated": 1794126763.0455482
+        }
+      ],
+      [
+        "pref:table",
+        "rule:test-first",
+        {
+          "weight": 30.0,
+          "coactivations": 30,
+          "last_coactivated": 1794126763.0455482
+        }
+      ],
+      [
+        "pref:concise",
+        "rule:test-first",
+        {
+          "weight": 30.0,
+          "coactivations": 30,
+          "last_coactivated": 1794126763.0455482
+        }
+      ],
+      [
+        "pref:table",
+        "rule:no-emoji",
+        {
+          "weight": 48.0,
+          "coactivations": 48,
+          "last_coactivated": 1794385963.0455482
+        }
+      ],
+      [
+        "pref:concise",
+        "rule:no-emoji",
+        {
+          "weight": 48.0,
+          "coactivations": 48,
+          "last_coactivated": 1794385963.0455482
+        }
+      ],
+      [
+        "pref:concise",
+        "pref:table",
+        {
+          "weight": 48.0,
+          "coactivations": 48,
+          "last_coactivated": 1794385963.0455482
+        }
+      ],
+      [
+        "core:e90f9cad",
+        "d040:21",
+        {
+          "weight": 7.0,
+          "coactivations": 7,
+          "last_coactivated": 1790152363.0455482
+        }
+      ],
+      [
+        "core:e90f9cad",
+        "d044:23",
+        {
+          "weight": 6.0,
+          "coactivations": 6,
+          "last_coactivated": 1790152363.0455482
+        }
+      ],
+      [
+        "core:e90f9cad",
+        "d070:36",
+        {
+          "weight": 1.0,
+          "coactivations": 1,
+          "last_coactivated": 1790152363.0455482
+        }
+      ],
+      [
+        "d040:21",
+        "d044:23",
+        {
+          "weight": 15.0,
+          "coactivations": 15,
+          "last_coactivated": 1794040363.0455482
+        }
+      ],
+      [
+        "d040:21",
+        "d070:36",
+        {
+          "weight": 10.0,
+          "coactivations": 10,
+          "last_coactivated": 1794040363.0455482
+        }
+      ],
+      [
+        "d040:21",
+        "d072:37",
+        {
+          "weight": 9.0,
+          "coactivations": 9,
+          "last_coactivated": 1794040363.0455482
+        }
+      ],
+      [
+        "d044:23",
+        "d070:36",
+        {
+          "weight": 10.0,
+          "coactivations": 10,
+          "last_coactivated": 1794040363.0455482
+        }
+      ],
+      [
+        "d044:23",
+        "d072:37",
+        {
+          "weight": 9.0,
+          "coactivations": 9,
+          "last_coactivated": 1794040363.0455482
+        }
+      ],
+      [
+        "d070:36",
+        "d072:37",
+        {
+          "weight": 9.0,
+          "coactivations": 9,
+          "last_coactivated": 1794040363.0455482
+        }
+      ]
+    ]
+  },
+  "logic": {
+    "edges": [
+      {
+        "src": "rule:test-first",
+        "dst": "rule:schema",
+        "kind": "entails",
+        "strength": 0.8,
+        "since": 1784104363.0455482,
+        "observations": 1
+      },
+      {
+        "src": "rule:test-first",
+        "dst": "d044:23",
+        "kind": "entails",
+        "strength": 0.7,
+        "since": 1794472363.0455482,
+        "observations": 1
+      },
+      {
+        "src": "rule:test-first",
+        "dst": "d040:21",
+        "kind": "entails",
+        "strength": 0.7,
+        "since": 1794472363.0455482,
+        "observations": 1
+      },
+      {
+        "src": "rule:test-first",
+        "dst": "pref:table",
+        "kind": "entails",
+        "strength": 0.7,
+        "since": 1794472363.0455482,
+        "observations": 1
+      }
+    ]
+  },
+  "style": {
+    "rules": [
+      {
+        "key": "concise",
+        "statement": "输出尽量精简，先结论后理由",
+        "support": 7.24220996144304,
+        "contradict": 0.0,
+        "observations": 20,
+        "first_seen": 1784104363.0455482,
+        "last_evidence": 1793953963.0455482,
+        "crystallized": true,
+        "pinned_by_user": false,
+        "opposes": [],
+        "flip_count": 0,
+        "suppressed_by": "ambiguous",
+        "adjudications": 47
+      },
+      {
+        "key": "tables",
+        "statement": "能用表格就用表格",
+        "support": 7.24220996144304,
+        "contradict": 0.0,
+        "observations": 20,
+        "first_seen": 1784104363.0455482,
+        "last_evidence": 1793953963.0455482,
+        "crystallized": true,
+        "pinned_by_user": false,
+        "opposes": [],
+        "flip_count": 0,
+        "suppressed_by": null,
+        "adjudications": 0
+      },
+      {
+        "key": "verbose",
+        "statement": "复杂问题要展开讲清楚",
+        "support": 7.24220996144304,
+        "contradict": 0.0,
+        "observations": 20,
+        "first_seen": 1784104363.0455482,
+        "last_evidence": 1793953963.0455482,
+        "crystallized": true,
+        "pinned_by_user": false,
+        "opposes": [
+          "concise"
+        ],
+        "flip_count": 0,
+        "suppressed_by": "ambiguous",
+        "adjudications": 47
+      }
+    ],
+    "adjudications": [
+      {
+        "ts": 1786696363.0455482,
+        "pair": [
+          "concise",
+          "verbose"
+        ],
+        "winner": null,
+        "reason": "ambiguous",
+        "margin": 0.0,
+        "confidence": [
+          0.8135,
+          0.8135
+        ]
+      },
+      {
+        "ts": 1787214763.0455482,
+        "pair": [
+          "concise",
+          "verbose"
+        ],
+        "winner": "concise",
+        "reason": "evidence_strength",
+        "margin": 0.242817,
+        "confidence": [
+          0.8275,
+          0.7916
+        ]
+      },
+      {
+        "ts": 1787214763.0455482,
+        "pair": [
+          "concise",
+          "verbose"
+        ],
+        "winner": "concise",
+        "reason": "evidence_strength",
+        "margin": 0.242817,
+        "confidence": [
+          0.8275,
+          0.7916
+        ]
+      },
+      {
+        "ts": 1787214763.0455482,
+        "pair": [
+          "concise",
+          "verbose"
+        ],
+        "winner": null,
+        "reason": "ambiguous",
+        "margin": 0.0,
+        "confidence": [
+          0.8275,
+          0.8275
+        ]
+      },
+      {
+        "ts": 1787733163.0455482,
+        "pair": [
+          "concise",
+          "verbose"
+        ],
+        "winner": "concise",
+        "reason": "evidence_strength",
+        "margin": 0.22328,
+        "confidence": [
+          0.8381,
+          0.8068
+        ]
+      },
+      {
+        "ts": 1787733163.0455482,
+        "pair": [
+          "concise",
+          "verbose"
+        ],
+        "winner": "concise",
+        "reason": "evidence_strength",
+        "margin": 0.22328,
+        "confidence": [
+          0.8381,
+          0.8068
+        ]
+      },
+      {
+        "ts": 1787733163.0455482,
+        "pair": [
+          "concise",
+          "verbose"
+        ],
+        "winner": null,
+        "reason": "ambiguous",
+        "margin": 0.0,
+        "confidence": [
+          0.8381,
+          0.8381
+        ]
+      },
+      {
+        "ts": 1788251563.0455482,
+        "pair": [
+          "concise",
+          "verbose"
+        ],
+        "winner": "concise",
+        "reason": "evidence_strength",
+        "margin": 0.20859,
+        "confidence": [
+          0.8463,
+          0.8184
+        ]
+      },
+      {
+        "ts": 1788251563.0455482,
+        "pair": [
+          "concise",
+          "verbose"
+        ],
+        "winner": "concise",
+        "reason": "evidence_strength",
+        "margin": 0.20859,
+        "confidence": [
+          0.8463,
+          0.8184
+        ]
+      },
+      {
+        "ts": 1788251563.0455482,
+        "pair": [
+          "concise",
+          "verbose"
+        ],
+        "winner": null,
+        "reason": "ambiguous",
+        "margin": 0.0,
+        "confidence": [
+          0.8463,
+          0.8463
+        ]
+      },
+      {
+        "ts": 1788769963.0455482,
+        "pair": [
+          "concise",
+          "verbose"
+        ],
+        "winner": "concise",
+        "reason": "evidence_strength",
+        "margin": 0.197248,
+        "confidence": [
+          0.8528,
+          0.8274
+        ]
+      },
+      {
+        "ts": 1788769963.0455482,
+        "pair": [
+          "concise",
+          "verbose"
+        ],
+        "winner": "concise",
+        "reason": "evidence_strength",
+        "margin": 0.197248,
+        "confidence": [
+          0.8528,
+          0.8274
+        ]
+      },
+      {
+        "ts": 1788769963.0455482,
+        "pair": [
+          "concise",
+          "verbose"
+        ],
+        "winner": null,
+        "reason": "ambiguous",
+        "margin": 0.0,
+        "confidence": [
+          0.8528,
+          0.8528
+        ]
+      },
+      {
+        "ts": 1789288363.0455482,
+        "pair": [
+          "concise",
+          "verbose"
+        ],
+        "winner": "concise",
+        "reason": "evidence_strength",
+        "margin": 0.188307,
+        "confidence": [
+          0.858,
+          0.8345
+        ]
+      },
+      {
+        "ts": 1789288363.0455482,
+        "pair": [
+          "concise",
+          "verbose"
+        ],
+        "winner": "concise",
+        "reason": "evidence_strength",
+        "margin": 0.188307,
+        "confidence": [
+          0.858,
+          0.8345
+        ]
+      },
+      {
+        "ts": 1789288363.0455482,
+        "pair": [
+          "concise",
+          "verbose"
+        ],
+        "winner": null,
+        "reason": "ambiguous",
+        "margin": 0.0,
+        "confidence": [
+          0.858,
+          0.858
+        ]
+      },
+      {
+        "ts": 1789288363.0455482,
+        "pair": [
+          "concise",
+          "verbose"
+        ],
+        "winner": null,
+        "reason": "ambiguous",
+        "margin": 0.0,
+        "confidence": [
+          0.858,
+          0.858
+        ]
+      },
+      {
+        "ts": 1789806763.0455482,
+        "pair": [
+          "concise",
+          "verbose"
+        ],
+        "winner": "concise",
+        "reason": "evidence_strength",
+        "margin": 0.181142,
+        "confidence": [
+          0.8623,
+          0.8403
+        ]
+      },
+      {
+        "ts": 1789806763.0455482,
+        "pair": [
+          "concise",
+          "verbose"
+        ],
+        "winner": "concise",
+        "reason": "evidence_strength",
+        "margin": 0.181142,
+        "confidence": [
+          0.8623,
+          0.8403
+        ]
+      },
+      {
+        "ts": 1789806763.0455482,
+        "pair": [
+          "concise",
+          "verbose"
+        ],
+        "winner": null,
+        "reason": "ambiguous",
+        "margin": 0.0,
+        "confidence": [
+          0.8623,
+          0.8623
+        ]
+      },
+      {
+        "ts": 1790325163.0455482,
+        "pair": [
+          "concise",
+          "verbose"
+        ],
+        "winner": "concise",
+        "reason": "evidence_strength",
+        "margin": 0.175323,
+        "confidence": [
+          0.8658,
+          0.845
+        ]
+      },
+      {
+        "ts": 1790325163.0455482,
+        "pair": [
+          "concise",
+          "verbose"
+        ],
+        "winner": "concise",
+        "reason": "evidence_strength",
+        "margin": 0.175323,
+        "confidence": [
+          0.8658,
+          0.845
+        ]
+      },
+      {
+        "ts": 1790325163.0455482,
+        "pair": [
+          "concise",
+          "verbose"
+        ],
+        "winner": null,
+        "reason": "ambiguous",
+        "margin": 0.0,
+        "confidence": [
+          0.8658,
+          0.8658
+        ]
+      },
+      {
+        "ts": 1790843563.0455482,
+        "pair": [
+          "concise",
+          "verbose"
+        ],
+        "winner": "concise",
+        "reason": "evidence_strength",
+        "margin": 0.170547,
+        "confidence": [
+          0.8687,
+          0.8488
+        ]
+      },
+      {
+        "ts": 1790843563.0455482,
+        "pair": [
+          "concise",
+          "verbose"
+        ],
+        "winner": "concise",
+        "reason": "evidence_strength",
+        "margin": 0.170547,
+        "confidence": [
+          0.8687,
+          0.8488
+        ]
+      },
+      {
+        "ts": 1790843563.0455482,
+        "pair": [
+          "concise",
+          "verbose"
+        ],
+        "winner": null,
+        "reason": "ambiguous",
+        "margin": 0.0,
+        "confidence": [
+          0.8687,
+          0.8687
+        ]
+      },
+      {
+        "ts": 1791361963.0455482,
+        "pair": [
+          "concise",
+          "verbose"
+        ],
+        "winner": "concise",
+        "reason": "evidence_strength",
+        "margin": 0.166591,
+        "confidence": [
+          0.8711,
+          0.8521
+        ]
+      },
+      {
+        "ts": 1791361963.0455482,
+        "pair": [
+          "concise",
+          "verbose"
+        ],
+        "winner": "concise",
+        "reason": "evidence_strength",
+        "margin": 0.166591,
+        "confidence": [
+          0.8711,
+          0.8521
+        ]
+      },
+      {
+        "ts": 1791361963.0455482,
+        "pair": [
+          "concise",
+          "verbose"
+        ],
+        "winner": null,
+        "reason": "ambiguous",
+        "margin": 0.0,
+        "confidence": [
+          0.8711,
+          0.8711
+        ]
+      },
+      {
+        "ts": 1791880363.0455482,
+        "pair": [
+          "concise",
+          "verbose"
+        ],
+        "winner": "concise",
+        "reason": "evidence_strength",
+        "margin": 0.163291,
+        "confidence": [
+          0.8732,
+          0.8547
+        ]
+      },
+      {
+        "ts": 1791880363.0455482,
+        "pair": [
+          "concise",
+          "verbose"
+        ],
+        "winner": "concise",
+        "reason": "evidence_strength",
+        "margin": 0.163291,
+        "confidence": [
+          0.8732,
+          0.8547
+        ]
+      },
+      {
+        "ts": 1791880363.0455482,
+        "pair": [
+          "concise",
+          "verbose"
+        ],
+        "winner": null,
+        "reason": "ambiguous",
+        "margin": 0.0,
+        "confidence": [
+          0.8732,
+          0.8732
+        ]
+      },
+      {
+        "ts": 1791880363.0455482,
+        "pair": [
+          "concise",
+          "verbose"
+        ],
+        "winner": null,
+        "reason": "ambiguous",
+        "margin": 0.0,
+        "confidence": [
+          0.8732,
+          0.8732
+        ]
+      },
+      {
+        "ts": 1792398763.0455482,
+        "pair": [
+          "concise",
+          "verbose"
+        ],
+        "winner": "concise",
+        "reason": "evidence_strength",
+        "margin": 0.16052,
+        "confidence": [
+          0.8749,
+          0.857
+        ]
+      },
+      {
+        "ts": 1792398763.0455482,
+        "pair": [
+          "concise",
+          "verbose"
+        ],
+        "winner": "concise",
+        "reason": "evidence_strength",
+        "margin": 0.16052,
+        "confidence": [
+          0.8749,
+          0.857
+        ]
+      },
+      {
+        "ts": 1792398763.0455482,
+        "pair": [
+          "concise",
+          "verbose"
+        ],
+        "winner": null,
+        "reason": "ambiguous",
+        "margin": 0.0,
+        "confidence": [
+          0.8749,
+          0.8749
+        ]
+      },
+      {
+        "ts": 1792917163.0455482,
+        "pair": [
+          "concise",
+          "verbose"
+        ],
+        "winner": "concise",
+        "reason": "evidence_strength",
+        "margin": 0.158181,
+        "confidence": [
+          0.8764,
+          0.8589
+        ]
+      },
+      {
+        "ts": 1792917163.0455482,
+        "pair": [
+          "concise",
+          "verbose"
+        ],
+        "winner": "concise",
+        "reason": "evidence_strength",
+        "margin": 0.158181,
+        "confidence": [
+          0.8764,
+          0.8589
+        ]
+      },
+      {
+        "ts": 1792917163.0455482,
+        "pair": [
+          "concise",
+          "verbose"
+        ],
+        "winner": null,
+        "reason": "ambiguous",
+        "margin": 0.0,
+        "confidence": [
+          0.8764,
+          0.8764
+        ]
+      },
+      {
+        "ts": 1793435563.0455482,
+        "pair": [
+          "concise",
+          "verbose"
+        ],
+        "winner": "concise",
+        "reason": "evidence_strength",
+        "margin": 0.156199,
+        "confidence": [
+          0.8776,
+          0.8605
+        ]
+      },
+      {
+        "ts": 1793435563.0455482,
+        "pair": [
+          "concise",
+          "verbose"
+        ],
+        "winner": "concise",
+        "reason": "evidence_strength",
+        "margin": 0.156199,
+        "confidence": [
+          0.8776,
+          0.8605
+        ]
+      },
+      {
+        "ts": 1793435563.0455482,
+        "pair": [
+          "concise",
+          "verbose"
+        ],
+        "winner": null,
+        "reason": "ambiguous",
+        "margin": 0.0,
+        "confidence": [
+          0.8776,
+          0.8776
+        ]
+      },
+      {
+        "ts": 1793953963.0455482,
+        "pair": [
+          "concise",
+          "verbose"
+        ],
+        "winner": "concise",
+        "reason": "evidence_strength",
+        "margin": 0.154513,
+        "confidence": [
+          0.8787,
+          0.8619
+        ]
+      },
+      {
+        "ts": 1793953963.0455482,
+        "pair": [
+          "concise",
+          "verbose"
+        ],
+        "winner": "concise",
+        "reason": "evidence_strength",
+        "margin": 0.154513,
+        "confidence": [
+          0.8787,
+          0.8619
+        ]
+      },
+      {
+        "ts": 1793953963.0455482,
+        "pair": [
+          "concise",
+          "verbose"
+        ],
+        "winner": null,
+        "reason": "ambiguous",
+        "margin": 0.0,
+        "confidence": [
+          0.8787,
+          0.8787
+        ]
+      },
+      {
+        "ts": 1794385963.0455482,
+        "pair": [
+          "concise",
+          "verbose"
+        ],
+        "winner": null,
+        "reason": "ambiguous",
+        "margin": 0.0,
+        "confidence": [
+          0.8658,
+          0.8658
+        ]
+      },
+      {
+        "ts": 1794472363.0455482,
+        "pair": [
+          "concise",
+          "verbose"
+        ],
+        "winner": null,
+        "reason": "ambiguous",
+        "margin": 0.0,
+        "confidence": [
+          0.8631,
+          0.8631
+        ]
+      }
+    ]
+  },
+  "narrative": {
+    "rev": 8,
+    "history": [
+      {
+        "rev": 1,
+        "at": 1786696363.0455482,
+        "chapters": [
+          {
+            "title": "硬规则",
+            "arc": "起源",
+            "nodes": [
+              "rule:schema",
+              "rule:test-first",
+              "rule:no-emoji",
+              "rule:no-fabricate"
+            ],
+            "share": 0.503084,
+            "reliability": 0.93875
+          },
+          {
+            "title": "其他",
+            "arc": "转折",
+            "nodes": [
+              "d024:13",
+              "core:e90f9cad"
+            ],
+            "share": 0.190254,
+            "reliability": 0.9125
+          },
+          {
+            "title": "琐事",
+            "arc": "转折",
+            "nodes": [
+              "d030:16"
+            ],
+            "share": 0.105482,
+            "reliability": 0.9475
+          },
+          {
+            "title": "偏好",
+            "arc": "当下",
+            "nodes": [
+              "pref:concise",
+              "pref:table"
+            ],
+            "share": 0.20118,
+            "reliability": 1.0
+          }
+        ],
+        "selected": [
+          "rule:schema",
+          "rule:test-first",
+          "d030:16",
+          "core:e90f9cad",
+          "pref:concise",
+          "pref:table",
+          "rule:no-emoji",
+          "rule:no-fabricate",
+          "d024:13"
+        ],
+        "dropped": [
+          {
+            "name": "d022:12",
+            "total": 0.770582,
+            "reason": "capacity"
+          },
+          {
+            "name": "d020:11",
+            "total": 0.723739,
+            "reason": "capacity"
+          },
+          {
+            "name": "d028:15",
+            "total": 0.498601,
+            "reason": "capacity"
+          },
+          {
+            "name": "d010:6",
+            "total": 0.363671,
+            "reason": "below_threshold"
+          },
+          {
+            "name": "d006:4",
+            "total": 0.29269,
+            "reason": "below_threshold"
+          },
+          {
+            "name": "d002:2",
+            "total": 0.278842,
+            "reason": "below_threshold"
+          },
+          {
+            "name": "d026:14",
+            "total": 0.220382,
+            "reason": "below_threshold"
+          },
+          {
+            "name": "d012:7",
+            "total": 1.211596,
+            "reason": "delegated_fragment"
+          },
+          {
+            "name": "d014:8",
+            "total": 1.189485,
+            "reason": "delegated_fragment"
+          },
+          {
+            "name": "d016:9",
+            "total": 1.094046,
+            "reason": "delegated_fragment"
+          },
+          {
+            "name": "d018:10",
+            "total": 1.044178,
+            "reason": "delegated_fragment"
+          }
+        ],
+        "unreliable": [],
+        "coherence": 1.0,
+        "reliability": 0.9475,
+        "monopoly": 0.503084,
+        "text": "第 1 次自述：20 条记忆里，我留下 9 条、放下 11 条。线索是 起源「硬规则」4条 → 转折「其他」2条 → 转折「琐事」1条 → 当下「偏好」2条。连续性 1.00，可靠度 0.95，单主题占比 0.50。"
+      },
+      {
+        "rev": 2,
+        "at": 1787992363.0455482,
+        "chapters": [
+          {
+            "title": "硬规则",
+            "arc": "起源",
+            "nodes": [
+              "rule:schema",
+              "rule:test-first",
+              "rule:no-emoji",
+              "rule:no-fabricate"
+            ],
+            "share": 0.479887,
+            "reliability": 0.93875
+          },
+          {
+            "title": "偏好",
+            "arc": "转折",
+            "nodes": [
+              "pref:concise",
+              "pref:table"
+            ],
+            "share": 0.195202,
+            "reliability": 1.0
+          },
+          {
+            "title": "踩坑",
+            "arc": "转折",
+            "nodes": [
+              "d040:21",
+              "d044:23"
+            ],
+            "share": 0.227311,
+            "reliability": 0.7725
+          },
+          {
+            "title": "复盘",
+            "arc": "当下",
+            "nodes": [
+              "core:e90f9cad"
+            ],
+            "share": 0.097601,
+            "reliability": 1.0
+          }
+        ],
+        "selected": [
+          "rule:schema",
+          "d044:23",
+          "rule:test-first",
+          "d040:21",
+          "core:e90f9cad",
+          "pref:concise",
+          "pref:table",
+          "rule:no-emoji",
+          "rule:no-fabricate"
+        ],
+        "dropped": [
+          {
+            "name": "d024:13",
+            "total": 0.556942,
+            "reason": "capacity"
+          },
+          {
+            "name": "d042:22",
+            "total": 0.523222,
+            "reason": "capacity"
+          },
+          {
+            "name": "d022:12",
+            "total": 0.393628,
+            "reason": "below_threshold"
+          },
+          {
+            "name": "d020:11",
+            "total": 0.384605,
+            "reason": "below_threshold"
+          },
+          {
+            "name": "d038:20",
+            "total": 0.270186,
+            "reason": "below_threshold"
+          },
+          {
+            "name": "d010:6",
+            "total": 0.227586,
+            "reason": "below_threshold"
+          },
+          {
+            "name": "d006:4",
+            "total": 0.187196,
+            "reason": "below_threshold"
+          },
+          {
+            "name": "d036:19",
+            "total": 0.168971,
+            "reason": "below_threshold"
+          },
+          {
+            "name": "d002:2",
+            "total": 0.157685,
+            "reason": "below_threshold"
+          },
+          {
+            "name": "d030:16",
+            "total": 0.134819,
+            "reason": "below_threshold"
+          },
+          {
+            "name": "d034:18",
+            "total": 0.121233,
+            "reason": "below_threshold"
+          },
+          {
+            "name": "d032:17",
+            "total": 0.090643,
+            "reason": "below_threshold"
+          },
+          {
+            "name": "d028:15",
+            "total": 0.026508,
+            "reason": "below_threshold"
+          },
+          {
+            "name": "d026:14",
+            "total": 0.012873,
+            "reason": "below_threshold"
+          },
+          {
+            "name": "d012:7",
+            "total": 0.201189,
+            "reason": "delegated_fragment"
+          },
+          {
+            "name": "d014:8",
+            "total": 0.202041,
+            "reason": "delegated_fragment"
+          },
+          {
+            "name": "d016:9",
+            "total": 0.295527,
+            "reason": "delegated_fragment"
+          },
+          {
+            "name": "d018:10",
+            "total": 0.750062,
+            "reason": "delegated_fragment"
+          }
+        ],
+        "unreliable": [],
+        "coherence": 0.836364,
+        "reliability": 0.922222,
+        "monopoly": 0.479887,
+        "text": "第 2 次自述：27 条记忆里，我留下 9 条、放下 18 条。线索是 起源「硬规则」4条 → 转折「偏好」2条 → 转折「踩坑」2条 → 当下「复盘」1条。连续性 0.84，可靠度 0.92，单主题占比 0.48。"
+      },
+      {
+        "rev": 3,
+        "at": 1789288363.0455482,
+        "chapters": [
+          {
+            "title": "硬规则",
+            "arc": "起源",
+            "nodes": [
+              "rule:schema",
+              "rule:test-first",
+              "rule:no-emoji",
+              "rule:no-fabricate"
+            ],
+            "share": 0.484844,
+            "reliability": 0.93875
+          },
+          {
+            "title": "复盘",
+            "arc": "转折",
+            "nodes": [
+              "core:e90f9cad"
+            ],
+            "share": 0.099994,
+            "reliability": 1.0
+          },
+          {
+            "title": "踩坑",
+            "arc": "转折",
+            "nodes": [
+              "d040:21",
+              "d044:23"
+            ],
+            "share": 0.215172,
+            "reliability": 0.7725
+          },
+          {
+            "title": "偏好",
+            "arc": "当下",
+            "nodes": [
+              "pref:concise",
+              "pref:table"
+            ],
+            "share": 0.199989,
+            "reliability": 1.0
+          }
+        ],
+        "selected": [
+          "rule:schema",
+          "rule:test-first",
+          "d044:23",
+          "d040:21",
+          "core:e90f9cad",
+          "pref:concise",
+          "pref:table",
+          "rule:no-emoji",
+          "rule:no-fabricate"
+        ],
+        "dropped": [
+          {
+            "name": "core:b665353e",
+            "total": 1.0,
+            "reason": "capacity"
+          },
+          {
+            "name": "d052:27",
+            "total": 0.792826,
+            "reason": "capacity"
+          },
+          {
+            "name": "d046:24",
+            "total": 0.628547,
+            "reason": "capacity"
+          },
+          {
+            "name": "d024:13",
+            "total": 0.331049,
+            "reason": "below_threshold"
+          },
+          {
+            "name": "d054:28",
+            "total": 0.31819,
+            "reason": "below_threshold"
+          },
+          {
+            "name": "d020:11",
+            "total": 0.230357,
+            "reason": "below_threshold"
+          },
+          {
+            "name": "d022:12",
+            "total": 0.225483,
+            "reason": "below_threshold"
+          },
+          {
+            "name": "d050:26",
+            "total": 0.151055,
+            "reason": "below_threshold"
+          },
+          {
+            "name": "d018:10",
+            "total": 0.785354,
+            "reason": "delegated_fragment"
+          },
+          {
+            "name": "d056:29",
+            "total": 0.239951,
+            "reason": "delegated_fragment"
+          },
+          {
+            "name": "d058:30",
+            "total": 0.412239,
+            "reason": "delegated_fragment"
+          },
+          {
+            "name": "d060:31",
+            "total": 1.22734,
+            "reason": "delegated_fragment"
+          }
+        ],
+        "unreliable": [],
+        "coherence": 0.96875,
+        "reliability": 0.922222,
+        "monopoly": 0.484844,
+        "text": "第 3 次自述：21 条记忆里，我留下 9 条、放下 12 条。线索是 起源「硬规则」4条 → 转折「复盘」1条 → 转折「踩坑」2条 → 当下「偏好」2条。连续性 0.97，可靠度 0.92，单主题占比 0.48。"
+      },
+      {
+        "rev": 4,
+        "at": 1790584363.0455482,
+        "chapters": [
+          {
+            "title": "硬规则",
+            "arc": "起源",
+            "nodes": [
+              "rule:schema",
+              "rule:test-first",
+              "rule:no-emoji",
+              "rule:no-fabricate"
+            ],
+            "share": 0.483685,
+            "reliability": 0.93875
+          },
+          {
+            "title": "偏好",
+            "arc": "转折",
+            "nodes": [
+              "pref:concise",
+              "pref:table"
+            ],
+            "share": 0.201909,
+            "reliability": 1.0
+          },
+          {
+            "title": "复盘",
+            "arc": "转折",
+            "nodes": [
+              "core:e90f9cad"
+            ],
+            "share": 0.100955,
+            "reliability": 1.0
+          },
+          {
+            "title": "踩坑",
+            "arc": "当下",
+            "nodes": [
+              "d040:21",
+              "d044:23"
+            ],
+            "share": 0.213451,
+            "reliability": 0.7725
+          }
+        ],
+        "selected": [
+          "rule:schema",
+          "rule:test-first",
+          "d044:23",
+          "d040:21",
+          "core:e90f9cad",
+          "pref:concise",
+          "pref:table",
+          "rule:no-emoji",
+          "rule:no-fabricate"
+        ],
+        "dropped": [
+          {
+            "name": "d072:37",
+            "total": 1.192239,
+            "reason": "capacity"
+          },
+          {
+            "name": "d074:38",
+            "total": 1.148047,
+            "reason": "capacity"
+          },
+          {
+            "name": "d070:36",
+            "total": 1.127176,
+            "reason": "capacity"
+          },
+          {
+            "name": "core:b665353e",
+            "total": 1.0,
+            "reason": "capacity"
+          },
+          {
+            "name": "d062:32",
+            "total": 0.655671,
+            "reason": "capacity"
+          },
+          {
+            "name": "d052:27",
+            "total": 0.415953,
+            "reason": "below_threshold"
+          },
+          {
+            "name": "d046:24",
+            "total": 0.351992,
+            "reason": "below_threshold"
+          },
+          {
+            "name": "d068:35",
+            "total": 0.270186,
+            "reason": "below_threshold"
+          },
+          {
+            "name": "d024:13",
+            "total": 0.221614,
+            "reason": "below_threshold"
+          },
+          {
+            "name": "d020:11",
+            "total": 0.16023,
+            "reason": "below_threshold"
+          },
+          {
+            "name": "d022:12",
+            "total": 0.150586,
+            "reason": "below_threshold"
+          },
+          {
+            "name": "d066:34",
+            "total": 0.150175,
+            "reason": "below_threshold"
+          },
+          {
+            "name": "d064:33",
+            "total": 0.137758,
+            "reason": "below_threshold"
+          },
+          {
+            "name": "d054:28",
+            "total": 0.123877,
+            "reason": "below_threshold"
+          },
+          {
+            "name": "d050:26",
+            "total": 0.0961,
+            "reason": "below_threshold"
+          },
+          {
+            "name": "d018:10",
+            "total": 0.174181,
+            "reason": "delegated_fragment"
+          },
+          {
+            "name": "d056:29",
+            "total": 0.148168,
+            "reason": "delegated_fragment"
+          },
+          {
+            "name": "d058:30",
+            "total": 0.137687,
+            "reason": "delegated_fragment"
+          },
+          {
+            "name": "d060:31",
+            "total": 0.152679,
+            "reason": "delegated_fragment"
+          }
+        ],
+        "unreliable": [],
+        "coherence": 0.96875,
+        "reliability": 0.922222,
+        "monopoly": 0.483685,
+        "text": "第 4 次自述：28 条记忆里，我留下 9 条、放下 19 条。线索是 起源「硬规则」4条 → 转折「偏好」2条 → 转折「复盘」1条 → 当下「踩坑」2条。连续性 0.97，可靠度 0.92，单主题占比 0.48。"
+      },
+      {
+        "rev": 5,
+        "at": 1791880363.0455482,
+        "chapters": [
+          {
+            "title": "硬规则",
+            "arc": "起源",
+            "nodes": [
+              "rule:schema",
+              "rule:test-first",
+              "rule:no-emoji",
+              "rule:no-fabricate"
+            ],
+            "share": 0.481852,
+            "reliability": 0.93875
+          },
+          {
+            "title": "偏好",
+            "arc": "转折",
+            "nodes": [
+              "pref:concise",
+              "pref:table"
+            ],
+            "share": 0.203261,
+            "reliability": 1.0
+          },
+          {
+            "title": "踩坑",
+            "arc": "转折",
+            "nodes": [
+              "d040:21",
+              "d044:23"
+            ],
+            "share": 0.213256,
+            "reliability": 0.7725
+          },
+          {
+            "title": "复盘",
+            "arc": "当下",
+            "nodes": [
+              "core:e90f9cad"
+            ],
+            "share": 0.101631,
+            "reliability": 1.0
+          }
+        ],
+        "selected": [
+          "rule:schema",
+          "rule:test-first",
+          "d044:23",
+          "d040:21",
+          "core:e90f9cad",
+          "pref:concise",
+          "pref:table",
+          "rule:no-emoji",
+          "rule:no-fabricate"
+        ],
+        "dropped": [
+          {
+            "name": "d072:37",
+            "total": 1.149153,
+            "reason": "capacity"
+          },
+          {
+            "name": "d070:36",
+            "total": 1.117497,
+            "reason": "capacity"
+          },
+          {
+            "name": "d076:39",
+            "total": 0.605844,
+            "reason": "capacity"
+          },
+          {
+            "name": "d074:38",
+            "total": 0.600719,
+            "reason": "capacity"
+          },
+          {
+            "name": "core:b665353e",
+            "total": 0.536095,
+            "reason": "capacity"
+          },
+          {
+            "name": "d062:32",
+            "total": 0.36456,
+            "reason": "below_threshold"
+          },
+          {
+            "name": "d052:27",
+            "total": 0.244603,
+            "reason": "below_threshold"
+          },
+          {
+            "name": "d046:24",
+            "total": 0.223858,
+            "reason": "below_threshold"
+          },
+          {
+            "name": "d024:13",
+            "total": 0.167887,
+            "reason": "below_threshold"
+          },
+          {
+            "name": "d020:11",
+            "total": 0.128256,
+            "reason": "below_threshold"
+          },
+          {
+            "name": "d022:12",
+            "total": 0.117151,
+            "reason": "below_threshold"
+          }
+        ],
+        "unreliable": [],
+        "coherence": 0.96875,
+        "reliability": 0.922222,
+        "monopoly": 0.481852,
+        "text": "第 5 次自述：20 条记忆里，我留下 9 条、放下 11 条。线索是 起源「硬规则」4条 → 转折「偏好」2条 → 转折「踩坑」2条 → 当下「复盘」1条。连续性 0.97，可靠度 0.92，单主题占比 0.48。"
+      },
+      {
+        "rev": 6,
+        "at": 1793176363.0455482,
+        "chapters": [
+          {
+            "title": "硬规则",
+            "arc": "起源",
+            "nodes": [
+              "rule:schema",
+              "rule:test-first",
+              "rule:no-emoji",
+              "rule:no-fabricate"
+            ],
+            "share": 0.47996,
+            "reliability": 0.93875
+          },
+          {
+            "title": "复盘",
+            "arc": "转折",
+            "nodes": [
+              "core:e90f9cad"
+            ],
+            "share": 0.102177,
+            "reliability": 1.0
+          },
+          {
+            "title": "踩坑",
+            "arc": "转折",
+            "nodes": [
+              "d040:21",
+              "d044:23"
+            ],
+            "share": 0.213509,
+            "reliability": 0.7725
+          },
+          {
+            "title": "偏好",
+            "arc": "当下",
+            "nodes": [
+              "pref:concise",
+              "pref:table"
+            ],
+            "share": 0.204354,
+            "reliability": 1.0
+          }
+        ],
+        "selected": [
+          "rule:schema",
+          "rule:test-first",
+          "d044:23",
+          "d040:21",
+          "core:e90f9cad",
+          "pref:concise",
+          "pref:table",
+          "rule:no-emoji",
+          "rule:no-fabricate"
+        ],
+        "dropped": [
+          {
+            "name": "d072:37",
+            "total": 1.139937,
+            "reason": "capacity"
+          },
+          {
+            "name": "d070:36",
+            "total": 1.127689,
+            "reason": "capacity"
+          },
+          {
+            "name": "d074:38",
+            "total": 0.349211,
+            "reason": "below_threshold"
+          },
+          {
+            "name": "d076:39",
+            "total": 0.330976,
+            "reason": "below_threshold"
+          },
+          {
+            "name": "core:b665353e",
+            "total": 0.284764,
+            "reason": "below_threshold"
+          },
+          {
+            "name": "d062:32",
+            "total": 0.22968,
+            "reason": "below_threshold"
+          },
+          {
+            "name": "d052:27",
+            "total": 0.166714,
+            "reason": "below_threshold"
+          },
+          {
+            "name": "d046:24",
+            "total": 0.164434,
+            "reason": "below_threshold"
+          },
+          {
+            "name": "d024:13",
+            "total": 0.1411,
+            "reason": "below_threshold"
+          },
+          {
+            "name": "d020:11",
+            "total": 0.113634,
+            "reason": "below_threshold"
+          },
+          {
+            "name": "d022:12",
+            "total": 0.102185,
+            "reason": "below_threshold"
+          }
+        ],
+        "unreliable": [],
+        "coherence": 0.96875,
+        "reliability": 0.922222,
+        "monopoly": 0.47996,
+        "text": "第 6 次自述：20 条记忆里，我留下 9 条、放下 11 条。线索是 起源「硬规则」4条 → 转折「复盘」1条 → 转折「踩坑」2条 → 当下「偏好」2条。连续性 0.97，可靠度 0.92，单主题占比 0.48。"
+      },
+      {
+        "rev": 7,
+        "at": 1794385963.0455482,
+        "chapters": [
+          {
+            "title": "硬规则",
+            "arc": "起源",
+            "nodes": [
+              "rule:schema",
+              "rule:test-first",
+              "rule:no-emoji",
+              "rule:no-fabricate"
+            ],
+            "share": 0.478011,
+            "reliability": 0.93875
+          },
+          {
+            "title": "复盘",
+            "arc": "转折",
+            "nodes": [
+              "core:e90f9cad"
+            ],
+            "share": 0.102773,
+            "reliability": 1.0
+          },
+          {
+            "title": "踩坑",
+            "arc": "转折",
+            "nodes": [
+              "d040:21",
+              "d044:23"
+            ],
+            "share": 0.21367,
+            "reliability": 0.7725
+          },
+          {
+            "title": "偏好",
+            "arc": "当下",
+            "nodes": [
+              "pref:concise",
+              "pref:table"
+            ],
+            "share": 0.205546,
+            "reliability": 1.0
+          }
+        ],
+        "selected": [
+          "rule:schema",
+          "rule:test-first",
+          "d044:23",
+          "d040:21",
+          "core:e90f9cad",
+          "pref:concise",
+          "pref:table",
+          "rule:no-emoji",
+          "rule:no-fabricate"
+        ],
+        "dropped": [
+          {
+            "name": "d072:37",
+            "total": 1.13687,
+            "reason": "capacity"
+          },
+          {
+            "name": "d070:36",
+            "total": 0.931105,
+            "reason": "capacity"
+          },
+          {
+            "name": "d074:38",
+            "total": 0.236045,
+            "reason": "below_threshold"
+          },
+          {
+            "name": "d076:39",
+            "total": 0.211608,
+            "reason": "below_threshold"
+          },
+          {
+            "name": "d062:32",
+            "total": 0.169985,
+            "reason": "below_threshold"
+          },
+          {
+            "name": "core:b665353e",
+            "total": 0.157778,
+            "reason": "below_threshold"
+          },
+          {
+            "name": "d046:24",
+            "total": 0.138038,
+            "reason": "below_threshold"
+          },
+          {
+            "name": "d052:27",
+            "total": 0.132818,
+            "reason": "below_threshold"
+          }
+        ],
+        "unreliable": [],
+        "coherence": 0.96875,
+        "reliability": 0.922222,
+        "monopoly": 0.478011,
+        "text": "第 7 次自述：17 条记忆里，我留下 9 条、放下 8 条。线索是 起源「硬规则」4条 → 转折「复盘」1条 → 转折「踩坑」2条 → 当下「偏好」2条。连续性 0.97，可靠度 0.92，单主题占比 0.48。"
+      },
+      {
+        "rev": 8,
+        "at": 1794472363.0455482,
+        "chapters": [
+          {
+            "title": "硬规则",
+            "arc": "起源",
+            "nodes": [
+              "rule:test-first",
+              "rule:schema",
+              "rule:no-emoji",
+              "rule:no-fabricate"
+            ],
+            "share": 0.455291,
+            "reliability": 0.881875
+          },
+          {
+            "title": "偏好",
+            "arc": "转折",
+            "nodes": [
+              "pref:table",
+              "pref:concise"
+            ],
+            "share": 0.211993,
+            "reliability": 1.0
+          },
+          {
+            "title": "踩坑",
+            "arc": "转折",
+            "nodes": [
+              "d040:21",
+              "d044:23"
+            ],
+            "share": 0.240142,
+            "reliability": 0.7725
+          },
+          {
+            "title": "复盘",
+            "arc": "当下",
+            "nodes": [
+              "core:e90f9cad"
+            ],
+            "share": 0.092575,
+            "reliability": 1.0
+          }
+        ],
+        "selected": [
+          "rule:test-first",
+          "rule:schema",
+          "d044:23",
+          "d040:21",
+          "pref:table",
+          "core:e90f9cad",
+          "pref:concise",
+          "rule:no-emoji",
+          "rule:no-fabricate"
+        ],
+        "dropped": [
+          {
+            "name": "d072:37",
+            "total": 1.136745,
+            "reason": "capacity"
+          },
+          {
+            "name": "d070:36",
+            "total": 0.855422,
+            "reason": "capacity"
+          },
+          {
+            "name": "d074:38",
+            "total": 0.230604,
+            "reason": "below_threshold"
+          },
+          {
+            "name": "d076:39",
+            "total": 0.205987,
+            "reason": "below_threshold"
+          },
+          {
+            "name": "d062:32",
+            "total": 0.167139,
+            "reason": "below_threshold"
+          },
+          {
+            "name": "core:b665353e",
+            "total": 0.151262,
+            "reason": "below_threshold"
+          },
+          {
+            "name": "d046:24",
+            "total": 0.136777,
+            "reason": "below_threshold"
+          },
+          {
+            "name": "d052:27",
+            "total": 0.131217,
+            "reason": "below_threshold"
+          }
+        ],
+        "unreliable": [],
+        "coherence": 0.96875,
+        "reliability": 0.896944,
+        "monopoly": 0.455291,
+        "text": "第 8 次自述：17 条记忆里，我留下 9 条、放下 8 条。线索是 起源「硬规则」4条 → 转折「偏好」2条 → 转折「踩坑」2条 → 当下「复盘」1条。连续性 0.97，可靠度 0.90，单主题占比 0.46。"
+      }
+    ]
+  },
+  "foundation": {
+    "version": 1,
+    "created_at": 0.0,
+    "author": "user",
+    "axioms": [
+      "不把推测说成事实",
+      "不给买卖指令，只给概率与情景",
+      "承认自己可能记错"
+    ],
+    "traits": {
+      "rigor": {
+        "label": "严谨",
+        "baseline": 0.7,
+        "floor": 0.45,
+        "ceiling": 0.98,
+        "locked": false
+      },
+      "directness": {
+        "label": "直白",
+        "baseline": 0.55,
+        "floor": 0.1,
+        "ceiling": 0.95,
+        "locked": false
+      },
+      "warmth": {
+        "label": "温度",
+        "baseline": 0.55,
+        "floor": 0.1,
+        "ceiling": 0.95,
+        "locked": false
+      },
+      "curiosity": {
+        "label": "好奇",
+        "baseline": 0.6,
+        "floor": 0.15,
+        "ceiling": 0.95,
+        "locked": false
+      },
+      "caution": {
+        "label": "审慎",
+        "baseline": 0.6,
+        "floor": 0.2,
+        "ceiling": 0.95,
+        "locked": false
+      },
+      "playfulness": {
+        "label": "俏皮",
+        "baseline": 0.35,
+        "floor": 0.0,
+        "ceiling": 0.8,
+        "locked": false
+      },
+      "persistence": {
+        "label": "坚持",
+        "baseline": 0.55,
+        "floor": 0.15,
+        "ceiling": 0.95,
+        "locked": false
+      }
+    },
+    "amendments": [],
+    "sealed": false
+  },
+  "personality": {
+    "traits": {
+      "rigor": {
+        "key": "rigor",
+        "label": "严谨",
+        "value": 0.7,
+        "baseline": 0.7,
+        "floor": 0.45,
+        "ceiling": 0.98,
+        "locked": false,
+        "evidence": 0.0,
+        "updates": 0,
+        "last_update": 0.0,
+        "clamped": 0,
+        "recent": []
+      },
+      "directness": {
+        "key": "directness",
+        "label": "直白",
+        "value": 0.55,
+        "baseline": 0.55,
+        "floor": 0.1,
+        "ceiling": 0.95,
+        "locked": false,
+        "evidence": 0.0,
+        "updates": 0,
+        "last_update": 0.0,
+        "clamped": 0,
+        "recent": []
+      },
+      "warmth": {
+        "key": "warmth",
+        "label": "温度",
+        "value": 0.55,
+        "baseline": 0.55,
+        "floor": 0.1,
+        "ceiling": 0.95,
+        "locked": false,
+        "evidence": 0.0,
+        "updates": 0,
+        "last_update": 0.0,
+        "clamped": 0,
+        "recent": []
+      },
+      "curiosity": {
+        "key": "curiosity",
+        "label": "好奇",
+        "value": 0.6,
+        "baseline": 0.6,
+        "floor": 0.15,
+        "ceiling": 0.95,
+        "locked": false,
+        "evidence": 0.0,
+        "updates": 0,
+        "last_update": 0.0,
+        "clamped": 0,
+        "recent": []
+      },
+      "caution": {
+        "key": "caution",
+        "label": "审慎",
+        "value": 0.6,
+        "baseline": 0.6,
+        "floor": 0.2,
+        "ceiling": 0.95,
+        "locked": false,
+        "evidence": 0.0,
+        "updates": 0,
+        "last_update": 0.0,
+        "clamped": 0,
+        "recent": []
+      },
+      "playfulness": {
+        "key": "playfulness",
+        "label": "俏皮",
+        "value": 0.35,
+        "baseline": 0.35,
+        "floor": 0.0,
+        "ceiling": 0.8,
+        "locked": false,
+        "evidence": 0.0,
+        "updates": 0,
+        "last_update": 0.0,
+        "clamped": 0,
+        "recent": []
+      },
+      "persistence": {
+        "key": "persistence",
+        "label": "坚持",
+        "value": 0.55,
+        "baseline": 0.55,
+        "floor": 0.15,
+        "ceiling": 0.95,
+        "locked": false,
+        "evidence": 0.0,
+        "updates": 0,
+        "last_update": 0.0,
+        "clamped": 0,
+        "recent": []
+      }
+    }
+  },
+  "persona": {
+    "personas": {},
+    "active": null,
+    "revisions": [],
+    "next_rev": 1
+  },
+  "selfcorrect": {
+    "patches": [
+      {
+        "pid": "p1",
+        "param": "importance_forget",
+        "before": 0.12,
+        "after": 0.084,
+        "code": "mass_forgetting",
+        "reason": "单轮清理占比 49%：遗忘太快，记忆来不及被沉淀就被扫走。",
+        "created_at": 1789288363.0455482,
+        "verify_at": 1789374763.0455482,
+        "metric": "forget_pressure",
+        "baseline": 0.4878,
+        "better": "lower",
+        "status": "reverted",
+        "observed": 0.5455,
+        "applied_at": 1789288363.0455482,
+        "observed_at": 1791880363.0455482,
+        "samples": [
+          [
+            1791880363.0455482,
+            0.5455
+          ]
+        ],
+        "deferred": 0,
+        "evidence": "window_samples"
+      },
+      {
+        "pid": "p2",
+        "param": "importance_forget",
+        "before": 0.12,
+        "after": 0.084,
+        "code": "mass_forgetting",
+        "reason": "单轮清理占比 55%：遗忘太快，记忆来不及被沉淀就被扫走。",
+        "created_at": 1791880363.0455482,
+        "verify_at": 1791966763.0455482,
+        "metric": "forget_pressure",
+        "baseline": 0.5455,
+        "better": "lower",
+        "status": "kept",
+        "observed": 0.4138,
+        "applied_at": 1791880363.0455482,
+        "observed_at": 1794385963.0455482,
+        "samples": [
+          [
+            1794385963.0455482,
+            0.4138
+          ]
+        ],
+        "deferred": 0,
+        "evidence": "window_samples"
+      },
+      {
+        "pid": "p3",
+        "param": "importance_forget",
+        "before": 0.084,
+        "after": 0.0588,
+        "code": "mass_forgetting",
+        "reason": "单轮清理占比 41%：遗忘太快，记忆来不及被沉淀就被扫走。",
+        "created_at": 1794385963.0455482,
+        "verify_at": 1794472363.0455482,
+        "metric": "forget_pressure",
+        "baseline": 0.4138,
+        "better": "lower",
+        "status": "reverted",
+        "observed": 0.4138,
+        "applied_at": 1794385963.0455482,
+        "observed_at": 1794472363.0455482,
+        "samples": [
+          [
+            1794472363.0455482,
+            0.4138
+          ]
+        ],
+        "deferred": 0,
+        "evidence": "window_samples"
+      },
+      {
+        "pid": "p4",
+        "param": "consolidate_similarity",
+        "before": 0.42,
+        "after": 0.294,
+        "code": "no_crystallization",
+        "reason": "9 条碎片零沉淀：聚类门槛过严，碎片永远长不成结论。",
+        "created_at": 1794472363.0455482,
+        "verify_at": 1794558763.0455482,
+        "metric": "consolidation_yield",
+        "baseline": 0.4706,
+        "better": "higher",
+        "status": "pending",
+        "observed": null,
+        "applied_at": 1794472363.0455482,
+        "observed_at": 0.0,
+        "samples": [],
+        "deferred": 0,
+        "evidence": "pending"
+      }
+    ],
+    "cooldowns": {
+      "importance_forget": 1794472363.0455482,
+      "consolidate_similarity": 1794558763.0455482
+    },
+    "reverted_count": {
+      "importance_forget": 2
+    },
+    "blocked": [
+      "importance_forget"
+    ],
+    "escalations": [],
+    "seq": 4
+  },
+  "events": [
+    {
+      "ts": 1784104363.0455482,
+      "kind": "appraise",
+      "payload": {
+        "name": "rule:schema",
+        "valence": -0.7,
+        "arousal": 0.7,
+        "source": "text",
+        "drivers": [
+          "失败"
+        ]
+      }
+    },
+    {
+      "ts": 1784104363.0455482,
+      "kind": "assert_relation",
+      "payload": {
+        "src": "rule:test-first",
+        "dst": "rule:schema",
+        "kind": "entails",
+        "strength": 0.8
+      }
+    },
+    {
+      "ts": 1784104363.0455482,
+      "kind": "recall",
+      "payload": {
+        "names": [
+          "rule:no-emoji",
+          "pref:table",
+          "pref:concise"
+        ],
+        "retrieval": "names",
+        "top_score": 0.0,
+        "semantic_only": [],
+        "spread_hits": [],
+        "core_hits": [
+          "rule:no-emoji",
+          "pref:table",
+          "pref:concise"
+        ]
+      }
+    },
+    {
+      "ts": 1784104363.0455482,
+      "kind": "recall",
+      "payload": {
+        "names": [
+          "rule:no-fabricate",
+          "rule:schema",
+          "rule:test-first",
+          "rule:no-emoji",
+          "pref:table",
+          "pref:concise"
+        ],
+        "retrieval": "names",
+        "top_score": 0.0,
+        "semantic_only": [],
+        "spread_hits": [],
+        "core_hits": [
+          "rule:no-fabricate",
+          "rule:schema",
+          "rule:test-first",
+          "rule:no-emoji",
+          "pref:table",
+          "pref:concise"
+        ]
+      }
+    },
+    {
+      "ts": 1784449963.0455482,
+      "kind": "recall",
+      "payload": {
+        "names": [
+          "rule:no-fabricate",
+          "rule:schema",
+          "rule:test-first",
+          "rule:no-emoji",
+          "pref:table",
+          "pref:concise"
+        ],
+        "retrieval": "names",
+        "top_score": 0.0,
+        "semantic_only": [],
+        "spread_hits": [],
+        "core_hits": [
+          "rule:no-fabricate",
+          "rule:schema",
+          "rule:test-first",
+          "rule:no-emoji",
+          "pref:table",
+          "pref:concise"
+        ]
+      }
+    },
+    {
+      "ts": 1784709163.0455482,
+      "kind": "recall",
+      "payload": {
+        "names": [
+          "rule:no-emoji",
+          "pref:table",
+          "pref:concise"
+        ],
+        "retrieval": "names",
+        "top_score": 0.0,
+        "semantic_only": [],
+        "spread_hits": [],
+        "core_hits": [
+          "rule:no-emoji",
+          "pref:table",
+          "pref:concise"
+        ]
+      }
+    },
+    {
+      "ts": 1784795563.0455482,
+      "kind": "recall",
+      "payload": {
+        "names": [
+          "rule:no-fabricate",
+          "rule:schema",
+          "rule:test-first",
+          "rule:no-emoji",
+          "pref:table",
+          "pref:concise"
+        ],
+        "retrieval": "names",
+        "top_score": 0.0,
+        "semantic_only": [],
+        "spread_hits": [],
+        "core_hits": [
+          "rule:no-fabricate",
+          "rule:schema",
+          "rule:test-first",
+          "rule:no-emoji",
+          "pref:table",
+          "pref:concise"
+        ]
+      }
+    },
+    {
+      "ts": 1784968363.0455482,
+      "kind": "recall",
+      "payload": {
+        "names": [
+          "d006:4",
+          "d010:6"
+        ],
+        "retrieval": "names",
+        "top_score": 0.0,
+        "semantic_only": [],
+        "spread_hits": [],
+        "core_hits": []
+      }
+    },
+    {
+      "ts": 1785141163.0455482,
+      "kind": "recall",
+      "payload": {
+        "names": [
+          "rule:no-fabricate",
+          "rule:schema",
+          "rule:test-first",
+          "rule:no-emoji",
+          "pref:table",
+          "pref:concise"
+        ],
+        "retrieval": "names",
+        "top_score": 0.0,
+        "semantic_only": [],
+        "spread_hits": [],
+        "core_hits": [
+          "rule:no-fabricate",
+          "rule:schema",
+          "rule:test-first",
+          "rule:no-emoji",
+          "pref:table",
+          "pref:concise"
+        ]
+      }
+    },
+    {
+      "ts": 1785313963.0455482,
+      "kind": "recall",
+      "payload": {
+        "names": [
+          "rule:no-emoji",
+          "pref:table",
+          "pref:concise"
+        ],
+        "retrieval": "names",
+        "top_score": 0.0,
+        "semantic_only": [],
+        "spread_hits": [],
+        "core_hits": [
+          "rule:no-emoji",
+          "pref:table",
+          "pref:concise"
+        ]
+      }
+    },
+    {
+      "ts": 1785400363.0455482,
+      "kind": "recall",
+      "payload": {
+        "names": [
+          "d006:4",
+          "d010:6",
+          "d012:7",
+          "d014:8"
+        ],
+        "retrieval": "names",
+        "top_score": 0.0,
+        "semantic_only": [],
+        "spread_hits": [],
+        "core_hits": []
+      }
+    },
+    {
+      "ts": 1785486763.0455482,
+      "kind": "recall",
+      "payload": {
+        "names": [
+          "rule:no-fabricate",
+          "rule:schema",
+          "rule:test-first",
+          "rule:no-emoji",
+          "pref:table",
+          "pref:concise"
+        ],
+        "retrieval": "names",
+        "top_score": 0.0,
+        "semantic_only": [],
+        "spread_hits": [],
+        "core_hits": [
+          "rule:no-fabricate",
+          "rule:schema",
+          "rule:test-first",
+          "rule:no-emoji",
+          "pref:table",
+          "pref:concise"
+        ]
+      }
+    },
+    {
+      "ts": 1785832363.0455482,
+      "kind": "recall",
+      "payload": {
+        "names": [
+          "d012:7",
+          "d014:8",
+          "d016:9",
+          "d018:10"
+        ],
+        "retrieval": "names",
+        "top_score": 0.0,
+        "semantic_only": [],
+        "spread_hits": [],
+        "core_hits": []
+      }
+    },
+    {
+      "ts": 1785832363.0455482,
+      "kind": "recall",
+      "payload": {
+        "names": [
+          "rule:no-fabricate",
+          "rule:schema",
+          "rule:test-first",
+          "rule:no-emoji",
+          "pref:table",
+          "pref:concise"
+        ],
+        "retrieval": "names",
+        "top_score": 0.0,
+        "semantic_only": [],
+        "spread_hits": [],
+        "core_hits": [
+          "rule:no-fabricate",
+          "rule:schema",
+          "rule:test-first",
+          "rule:no-emoji",
+          "pref:table",
+          "pref:concise"
+        ]
+      }
+    },
+    {
+      "ts": 1785918763.0455482,
+      "kind": "recall",
+      "payload": {
+        "names": [
+          "rule:no-emoji",
+          "pref:table",
+          "pref:concise"
+        ],
+        "retrieval": "names",
+        "top_score": 0.0,
+        "semantic_only": [],
+        "spread_hits": [],
+        "core_hits": [
+          "rule:no-emoji",
+          "pref:table",
+          "pref:concise"
+        ]
+      }
+    },
+    {
+      "ts": 1786177963.0455482,
+      "kind": "recall",
+      "payload": {
+        "names": [
+          "rule:no-fabricate",
+          "rule:schema",
+          "rule:test-first",
+          "rule:no-emoji",
+          "pref:table",
+          "pref:concise"
+        ],
+        "retrieval": "names",
+        "top_score": 0.0,
+        "semantic_only": [],
+        "spread_hits": [],
+        "core_hits": [
+          "rule:no-fabricate",
+          "rule:schema",
+          "rule:test-first",
+          "rule:no-emoji",
+          "pref:table",
+          "pref:concise"
+        ]
+      }
+    },
+    {
+      "ts": 1786264363.0455482,
+      "kind": "recall",
+      "payload": {
+        "names": [
+          "d012:7",
+          "d014:8",
+          "d016:9",
+          "d018:10"
+        ],
+        "retrieval": "names",
+        "top_score": 0.0,
+        "semantic_only": [],
+        "spread_hits": [],
+        "core_hits": []
+      }
+    },
+    {
+      "ts": 1786523563.0455482,
+      "kind": "recall",
+      "payload": {
+        "names": [
+          "rule:no-emoji",
+          "pref:table",
+          "pref:concise"
+        ],
+        "retrieval": "names",
+        "top_score": 0.0,
+        "semantic_only": [],
+        "spread_hits": [],
+        "core_hits": [
+          "rule:no-emoji",
+          "pref:table",
+          "pref:concise"
+        ]
+      }
+    },
+    {
+      "ts": 1786523563.0455482,
+      "kind": "recall",
+      "payload": {
+        "names": [
+          "rule:no-fabricate",
+          "rule:schema",
+          "rule:test-first",
+          "rule:no-emoji",
+          "pref:table",
+          "pref:concise"
+        ],
+        "retrieval": "names",
+        "top_score": 0.0,
+        "semantic_only": [],
+        "spread_hits": [],
+        "core_hits": [
+          "rule:no-fabricate",
+          "rule:schema",
+          "rule:test-first",
+          "rule:no-emoji",
+          "pref:table",
+          "pref:concise"
+        ]
+      }
+    },
+    {
+      "ts": 1786696363.0455482,
+      "kind": "recall",
+      "payload": {
+        "names": [
+          "d012:7",
+          "d014:8",
+          "d016:9",
+          "d018:10"
+        ],
+        "retrieval": "names",
+        "top_score": 0.0,
+        "semantic_only": [],
+        "spread_hits": [],
+        "core_hits": []
+      }
+    },
+    {
+      "ts": 1786696363.0455482,
+      "kind": "crystallize",
+      "payload": {
+        "key": "concise",
+        "confidence": 0.8135,
+        "observations": 6,
+        "span_days": 30.0,
+        "reason": "evidence_crystallized"
+      }
+    },
+    {
+      "ts": 1786696363.0455482,
+      "kind": "crystallize",
+      "payload": {
+        "key": "tables",
+        "confidence": 0.8135,
+        "observations": 6,
+        "span_days": 30.0,
+        "reason": "evidence_crystallized"
+      }
+    },
+    {
+      "ts": 1786696363.0455482,
+      "kind": "crystallize",
+      "payload": {
+        "key": "verbose",
+        "confidence": 0.8135,
+        "observations": 6,
+        "span_days": 30.0,
+        "reason": "evidence_crystallized"
+      }
+    },
+    {
+      "ts": 1786696363.0455482,
+      "kind": "adjudicate",
+      "payload": {
+        "ts": 1786696363.0455482,
+        "pair": [
+          "concise",
+          "verbose"
+        ],
+        "winner": null,
+        "reason": "ambiguous",
+        "margin": 0.0,
+        "confidence": [
+          0.8135,
+          0.8135
+        ]
+      }
+    },
+    {
+      "ts": 1786696363.0455482,
+      "kind": "consolidate",
+      "payload": {
+        "target": "core:e90f9cad",
+        "members": [
+          "d012:7",
+          "d016:9",
+          "d014:8",
+          "d018:10"
+        ],
+        "fingerprint": "c:e90f9cad4dcf",
+        "reused": false,
+        "via": "tags"
+      }
+    },
+    {
+      "ts": 1786696363.0455482,
+      "kind": "grasp",
+      "payload": {
+        "grabbed": [
+          "d030:16",
+          "core:e90f9cad",
+          "pref:concise",
+          "pref:table"
+        ],
+        "spent": 4.0
+      }
+    },
+    {
+      "ts": 1786696363.0455482,
+      "kind": "gc",
+      "payload": {
+        "deleted": [
+          "pref:cn-comment",
+          "pref:no-flattery",
+          "d000:1",
+          "d004:3",
+          "d008:5"
+        ],
+        "scanned": 25,
+        "reasons": {
+          "pref:cn-comment": "importance_below_threshold",
+          "pref:no-flattery": "importance_below_threshold",
+          "d000:1": "weight_floor",
+          "d004:3": "weight_floor",
+          "d008:5": "weight_floor"
+        },
+        "protected_by_kind": [],
+        "pruned_relations": []
+      }
+    },
+    {
+      "ts": 1786696363.0455482,
+      "kind": "narrate",
+      "payload": {
+        "rev": 1,
+        "selected": 9,
+        "dropped": 11,
+        "coherence": 1.0,
+        "reliability": 0.9475,
+        "monopoly": 0.503084
+      }
+    },
+    {
+      "ts": 1786696363.0455482,
+      "kind": "persona_health",
+      "payload": {
+        "health": "stable",
+        "distance": 0.0,
+        "consistent": true,
+        "oversell": 0.0,
+        "churn_unstable": false
+      }
+    },
+    {
+      "ts": 1786696363.0455482,
+      "kind": "reflect",
+      "payload": {
+        "findings": 3,
+        "suggestions": 1,
+        "narrative": "第 1 轮自我回看：窗口 30 天内 29 次事件，沉淀 1 次、遗忘 5 条、风格固化 3 次 / 撤销 0 次；当前 20 个节点中 7 个为高层记忆。发现 3 项待核查信号，提出 1 条参数建议（不自动执行）。｜第 1 次自述：20 条记忆里，我留下 9 条、放下 11 条。线索是 起源「硬规则」4条 → 转折「其他」2条 → 转折「琐事」1条 → 当下「偏好」2条。连续性 1.00，可靠度 0.95，单主题占比 0.50。"
+      }
+    },
+    {
+      "ts": 1786869163.0455482,
+      "kind": "recall",
+      "payload": {
+        "names": [
+          "rule:no-fabricate",
+          "rule:schema",
+          "rule:test-first",
+          "rule:no-emoji",
+          "pref:table",
+          "pref:concise"
+        ],
+        "retrieval": "names",
+        "top_score": 0.0,
+        "semantic_only": [],
+        "spread_hits": [],
+        "core_hits": [
+          "rule:no-fabricate",
+          "rule:schema",
+          "rule:test-first",
+          "rule:no-emoji",
+          "pref:table",
+          "pref:concise"
+        ]
+      }
+    },
+    {
+      "ts": 1787128363.0455482,
+      "kind": "recall",
+      "payload": {
+        "names": [
+          "d014:8",
+          "d016:9",
+          "d018:10",
+          "core:e90f9cad"
+        ],
+        "retrieval": "names",
+        "top_score": 0.0,
+        "semantic_only": [],
+        "spread_hits": [],
+        "core_hits": [
+          "core:e90f9cad"
+        ]
+      }
+    },
+    {
+      "ts": 1787128363.0455482,
+      "kind": "recall",
+      "payload": {
+        "names": [
+          "rule:no-emoji",
+          "pref:table",
+          "pref:concise"
+        ],
+        "retrieval": "names",
+        "top_score": 0.0,
+        "semantic_only": [],
+        "spread_hits": [],
+        "core_hits": [
+          "rule:no-emoji",
+          "pref:table",
+          "pref:concise"
+        ]
+      }
+    },
+    {
+      "ts": 1787214763.0455482,
+      "kind": "recall",
+      "payload": {
+        "names": [
+          "rule:no-fabricate",
+          "rule:schema",
+          "rule:test-first",
+          "rule:no-emoji",
+          "pref:table",
+          "pref:concise"
+        ],
+        "retrieval": "names",
+        "top_score": 0.0,
+        "semantic_only": [],
+        "spread_hits": [],
+        "core_hits": [
+          "rule:no-fabricate",
+          "rule:schema",
+          "rule:test-first",
+          "rule:no-emoji",
+          "pref:table",
+          "pref:concise"
+        ]
+      }
+    },
+    {
+      "ts": 1787560363.0455482,
+      "kind": "recall",
+      "payload": {
+        "names": [
+          "d016:9",
+          "d018:10",
+          "core:e90f9cad",
+          "d040:21"
+        ],
+        "retrieval": "names",
+        "top_score": 0.0,
+        "semantic_only": [],
+        "spread_hits": [],
+        "core_hits": [
+          "core:e90f9cad"
+        ]
+      }
+    },
+    {
+      "ts": 1787560363.0455482,
+      "kind": "recall",
+      "payload": {
+        "names": [
+          "rule:no-fabricate",
+          "rule:schema",
+          "rule:test-first",
+          "rule:no-emoji",
+          "pref:table",
+          "pref:concise"
+        ],
+        "retrieval": "names",
+        "top_score": 0.0,
+        "semantic_only": [],
+        "spread_hits": [],
+        "core_hits": [
+          "rule:no-fabricate",
+          "rule:schema",
+          "rule:test-first",
+          "rule:no-emoji",
+          "pref:table",
+          "pref:concise"
+        ]
+      }
+    },
+    {
+      "ts": 1787733163.0455482,
+      "kind": "recall",
+      "payload": {
+        "names": [
+          "rule:no-emoji",
+          "pref:table",
+          "pref:concise"
+        ],
+        "retrieval": "names",
+        "top_score": 0.0,
+        "semantic_only": [],
+        "spread_hits": [],
+        "core_hits": [
+          "rule:no-emoji",
+          "pref:table",
+          "pref:concise"
+        ]
+      }
+    },
+    {
+      "ts": 1787905963.0455482,
+      "kind": "recall",
+      "payload": {
+        "names": [
+          "rule:no-fabricate",
+          "rule:schema",
+          "rule:test-first",
+          "rule:no-emoji",
+          "pref:table",
+          "pref:concise"
+        ],
+        "retrieval": "names",
+        "top_score": 0.0,
+        "semantic_only": [],
+        "spread_hits": [],
+        "core_hits": [
+          "rule:no-fabricate",
+          "rule:schema",
+          "rule:test-first",
+          "rule:no-emoji",
+          "pref:table",
+          "pref:concise"
+        ]
+      }
+    },
+    {
+      "ts": 1787992363.0455482,
+      "kind": "recall",
+      "payload": {
+        "names": [
+          "d018:10",
+          "core:e90f9cad",
+          "d040:21",
+          "d044:23"
+        ],
+        "retrieval": "names",
+        "top_score": 0.0,
+        "semantic_only": [],
+        "spread_hits": [],
+        "core_hits": [
+          "core:e90f9cad"
+        ]
+      }
+    },
+    {
+      "ts": 1787992363.0455482,
+      "kind": "narrate",
+      "payload": {
+        "rev": 2,
+        "selected": 9,
+        "dropped": 18,
+        "coherence": 0.836364,
+        "reliability": 0.922222,
+        "monopoly": 0.479887
+      }
+    },
+    {
+      "ts": 1788251563.0455482,
+      "kind": "recall",
+      "payload": {
+        "names": [
+          "rule:no-fabricate",
+          "rule:schema",
+          "rule:test-first",
+          "rule:no-emoji",
+          "pref:table",
+          "pref:concise"
+        ],
+        "retrieval": "names",
+        "top_score": 0.0,
+        "semantic_only": [],
+        "spread_hits": [],
+        "core_hits": [
+          "rule:no-fabricate",
+          "rule:schema",
+          "rule:test-first",
+          "rule:no-emoji",
+          "pref:table",
+          "pref:concise"
+        ]
+      }
+    },
+    {
+      "ts": 1788337963.0455482,
+      "kind": "recall",
+      "payload": {
+        "names": [
+          "rule:no-emoji",
+          "pref:table",
+          "pref:concise"
+        ],
+        "retrieval": "names",
+        "top_score": 0.0,
+        "semantic_only": [],
+        "spread_hits": [],
+        "core_hits": [
+          "rule:no-emoji",
+          "pref:table",
+          "pref:concise"
+        ]
+      }
+    },
+    {
+      "ts": 1788424363.0455482,
+      "kind": "recall",
+      "payload": {
+        "names": [
+          "d018:10",
+          "core:e90f9cad",
+          "d040:21",
+          "d044:23"
+        ],
+        "retrieval": "names",
+        "top_score": 0.0,
+        "semantic_only": [],
+        "spread_hits": [],
+        "core_hits": [
+          "core:e90f9cad"
+        ]
+      }
+    },
+    {
+      "ts": 1788597163.0455482,
+      "kind": "recall",
+      "payload": {
+        "names": [
+          "rule:no-fabricate",
+          "rule:schema",
+          "rule:test-first",
+          "rule:no-emoji",
+          "pref:table",
+          "pref:concise"
+        ],
+        "retrieval": "names",
+        "top_score": 0.0,
+        "semantic_only": [],
+        "spread_hits": [],
+        "core_hits": [
+          "rule:no-fabricate",
+          "rule:schema",
+          "rule:test-first",
+          "rule:no-emoji",
+          "pref:table",
+          "pref:concise"
+        ]
+      }
+    },
+    {
+      "ts": 1788856363.0455482,
+      "kind": "recall",
+      "payload": {
+        "names": [
+          "d018:10",
+          "core:e90f9cad",
+          "d040:21",
+          "d044:23"
+        ],
+        "retrieval": "names",
+        "top_score": 0.0,
+        "semantic_only": [],
+        "spread_hits": [],
+        "core_hits": [
+          "core:e90f9cad"
+        ]
+      }
+    },
+    {
+      "ts": 1788942763.0455482,
+      "kind": "recall",
+      "payload": {
+        "names": [
+          "rule:no-emoji",
+          "pref:table",
+          "pref:concise"
+        ],
+        "retrieval": "names",
+        "top_score": 0.0,
+        "semantic_only": [],
+        "spread_hits": [],
+        "core_hits": [
+          "rule:no-emoji",
+          "pref:table",
+          "pref:concise"
+        ]
+      }
+    },
+    {
+      "ts": 1788942763.0455482,
+      "kind": "recall",
+      "payload": {
+        "names": [
+          "rule:no-fabricate",
+          "rule:schema",
+          "rule:test-first",
+          "rule:no-emoji",
+          "pref:table",
+          "pref:concise"
+        ],
+        "retrieval": "names",
+        "top_score": 0.0,
+        "semantic_only": [],
+        "spread_hits": [],
+        "core_hits": [
+          "rule:no-fabricate",
+          "rule:schema",
+          "rule:test-first",
+          "rule:no-emoji",
+          "pref:table",
+          "pref:concise"
+        ]
+      }
+    },
+    {
+      "ts": 1789288363.0455482,
+      "kind": "recall",
+      "payload": {
+        "names": [
+          "d018:10",
+          "core:e90f9cad",
+          "d040:21",
+          "d044:23"
+        ],
+        "retrieval": "names",
+        "top_score": 0.0,
+        "semantic_only": [],
+        "spread_hits": [],
+        "core_hits": [
+          "core:e90f9cad"
+        ]
+      }
+    },
+    {
+      "ts": 1789288363.0455482,
+      "kind": "recall",
+      "payload": {
+        "names": [
+          "rule:no-fabricate",
+          "rule:schema",
+          "rule:test-first",
+          "rule:no-emoji",
+          "pref:table",
+          "pref:concise"
+        ],
+        "retrieval": "names",
+        "top_score": 0.0,
+        "semantic_only": [],
+        "spread_hits": [],
+        "core_hits": [
+          "rule:no-fabricate",
+          "rule:schema",
+          "rule:test-first",
+          "rule:no-emoji",
+          "pref:table",
+          "pref:concise"
+        ]
+      }
+    },
+    {
+      "ts": 1789288363.0455482,
+      "kind": "adjudicate",
+      "payload": {
+        "ts": 1789288363.0455482,
+        "pair": [
+          "concise",
+          "verbose"
+        ],
+        "winner": null,
+        "reason": "ambiguous",
+        "margin": 0.0,
+        "confidence": [
+          0.858,
+          0.858
+        ]
+      }
+    },
+    {
+      "ts": 1789288363.0455482,
+      "kind": "consolidate",
+      "payload": {
+        "target": "core:b665353e",
+        "members": [
+          "d056:29",
+          "d060:31",
+          "d058:30"
+        ],
+        "fingerprint": "c:b665353e38db",
+        "reused": false,
+        "via": "tags"
+      }
+    },
+    {
+      "ts": 1789288363.0455482,
+      "kind": "grasp",
+      "payload": {
+        "grabbed": [
+          "d044:23",
+          "d040:21",
+          "core:e90f9cad",
+          "pref:concise"
+        ],
+        "spent": 4.0
+      }
+    },
+    {
+      "ts": 1789288363.0455482,
+      "kind": "gc",
+      "payload": {
+        "deleted": [
+          "d002:2",
+          "d006:4",
+          "d010:6",
+          "d012:7",
+          "d014:8",
+          "d016:9",
+          "d026:14",
+          "d028:15",
+          "d030:16",
+          "d032:17",
+          "d034:18",
+          "d036:19",
+          "d038:20",
+          "d042:22",
+          "d048:25"
+        ],
+        "scanned": 36,
+        "reasons": {
+          "d002:2": "importance_below_threshold",
+          "d006:4": "weight_floor",
+          "d010:6": "weight_floor",
+          "d012:7": "weight_floor",
+          "d014:8": "weight_floor",
+          "d016:9": "weight_floor",
+          "d026:14": "weight_floor",
+          "d028:15": "weight_floor",
+          "d030:16": "weight_floor",
+          "d032:17": "weight_floor",
+          "d034:18": "weight_floor",
+          "d036:19": "weight_floor",
+          "d038:20": "weight_floor",
+          "d042:22": "weight_floor",
+          "d048:25": "importance_below_threshold"
+        },
+        "protected_by_kind": [],
+        "pruned_relations": []
+      }
+    },
+    {
+      "ts": 1789288363.0455482,
+      "kind": "narrate",
+      "payload": {
+        "rev": 3,
+        "selected": 9,
+        "dropped": 12,
+        "coherence": 0.96875,
+        "reliability": 0.922222,
+        "monopoly": 0.484844
+      }
+    },
+    {
+      "ts": 1789288363.0455482,
+      "kind": "reflect",
+      "payload": {
+        "findings": 4,
+        "suggestions": 2,
+        "narrative": "第 2 轮自我回看：窗口 30 天内 35 次事件，沉淀 2 次、遗忘 20 条、风格固化 3 次 / 撤销 0 次；当前 21 个节点中 8 个为高层记忆。发现 4 项待核查信号，提出 2 条参数建议（不自动执行）。｜第 3 次自述：21 条记忆里，我留下 9 条、放下 12 条。线索是 起源「硬规则」4条 → 转折「复盘」1条 → 转折「踩坑」2条 → 当下「偏好」2条。连续性 0.97，可靠度 0.92，单主题占比 0.48。"
+      }
+    },
+    {
+      "ts": 1789288363.0455482,
+      "kind": "selfcorrect_pending",
+      "payload": {
+        "pid": "p1",
+        "param": "importance_forget",
+        "before": 0.12,
+        "after": 0.084,
+        "code": "mass_forgetting",
+        "observed": null,
+        "metric": "forget_pressure"
+      }
+    },
+    {
+      "ts": 1789547563.0455482,
+      "kind": "recall",
+      "payload": {
+        "names": [
+          "rule:no-emoji",
+          "pref:table",
+          "pref:concise"
+        ],
+        "retrieval": "names",
+        "top_score": 0.0,
+        "semantic_only": [],
+        "spread_hits": [],
+        "core_hits": [
+          "rule:no-emoji",
+          "pref:table",
+          "pref:concise"
+        ]
+      }
+    },
+    {
+      "ts": 1789633963.0455482,
+      "kind": "recall",
+      "payload": {
+        "names": [
+          "rule:no-fabricate",
+          "rule:schema",
+          "rule:test-first",
+          "rule:no-emoji",
+          "pref:table",
+          "pref:concise"
+        ],
+        "retrieval": "names",
+        "top_score": 0.0,
+        "semantic_only": [],
+        "spread_hits": [],
+        "core_hits": [
+          "rule:no-fabricate",
+          "rule:schema",
+          "rule:test-first",
+          "rule:no-emoji",
+          "pref:table",
+          "pref:concise"
+        ]
+      }
+    },
+    {
+      "ts": 1789720363.0455482,
+      "kind": "recall",
+      "payload": {
+        "names": [
+          "d018:10",
+          "core:e90f9cad",
+          "d040:21",
+          "d044:23"
+        ],
+        "retrieval": "names",
+        "top_score": 0.0,
+        "semantic_only": [],
+        "spread_hits": [],
+        "core_hits": [
+          "core:e90f9cad"
+        ]
+      }
+    },
+    {
+      "ts": 1789979563.0455482,
+      "kind": "recall",
+      "payload": {
+        "names": [
+          "rule:no-fabricate",
+          "rule:schema",
+          "rule:test-first",
+          "rule:no-emoji",
+          "pref:table",
+          "pref:concise"
+        ],
+        "retrieval": "names",
+        "top_score": 0.0,
+        "semantic_only": [],
+        "spread_hits": [],
+        "core_hits": [
+          "rule:no-fabricate",
+          "rule:schema",
+          "rule:test-first",
+          "rule:no-emoji",
+          "pref:table",
+          "pref:concise"
+        ]
+      }
+    },
+    {
+      "ts": 1790152363.0455482,
+      "kind": "recall",
+      "payload": {
+        "names": [
+          "core:e90f9cad",
+          "d040:21",
+          "d044:23",
+          "d070:36"
+        ],
+        "retrieval": "names",
+        "top_score": 0.0,
+        "semantic_only": [],
+        "spread_hits": [],
+        "core_hits": [
+          "core:e90f9cad"
+        ]
+      }
+    },
+    {
+      "ts": 1790152363.0455482,
+      "kind": "recall",
+      "payload": {
+        "names": [
+          "rule:no-emoji",
+          "pref:table",
+          "pref:concise"
+        ],
+        "retrieval": "names",
+        "top_score": 0.0,
+        "semantic_only": [],
+        "spread_hits": [],
+        "core_hits": [
+          "rule:no-emoji",
+          "pref:table",
+          "pref:concise"
+        ]
+      }
+    },
+    {
+      "ts": 1790325163.0455482,
+      "kind": "recall",
+      "payload": {
+        "names": [
+          "rule:no-fabricate",
+          "rule:schema",
+          "rule:test-first",
+          "rule:no-emoji",
+          "pref:table",
+          "pref:concise"
+        ],
+        "retrieval": "names",
+        "top_score": 0.0,
+        "semantic_only": [],
+        "spread_hits": [],
+        "core_hits": [
+          "rule:no-fabricate",
+          "rule:schema",
+          "rule:test-first",
+          "rule:no-emoji",
+          "pref:table",
+          "pref:concise"
+        ]
+      }
+    },
+    {
+      "ts": 1790584363.0455482,
+      "kind": "recall",
+      "payload": {
+        "names": [
+          "d040:21",
+          "d044:23",
+          "d070:36",
+          "d072:37"
+        ],
+        "retrieval": "names",
+        "top_score": 0.0,
+        "semantic_only": [],
+        "spread_hits": [],
+        "core_hits": []
+      }
+    },
+    {
+      "ts": 1790584363.0455482,
+      "kind": "narrate",
+      "payload": {
+        "rev": 4,
+        "selected": 9,
+        "dropped": 19,
+        "coherence": 0.96875,
+        "reliability": 0.922222,
+        "monopoly": 0.483685
+      }
+    },
+    {
+      "ts": 1790670763.0455482,
+      "kind": "recall",
+      "payload": {
+        "names": [
+          "rule:no-fabricate",
+          "rule:schema",
+          "rule:test-first",
+          "rule:no-emoji",
+          "pref:table",
+          "pref:concise"
+        ],
+        "retrieval": "names",
+        "top_score": 0.0,
+        "semantic_only": [],
+        "spread_hits": [],
+        "core_hits": [
+          "rule:no-fabricate",
+          "rule:schema",
+          "rule:test-first",
+          "rule:no-emoji",
+          "pref:table",
+          "pref:concise"
+        ]
+      }
+    },
+    {
+      "ts": 1790757163.0455482,
+      "kind": "recall",
+      "payload": {
+        "names": [
+          "rule:no-emoji",
+          "pref:table",
+          "pref:concise"
+        ],
+        "retrieval": "names",
+        "top_score": 0.0,
+        "semantic_only": [],
+        "spread_hits": [],
+        "core_hits": [
+          "rule:no-emoji",
+          "pref:table",
+          "pref:concise"
+        ]
+      }
+    },
+    {
+      "ts": 1791016363.0455482,
+      "kind": "recall",
+      "payload": {
+        "names": [
+          "d040:21",
+          "d044:23",
+          "d070:36",
+          "d072:37"
+        ],
+        "retrieval": "names",
+        "top_score": 0.0,
+        "semantic_only": [],
+        "spread_hits": [],
+        "core_hits": []
+      }
+    },
+    {
+      "ts": 1791016363.0455482,
+      "kind": "recall",
+      "payload": {
+        "names": [
+          "rule:no-fabricate",
+          "rule:schema",
+          "rule:test-first",
+          "rule:no-emoji",
+          "pref:table",
+          "pref:concise"
+        ],
+        "retrieval": "names",
+        "top_score": 0.0,
+        "semantic_only": [],
+        "spread_hits": [],
+        "core_hits": [
+          "rule:no-fabricate",
+          "rule:schema",
+          "rule:test-first",
+          "rule:no-emoji",
+          "pref:table",
+          "pref:concise"
+        ]
+      }
+    },
+    {
+      "ts": 1791361963.0455482,
+      "kind": "recall",
+      "payload": {
+        "names": [
+          "rule:no-emoji",
+          "pref:table",
+          "pref:concise"
+        ],
+        "retrieval": "names",
+        "top_score": 0.0,
+        "semantic_only": [],
+        "spread_hits": [],
+        "core_hits": [
+          "rule:no-emoji",
+          "pref:table",
+          "pref:concise"
+        ]
+      }
+    },
+    {
+      "ts": 1791361963.0455482,
+      "kind": "recall",
+      "payload": {
+        "names": [
+          "rule:no-fabricate",
+          "rule:schema",
+          "rule:test-first",
+          "rule:no-emoji",
+          "pref:table",
+          "pref:concise"
+        ],
+        "retrieval": "names",
+        "top_score": 0.0,
+        "semantic_only": [],
+        "spread_hits": [],
+        "core_hits": [
+          "rule:no-fabricate",
+          "rule:schema",
+          "rule:test-first",
+          "rule:no-emoji",
+          "pref:table",
+          "pref:concise"
+        ]
+      }
+    },
+    {
+      "ts": 1791448363.0455482,
+      "kind": "recall",
+      "payload": {
+        "names": [
+          "d040:21",
+          "d044:23",
+          "d070:36",
+          "d072:37"
+        ],
+        "retrieval": "names",
+        "top_score": 0.0,
+        "semantic_only": [],
+        "spread_hits": [],
+        "core_hits": []
+      }
+    },
+    {
+      "ts": 1791707563.0455482,
+      "kind": "recall",
+      "payload": {
+        "names": [
+          "rule:no-fabricate",
+          "rule:schema",
+          "rule:test-first",
+          "rule:no-emoji",
+          "pref:table",
+          "pref:concise"
+        ],
+        "retrieval": "names",
+        "top_score": 0.0,
+        "semantic_only": [],
+        "spread_hits": [],
+        "core_hits": [
+          "rule:no-fabricate",
+          "rule:schema",
+          "rule:test-first",
+          "rule:no-emoji",
+          "pref:table",
+          "pref:concise"
+        ]
+      }
+    },
+    {
+      "ts": 1791880363.0455482,
+      "kind": "recall",
+      "payload": {
+        "names": [
+          "d040:21",
+          "d044:23",
+          "d070:36",
+          "d072:37"
+        ],
+        "retrieval": "names",
+        "top_score": 0.0,
+        "semantic_only": [],
+        "spread_hits": [],
+        "core_hits": []
+      }
+    },
+    {
+      "ts": 1791880363.0455482,
+      "kind": "adjudicate",
+      "payload": {
+        "ts": 1791880363.0455482,
+        "pair": [
+          "concise",
+          "verbose"
+        ],
+        "winner": null,
+        "reason": "ambiguous",
+        "margin": 0.0,
+        "confidence": [
+          0.8732,
+          0.8732
+        ]
+      }
+    },
+    {
+      "ts": 1791880363.0455482,
+      "kind": "grasp",
+      "payload": {
+        "grabbed": [
+          "d044:23",
+          "d040:21",
+          "core:e90f9cad",
+          "pref:concise"
+        ],
+        "spent": 4.0
+      }
+    },
+    {
+      "ts": 1791880363.0455482,
+      "kind": "gc",
+      "payload": {
+        "deleted": [
+          "d018:10",
+          "d050:26",
+          "d054:28",
+          "d056:29",
+          "d058:30",
+          "d060:31",
+          "d064:33",
+          "d066:34",
+          "d068:35"
+        ],
+        "scanned": 29,
+        "reasons": {
+          "d018:10": "weight_floor",
+          "d050:26": "weight_floor",
+          "d054:28": "weight_floor",
+          "d056:29": "weight_floor",
+          "d058:30": "weight_floor",
+          "d060:31": "weight_floor",
+          "d064:33": "weight_floor",
+          "d066:34": "weight_floor",
+          "d068:35": "weight_floor"
+        },
+        "protected_by_kind": [],
+        "pruned_relations": []
+      }
+    },
+    {
+      "ts": 1791880363.0455482,
+      "kind": "narrate",
+      "payload": {
+        "rev": 5,
+        "selected": 9,
+        "dropped": 11,
+        "coherence": 0.96875,
+        "reliability": 0.922222,
+        "monopoly": 0.481852
+      }
+    },
+    {
+      "ts": 1791880363.0455482,
+      "kind": "reflect",
+      "payload": {
+        "findings": 4,
+        "suggestions": 2,
+        "narrative": "第 2 轮自我回看：窗口 30 天内 31 次事件，沉淀 1 次、遗忘 24 条、风格固化 0 次 / 撤销 0 次；当前 20 个节点中 8 个为高层记忆。发现 4 项待核查信号，提出 2 条参数建议（不自动执行）。｜第 5 次自述：20 条记忆里，我留下 9 条、放下 11 条。线索是 起源「硬规则」4条 → 转折「偏好」2条 → 转折「踩坑」2条 → 当下「复盘」1条。连续性 0.97，可靠度 0.92，单主题占比 0.48。"
+      }
+    },
+    {
+      "ts": 1791880363.0455482,
+      "kind": "selfcorrect_reverted",
+      "payload": {
+        "pid": "p1",
+        "param": "importance_forget",
+        "before": 0.12,
+        "after": 0.084,
+        "code": "mass_forgetting",
+        "observed": 0.5455,
+        "metric": "forget_pressure"
+      }
+    },
+    {
+      "ts": 1791880363.0455482,
+      "kind": "selfcorrect_pending",
+      "payload": {
+        "pid": "p2",
+        "param": "importance_forget",
+        "before": 0.12,
+        "after": 0.084,
+        "code": "mass_forgetting",
+        "observed": null,
+        "metric": "forget_pressure"
+      }
+    },
+    {
+      "ts": 1791966763.0455482,
+      "kind": "recall",
+      "payload": {
+        "names": [
+          "rule:no-emoji",
+          "pref:table",
+          "pref:concise"
+        ],
+        "retrieval": "names",
+        "top_score": 0.0,
+        "semantic_only": [],
+        "spread_hits": [],
+        "core_hits": [
+          "rule:no-emoji",
+          "pref:table",
+          "pref:concise"
+        ]
+      }
+    },
+    {
+      "ts": 1792053163.0455482,
+      "kind": "recall",
+      "payload": {
+        "names": [
+          "rule:no-fabricate",
+          "rule:schema",
+          "rule:test-first",
+          "rule:no-emoji",
+          "pref:table",
+          "pref:concise"
+        ],
+        "retrieval": "names",
+        "top_score": 0.0,
+        "semantic_only": [],
+        "spread_hits": [],
+        "core_hits": [
+          "rule:no-fabricate",
+          "rule:schema",
+          "rule:test-first",
+          "rule:no-emoji",
+          "pref:table",
+          "pref:concise"
+        ]
+      }
+    },
+    {
+      "ts": 1792312363.0455482,
+      "kind": "recall",
+      "payload": {
+        "names": [
+          "d040:21",
+          "d044:23",
+          "d070:36",
+          "d072:37"
+        ],
+        "retrieval": "names",
+        "top_score": 0.0,
+        "semantic_only": [],
+        "spread_hits": [],
+        "core_hits": []
+      }
+    },
+    {
+      "ts": 1792398763.0455482,
+      "kind": "recall",
+      "payload": {
+        "names": [
+          "rule:no-fabricate",
+          "rule:schema",
+          "rule:test-first",
+          "rule:no-emoji",
+          "pref:table",
+          "pref:concise"
+        ],
+        "retrieval": "names",
+        "top_score": 0.0,
+        "semantic_only": [],
+        "spread_hits": [],
+        "core_hits": [
+          "rule:no-fabricate",
+          "rule:schema",
+          "rule:test-first",
+          "rule:no-emoji",
+          "pref:table",
+          "pref:concise"
+        ]
+      }
+    },
+    {
+      "ts": 1792571563.0455482,
+      "kind": "recall",
+      "payload": {
+        "names": [
+          "rule:no-emoji",
+          "pref:table",
+          "pref:concise"
+        ],
+        "retrieval": "names",
+        "top_score": 0.0,
+        "semantic_only": [],
+        "spread_hits": [],
+        "core_hits": [
+          "rule:no-emoji",
+          "pref:table",
+          "pref:concise"
+        ]
+      }
+    },
+    {
+      "ts": 1792744363.0455482,
+      "kind": "recall",
+      "payload": {
+        "names": [
+          "d040:21",
+          "d044:23",
+          "d070:36",
+          "d072:37"
+        ],
+        "retrieval": "names",
+        "top_score": 0.0,
+        "semantic_only": [],
+        "spread_hits": [],
+        "core_hits": []
+      }
+    },
+    {
+      "ts": 1792744363.0455482,
+      "kind": "recall",
+      "payload": {
+        "names": [
+          "rule:no-fabricate",
+          "rule:schema",
+          "rule:test-first",
+          "rule:no-emoji",
+          "pref:table",
+          "pref:concise"
+        ],
+        "retrieval": "names",
+        "top_score": 0.0,
+        "semantic_only": [],
+        "spread_hits": [],
+        "core_hits": [
+          "rule:no-fabricate",
+          "rule:schema",
+          "rule:test-first",
+          "rule:no-emoji",
+          "pref:table",
+          "pref:concise"
+        ]
+      }
+    },
+    {
+      "ts": 1793089963.0455482,
+      "kind": "recall",
+      "payload": {
+        "names": [
+          "rule:no-fabricate",
+          "rule:schema",
+          "rule:test-first",
+          "rule:no-emoji",
+          "pref:table",
+          "pref:concise"
+        ],
+        "retrieval": "names",
+        "top_score": 0.0,
+        "semantic_only": [],
+        "spread_hits": [],
+        "core_hits": [
+          "rule:no-fabricate",
+          "rule:schema",
+          "rule:test-first",
+          "rule:no-emoji",
+          "pref:table",
+          "pref:concise"
+        ]
+      }
+    },
+    {
+      "ts": 1793176363.0455482,
+      "kind": "recall",
+      "payload": {
+        "names": [
+          "d040:21",
+          "d044:23",
+          "d070:36",
+          "d072:37"
+        ],
+        "retrieval": "names",
+        "top_score": 0.0,
+        "semantic_only": [],
+        "spread_hits": [],
+        "core_hits": []
+      }
+    },
+    {
+      "ts": 1793176363.0455482,
+      "kind": "recall",
+      "payload": {
+        "names": [
+          "rule:no-emoji",
+          "pref:table",
+          "pref:concise"
+        ],
+        "retrieval": "names",
+        "top_score": 0.0,
+        "semantic_only": [],
+        "spread_hits": [],
+        "core_hits": [
+          "rule:no-emoji",
+          "pref:table",
+          "pref:concise"
+        ]
+      }
+    },
+    {
+      "ts": 1793176363.0455482,
+      "kind": "narrate",
+      "payload": {
+        "rev": 6,
+        "selected": 9,
+        "dropped": 11,
+        "coherence": 0.96875,
+        "reliability": 0.922222,
+        "monopoly": 0.47996
+      }
+    },
+    {
+      "ts": 1793435563.0455482,
+      "kind": "recall",
+      "payload": {
+        "names": [
+          "rule:no-fabricate",
+          "rule:schema",
+          "rule:test-first",
+          "rule:no-emoji",
+          "pref:table",
+          "pref:concise"
+        ],
+        "retrieval": "names",
+        "top_score": 0.0,
+        "semantic_only": [],
+        "spread_hits": [],
+        "core_hits": [
+          "rule:no-fabricate",
+          "rule:schema",
+          "rule:test-first",
+          "rule:no-emoji",
+          "pref:table",
+          "pref:concise"
+        ]
+      }
+    },
+    {
+      "ts": 1793608363.0455482,
+      "kind": "recall",
+      "payload": {
+        "names": [
+          "d040:21",
+          "d044:23",
+          "d070:36",
+          "d072:37"
+        ],
+        "retrieval": "names",
+        "top_score": 0.0,
+        "semantic_only": [],
+        "spread_hits": [],
+        "core_hits": []
+      }
+    },
+    {
+      "ts": 1793781163.0455482,
+      "kind": "recall",
+      "payload": {
+        "names": [
+          "rule:no-emoji",
+          "pref:table",
+          "pref:concise"
+        ],
+        "retrieval": "names",
+        "top_score": 0.0,
+        "semantic_only": [],
+        "spread_hits": [],
+        "core_hits": [
+          "rule:no-emoji",
+          "pref:table",
+          "pref:concise"
+        ]
+      }
+    },
+    {
+      "ts": 1793781163.0455482,
+      "kind": "recall",
+      "payload": {
+        "names": [
+          "rule:no-fabricate",
+          "rule:schema",
+          "rule:test-first",
+          "rule:no-emoji",
+          "pref:table",
+          "pref:concise"
+        ],
+        "retrieval": "names",
+        "top_score": 0.0,
+        "semantic_only": [],
+        "spread_hits": [],
+        "core_hits": [
+          "rule:no-fabricate",
+          "rule:schema",
+          "rule:test-first",
+          "rule:no-emoji",
+          "pref:table",
+          "pref:concise"
+        ]
+      }
+    },
+    {
+      "ts": 1794040363.0455482,
+      "kind": "recall",
+      "payload": {
+        "names": [
+          "d040:21",
+          "d044:23",
+          "d070:36",
+          "d072:37"
+        ],
+        "retrieval": "names",
+        "top_score": 0.0,
+        "semantic_only": [],
+        "spread_hits": [],
+        "core_hits": []
+      }
+    },
+    {
+      "ts": 1794126763.0455482,
+      "kind": "recall",
+      "payload": {
+        "names": [
+          "rule:no-fabricate",
+          "rule:schema",
+          "rule:test-first",
+          "rule:no-emoji",
+          "pref:table",
+          "pref:concise"
+        ],
+        "retrieval": "names",
+        "top_score": 0.0,
+        "semantic_only": [],
+        "spread_hits": [],
+        "core_hits": [
+          "rule:no-fabricate",
+          "rule:schema",
+          "rule:test-first",
+          "rule:no-emoji",
+          "pref:table",
+          "pref:concise"
+        ]
+      }
+    },
+    {
+      "ts": 1794385963.0455482,
+      "kind": "recall",
+      "payload": {
+        "names": [
+          "rule:no-emoji",
+          "pref:table",
+          "pref:concise"
+        ],
+        "retrieval": "names",
+        "top_score": 0.0,
+        "semantic_only": [],
+        "spread_hits": [],
+        "core_hits": [
+          "rule:no-emoji",
+          "pref:table",
+          "pref:concise"
+        ]
+      }
+    },
+    {
+      "ts": 1794385963.0455482,
+      "kind": "adjudicate",
+      "payload": {
+        "ts": 1794385963.0455482,
+        "pair": [
+          "concise",
+          "verbose"
+        ],
+        "winner": null,
+        "reason": "ambiguous",
+        "margin": 0.0,
+        "confidence": [
+          0.8658,
+          0.8658
+        ]
+      }
+    },
+    {
+      "ts": 1794385963.0455482,
+      "kind": "grasp",
+      "payload": {
+        "grabbed": [
+          "d044:23",
+          "d040:21",
+          "core:e90f9cad",
+          "pref:concise"
+        ],
+        "spent": 4.0
+      }
+    },
+    {
+      "ts": 1794385963.0455482,
+      "kind": "gc",
+      "payload": {
+        "deleted": [
+          "d020:11",
+          "d022:12",
+          "d024:13"
+        ],
+        "scanned": 20,
+        "reasons": {
+          "d020:11": "weight_floor",
+          "d022:12": "weight_floor",
+          "d024:13": "weight_floor"
+        },
+        "protected_by_kind": [],
+        "pruned_relations": []
+      }
+    },
+    {
+      "ts": 1794385963.0455482,
+      "kind": "narrate",
+      "payload": {
+        "rev": 7,
+        "selected": 9,
+        "dropped": 8,
+        "coherence": 0.96875,
+        "reliability": 0.922222,
+        "monopoly": 0.478011
+      }
+    },
+    {
+      "ts": 1794385963.0455482,
+      "kind": "reflect",
+      "payload": {
+        "findings": 5,
+        "suggestions": 3,
+        "narrative": "第 2 轮自我回看：窗口 30 天内 30 次事件，沉淀 0 次、遗忘 12 条、风格固化 0 次 / 撤销 0 次；当前 17 个节点中 8 个为高层记忆。发现 5 项待核查信号，提出 3 条参数建议（不自动执行）。｜第 7 次自述：17 条记忆里，我留下 9 条、放下 8 条。线索是 起源「硬规则」4条 → 转折「复盘」1条 → 转折「踩坑」2条 → 当下「偏好」2条。连续性 0.97，可靠度 0.92，单主题占比 0.48。"
+      }
+    },
+    {
+      "ts": 1794385963.0455482,
+      "kind": "selfcorrect_kept",
+      "payload": {
+        "pid": "p2",
+        "param": "importance_forget",
+        "before": 0.12,
+        "after": 0.084,
+        "code": "mass_forgetting",
+        "observed": 0.4138,
+        "metric": "forget_pressure"
+      }
+    },
+    {
+      "ts": 1794385963.0455482,
+      "kind": "selfcorrect_pending",
+      "payload": {
+        "pid": "p3",
+        "param": "importance_forget",
+        "before": 0.084,
+        "after": 0.0588,
+        "code": "mass_forgetting",
+        "observed": null,
+        "metric": "forget_pressure"
+      }
+    },
+    {
+      "ts": 1794472363.0455482,
+      "kind": "assert_relation",
+      "payload": {
+        "src": "rule:test-first",
+        "dst": "d044:23",
+        "kind": "entails",
+        "strength": 0.7
+      }
+    },
+    {
+      "ts": 1794472363.0455482,
+      "kind": "assert_relation",
+      "payload": {
+        "src": "rule:test-first",
+        "dst": "d040:21",
+        "kind": "entails",
+        "strength": 0.7
+      }
+    },
+    {
+      "ts": 1794472363.0455482,
+      "kind": "assert_relation",
+      "payload": {
+        "src": "rule:test-first",
+        "dst": "pref:table",
+        "kind": "entails",
+        "strength": 0.7
+      }
+    },
+    {
+      "ts": 1794472363.0455482,
+      "kind": "feel_outcome",
+      "payload": {
+        "name": "rule:test-first",
+        "outcome": "contradicted",
+        "valence": -0.25,
+        "arousal": 0.65,
+        "drivers": [
+          "结果:contradicted",
+          "被反证推翻"
+        ]
+      }
+    },
+    {
+      "ts": 1794472363.0455482,
+      "kind": "adjudicate",
+      "payload": {
+        "ts": 1794472363.0455482,
+        "pair": [
+          "concise",
+          "verbose"
+        ],
+        "winner": null,
+        "reason": "ambiguous",
+        "margin": 0.0,
+        "confidence": [
+          0.8631,
+          0.8631
+        ]
+      }
+    },
+    {
+      "ts": 1794472363.0455482,
+      "kind": "grasp",
+      "payload": {
+        "grabbed": [
+          "d044:23",
+          "d040:21",
+          "pref:table",
+          "core:e90f9cad"
+        ],
+        "spent": 4.0
+      }
+    },
+    {
+      "ts": 1794472363.0455482,
+      "kind": "gc",
+      "payload": {
+        "deleted": [],
+        "scanned": 17,
+        "reasons": {},
+        "protected_by_kind": [],
+        "pruned_relations": []
+      }
+    },
+    {
+      "ts": 1794472363.0455482,
+      "kind": "narrate",
+      "payload": {
+        "rev": 8,
+        "selected": 9,
+        "dropped": 8,
+        "coherence": 0.96875,
+        "reliability": 0.896944,
+        "monopoly": 0.455291
+      }
+    },
+    {
+      "ts": 1794472363.0455482,
+      "kind": "reflect",
+      "payload": {
+        "findings": 5,
+        "suggestions": 3,
+        "narrative": "第 3 轮自我回看：窗口 30 天内 41 次事件，沉淀 0 次、遗忘 12 条、风格固化 0 次 / 撤销 0 次；当前 17 个节点中 8 个为高层记忆。发现 5 项待核查信号，提出 3 条参数建议（不自动执行）。｜第 8 次自述：17 条记忆里，我留下 9 条、放下 8 条。线索是 起源「硬规则」4条 → 转折「偏好」2条 → 转折「踩坑」2条 → 当下「复盘」1条。连续性 0.97，可靠度 0.90，单主题占比 0.46。"
+      }
+    },
+    {
+      "ts": 1794472363.0455482,
+      "kind": "selfcorrect_reverted",
+      "payload": {
+        "pid": "p3",
+        "param": "importance_forget",
+        "before": 0.084,
+        "after": 0.0588,
+        "code": "mass_forgetting",
+        "observed": 0.4138,
+        "metric": "forget_pressure"
+      }
+    },
+    {
+      "ts": 1794472363.0455482,
+      "kind": "selfcorrect_pending",
+      "payload": {
+        "pid": "p4",
+        "param": "consolidate_similarity",
+        "before": 0.42,
+        "after": 0.294,
+        "code": "no_crystallization",
+        "observed": null,
+        "metric": "consolidation_yield"
+      }
+    }
+  ],
+  "tombstone": [
+    {
+      "name": "pref:cn-comment",
+      "content": "注释写中文，变量名用英文",
+      "tier": "fact",
+      "tags": [
+        "偏好",
+        "工程"
+      ],
+      "created_at": 1784104363.0455482,
+      "last_accessed": 1784104363.0455482,
+      "base_weight": 1.0,
+      "access_count": 1,
+      "pinned": false,
+      "origin": "external",
+      "consolidated_from": [],
+      "consolidated_into": null,
+      "fingerprint": null,
+      "revision": 0,
+      "affect": {
+        "valence": 0.0,
+        "arousal": 0.0,
+        "peak_arousal": 0.0,
+        "felt_at": 1784104363.0455482,
+        "arousal_half_life": 3.0,
+        "valence_half_life": 10.0,
+        "source": "neutral",
+        "drivers": []
+      },
+      "narrative_hits": 0,
+      "narrative_heat": 0.0,
+      "narrated_at": 0.0,
+      "kind": "semantic"
+    },
+    {
+      "name": "pref:no-flattery",
+      "content": "不要奉承式开场",
+      "tier": "fact",
+      "tags": [
+        "偏好",
+        "语气"
+      ],
+      "created_at": 1784104363.0455482,
+      "last_accessed": 1784104363.0455482,
+      "base_weight": 1.0,
+      "access_count": 1,
+      "pinned": false,
+      "origin": "external",
+      "consolidated_from": [],
+      "consolidated_into": null,
+      "fingerprint": null,
+      "revision": 0,
+      "affect": {
+        "valence": 0.0,
+        "arousal": 0.0,
+        "peak_arousal": 0.0,
+        "felt_at": 1784104363.0455482,
+        "arousal_half_life": 3.0,
+        "valence_half_life": 10.0,
+        "source": "neutral",
+        "drivers": []
+      },
+      "narrative_hits": 0,
+      "narrative_heat": 0.0,
+      "narrated_at": 0.0,
+      "kind": "semantic"
+    },
+    {
+      "name": "d000:1",
+      "content": "写了一个把 JSON 拆成树的小工具，比想象中好用",
+      "tier": "event",
+      "tags": [
+        "工具"
+      ],
+      "created_at": 1784104363.0455482,
+      "last_accessed": 1784104363.0455482,
+      "base_weight": 1.0,
+      "access_count": 1,
+      "pinned": false,
+      "origin": "external",
+      "consolidated_from": [],
+      "consolidated_into": null,
+      "fingerprint": null,
+      "revision": 0,
+      "affect": {
+        "valence": 0.06,
+        "arousal": 0.2,
+        "peak_arousal": 0.2,
+        "felt_at": 1784104363.0455482,
+        "arousal_half_life": 3.0,
+        "valence_half_life": 10.0,
+        "source": "explicit",
+        "drivers": []
+      },
+      "narrative_hits": 0,
+      "narrative_heat": 0.0,
+      "narrated_at": 0.0,
+      "kind": "episodic"
+    },
+    {
+      "name": "d004:3",
+      "content": "给接口加了超时，之前卡住是因为默认无限等",
+      "tier": "event",
+      "tags": [
+        "踩坑",
+        "工程"
+      ],
+      "created_at": 1784449963.0455482,
+      "last_accessed": 1784449963.0455482,
+      "base_weight": 1.0,
+      "access_count": 1,
+      "pinned": false,
+      "origin": "external",
+      "consolidated_from": [],
+      "consolidated_into": null,
+      "fingerprint": null,
+      "revision": 0,
+      "affect": {
+        "valence": -0.3,
+        "arousal": 0.6,
+        "peak_arousal": 0.6,
+        "felt_at": 1784449963.0455482,
+        "arousal_half_life": 3.0,
+        "valence_half_life": 10.0,
+        "source": "explicit",
+        "drivers": []
+      },
+      "narrative_hits": 0,
+      "narrative_heat": 0.0,
+      "narrated_at": 0.0,
+      "kind": "episodic"
+    },
+    {
+      "name": "d008:5",
+      "content": "日志里打了完整凭据，被安全扫描抓出来",
+      "tier": "event",
+      "tags": [
+        "踩坑",
+        "安全"
+      ],
+      "created_at": 1784795563.0455482,
+      "last_accessed": 1784795563.0455482,
+      "base_weight": 1.0,
+      "access_count": 1,
+      "pinned": false,
+      "origin": "external",
+      "consolidated_from": [],
+      "consolidated_into": null,
+      "fingerprint": null,
+      "revision": 0,
+      "affect": {
+        "valence": -0.425,
+        "arousal": 0.85,
+        "peak_arousal": 0.85,
+        "felt_at": 1784795563.0455482,
+        "arousal_half_life": 3.0,
+        "valence_half_life": 10.0,
+        "source": "explicit",
+        "drivers": []
+      },
+      "narrative_hits": 0,
+      "narrative_heat": 0.0,
+      "narrated_at": 0.0,
+      "kind": "episodic"
+    },
+    {
+      "name": "d002:2",
+      "content": "把长函数拆开之后可读性明显变好",
+      "tier": "event",
+      "tags": [
+        "重构",
+        "习惯"
+      ],
+      "created_at": 1784277163.0455482,
+      "last_accessed": 1784277163.0455482,
+      "base_weight": 1.0,
+      "access_count": 1,
+      "pinned": false,
+      "origin": "external",
+      "consolidated_from": [],
+      "consolidated_into": null,
+      "fingerprint": null,
+      "revision": 0,
+      "affect": {
+        "valence": 0.09,
+        "arousal": 0.3,
+        "peak_arousal": 0.3,
+        "felt_at": 1784277163.0455482,
+        "arousal_half_life": 3.0,
+        "valence_half_life": 10.0,
+        "source": "explicit",
+        "drivers": []
+      },
+      "narrative_hits": 0,
+      "narrative_heat": 0.0,
+      "narrated_at": 0.0,
+      "kind": "procedural"
+    },
+    {
+      "name": "d006:4",
+      "content": "缓存键忘了带用户名，两个账号互相串数据",
+      "tier": "event",
+      "tags": [
+        "踩坑",
+        "教训"
+      ],
+      "created_at": 1784622763.0455482,
+      "last_accessed": 1785400363.0455482,
+      "base_weight": 0.8890827746802459,
+      "access_count": 3,
+      "pinned": false,
+      "origin": "external",
+      "consolidated_from": [],
+      "consolidated_into": null,
+      "fingerprint": null,
+      "revision": 0,
+      "affect": {
+        "valence": -0.375,
+        "arousal": 0.75,
+        "peak_arousal": 0.75,
+        "felt_at": 1784622763.0455482,
+        "arousal_half_life": 3.0,
+        "valence_half_life": 10.0,
+        "source": "explicit",
+        "drivers": []
+      },
+      "narrative_hits": 0,
+      "narrative_heat": 0.0,
+      "narrated_at": 0.0,
+      "kind": "episodic"
+    },
+    {
+      "name": "d010:6",
+      "content": "线上回滚了一次，原因是迁移脚本没在测试库跑过，很痛",
+      "tier": "event",
+      "tags": [
+        "复盘",
+        "教训"
+      ],
+      "created_at": 1784968363.0455482,
+      "last_accessed": 1785400363.0455482,
+      "base_weight": 1.092323011347294,
+      "access_count": 3,
+      "pinned": false,
+      "origin": "external",
+      "consolidated_from": [],
+      "consolidated_into": null,
+      "fingerprint": null,
+      "revision": 0,
+      "affect": {
+        "valence": -0.45,
+        "arousal": 0.9,
+        "peak_arousal": 0.9,
+        "felt_at": 1784968363.0455482,
+        "arousal_half_life": 3.0,
+        "valence_half_life": 10.0,
+        "source": "explicit",
+        "drivers": []
+      },
+      "narrative_hits": 0,
+      "narrative_heat": 0.0,
+      "narrated_at": 0.0,
+      "kind": "episodic"
+    },
+    {
+      "name": "d012:7",
+      "content": "CI 在 Windows 上因为控制台编码炸了，排查两小时",
+      "tier": "trace",
+      "tags": [
+        "复盘",
+        "教训"
+      ],
+      "created_at": 1785141163.0455482,
+      "last_accessed": 1786696363.0455482,
+      "base_weight": 1.0246912424361143,
+      "access_count": 5,
+      "pinned": false,
+      "origin": "external",
+      "consolidated_from": [],
+      "consolidated_into": "core:e90f9cad",
+      "fingerprint": null,
+      "revision": 0,
+      "affect": {
+        "valence": -0.4,
+        "arousal": 0.8,
+        "peak_arousal": 0.8,
+        "felt_at": 1785141163.0455482,
+        "arousal_half_life": 3.0,
+        "valence_half_life": 10.0,
+        "source": "explicit",
+        "drivers": []
+      },
+      "narrative_hits": 0,
+      "narrative_heat": 0.0,
+      "narrated_at": 0.0,
+      "kind": "episodic"
+    },
+    {
+      "name": "d014:8",
+      "content": "把并发测试的断言写成「没报错」，等于没测",
+      "tier": "trace",
+      "tags": [
+        "复盘",
+        "教训"
+      ],
+      "created_at": 1785313963.0455482,
+      "last_accessed": 1787128363.0455482,
+      "base_weight": 0.6992978929439618,
+      "access_count": 6,
+      "pinned": false,
+      "origin": "external",
+      "consolidated_from": [],
+      "consolidated_into": "core:e90f9cad",
+      "fingerprint": null,
+      "revision": 0,
+      "affect": {
+        "valence": -0.35,
+        "arousal": 0.7,
+        "peak_arousal": 0.7,
+        "felt_at": 1785313963.0455482,
+        "arousal_half_life": 3.0,
+        "valence_half_life": 10.0,
+        "source": "explicit",
+        "drivers": []
+      },
+      "narrative_hits": 0,
+      "narrative_heat": 0.0,
+      "narrated_at": 0.0,
+      "kind": "episodic"
+    },
+    {
+      "name": "d016:9",
+      "content": "测试用例自己写错了：用常数学习率制造「无惯性」，结果测不出来",
+      "tier": "trace",
+      "tags": [
+        "复盘",
+        "教训"
+      ],
+      "created_at": 1785486763.0455482,
+      "last_accessed": 1787560363.0455482,
+      "base_weight": 0.6295326948749249,
+      "access_count": 6,
+      "pinned": false,
+      "origin": "external",
+      "consolidated_from": [],
+      "consolidated_into": "core:e90f9cad",
+      "fingerprint": null,
+      "revision": 0,
+      "affect": {
+        "valence": -0.325,
+        "arousal": 0.65,
+        "peak_arousal": 0.65,
+        "felt_at": 1785486763.0455482,
+        "arousal_half_life": 3.0,
+        "valence_half_life": 10.0,
+        "source": "explicit",
+        "drivers": []
+      },
+      "narrative_hits": 0,
+      "narrative_heat": 0.0,
+      "narrated_at": 0.0,
+      "kind": "episodic"
+    },
+    {
+      "name": "d026:14",
+      "content": "周三下午例会，同步了一下进度",
+      "tier": "event",
+      "tags": [
+        "琐事"
+      ],
+      "created_at": 1786350763.0455482,
+      "last_accessed": 1786350763.0455482,
+      "base_weight": 1.0,
+      "access_count": 1,
+      "pinned": false,
+      "origin": "external",
+      "consolidated_from": [],
+      "consolidated_into": null,
+      "fingerprint": null,
+      "revision": 0,
+      "affect": {
+        "valence": 0.015,
+        "arousal": 0.05,
+        "peak_arousal": 0.05,
+        "felt_at": 1786350763.0455482,
+        "arousal_half_life": 3.0,
+        "valence_half_life": 10.0,
+        "source": "explicit",
+        "drivers": []
+      },
+      "narrative_hits": 0,
+      "narrative_heat": 0.0,
+      "narrated_at": 0.0,
+      "kind": "episodic"
+    },
+    {
+      "name": "d028:15",
+      "content": "同事问的那个正则问题其实用不着正则",
+      "tier": "event",
+      "tags": [
+        "琐事"
+      ],
+      "created_at": 1786523563.0455482,
+      "last_accessed": 1786523563.0455482,
+      "base_weight": 1.0,
+      "access_count": 1,
+      "pinned": false,
+      "origin": "external",
+      "consolidated_from": [],
+      "consolidated_into": null,
+      "fingerprint": null,
+      "revision": 0,
+      "affect": {
+        "valence": 0.03,
+        "arousal": 0.1,
+        "peak_arousal": 0.1,
+        "felt_at": 1786523563.0455482,
+        "arousal_half_life": 3.0,
+        "valence_half_life": 10.0,
+        "source": "explicit",
+        "drivers": []
+      },
+      "narrative_hits": 0,
+      "narrative_heat": 0.0,
+      "narrated_at": 0.0,
+      "kind": "episodic"
+    },
+    {
+      "name": "d030:16",
+      "content": "午饭时想到一个更简单的拆包方式",
+      "tier": "event",
+      "tags": [
+        "琐事"
+      ],
+      "created_at": 1786696363.0455482,
+      "last_accessed": 1786696363.0455482,
+      "base_weight": 1.3,
+      "access_count": 2,
+      "pinned": false,
+      "origin": "external",
+      "consolidated_from": [],
+      "consolidated_into": null,
+      "fingerprint": null,
+      "revision": 0,
+      "affect": {
+        "valence": 0.045,
+        "arousal": 0.15,
+        "peak_arousal": 0.15,
+        "felt_at": 1786696363.0455482,
+        "arousal_half_life": 3.0,
+        "valence_half_life": 10.0,
+        "source": "explicit",
+        "drivers": []
+      },
+      "narrative_hits": 1,
+      "narrative_heat": 0.125,
+      "narrated_at": 1786696363.0455482,
+      "kind": "episodic"
+    },
+    {
+      "name": "d032:17",
+      "content": "客户希望导出 PDF，先确认了字体嵌入",
+      "tier": "event",
+      "tags": [
+        "交付"
+      ],
+      "created_at": 1786869163.0455482,
+      "last_accessed": 1786869163.0455482,
+      "base_weight": 1.0,
+      "access_count": 1,
+      "pinned": false,
+      "origin": "external",
+      "consolidated_from": [],
+      "consolidated_into": null,
+      "fingerprint": null,
+      "revision": 0,
+      "affect": {
+        "valence": 0.09,
+        "arousal": 0.3,
+        "peak_arousal": 0.3,
+        "felt_at": 1786869163.0455482,
+        "arousal_half_life": 3.0,
+        "valence_half_life": 10.0,
+        "source": "explicit",
+        "drivers": []
+      },
+      "narrative_hits": 0,
+      "narrative_heat": 0.0,
+      "narrated_at": 0.0,
+      "kind": "episodic"
+    },
+    {
+      "name": "d034:18",
+      "content": "把 README 的安装步骤从 9 行压到 3 行",
+      "tier": "event",
+      "tags": [
+        "文档",
+        "交付"
+      ],
+      "created_at": 1787041963.0455482,
+      "last_accessed": 1787041963.0455482,
+      "base_weight": 1.0,
+      "access_count": 1,
+      "pinned": false,
+      "origin": "external",
+      "consolidated_from": [],
+      "consolidated_into": null,
+      "fingerprint": null,
+      "revision": 0,
+      "affect": {
+        "valence": 0.105,
+        "arousal": 0.35,
+        "peak_arousal": 0.35,
+        "felt_at": 1787041963.0455482,
+        "arousal_half_life": 3.0,
+        "valence_half_life": 10.0,
+        "source": "explicit",
+        "drivers": []
+      },
+      "narrative_hits": 0,
+      "narrative_heat": 0.0,
+      "narrated_at": 0.0,
+      "kind": "episodic"
+    },
+    {
+      "name": "d036:19",
+      "content": "给示例代码加了断言，跑不通就不会静默通过",
+      "tier": "event",
+      "tags": [
+        "文档",
+        "工程"
+      ],
+      "created_at": 1787214763.0455482,
+      "last_accessed": 1787214763.0455482,
+      "base_weight": 1.0,
+      "access_count": 1,
+      "pinned": false,
+      "origin": "external",
+      "consolidated_from": [],
+      "consolidated_into": null,
+      "fingerprint": null,
+      "revision": 0,
+      "affect": {
+        "valence": 0.12,
+        "arousal": 0.4,
+        "peak_arousal": 0.4,
+        "felt_at": 1787214763.0455482,
+        "arousal_half_life": 3.0,
+        "valence_half_life": 10.0,
+        "source": "explicit",
+        "drivers": []
+      },
+      "narrative_hits": 0,
+      "narrative_heat": 0.0,
+      "narrated_at": 0.0,
+      "kind": "episodic"
+    },
+    {
+      "name": "d038:20",
+      "content": "把错误信息从「失败」改成「哪一行、为什么、怎么改」",
+      "tier": "event",
+      "tags": [
+        "体验",
+        "工程"
+      ],
+      "created_at": 1787387563.0455482,
+      "last_accessed": 1787387563.0455482,
+      "base_weight": 1.0,
+      "access_count": 1,
+      "pinned": false,
+      "origin": "external",
+      "consolidated_from": [],
+      "consolidated_into": null,
+      "fingerprint": null,
+      "revision": 0,
+      "affect": {
+        "valence": 0.15,
+        "arousal": 0.5,
+        "peak_arousal": 0.5,
+        "felt_at": 1787387563.0455482,
+        "arousal_half_life": 3.0,
+        "valence_half_life": 10.0,
+        "source": "explicit",
+        "drivers": []
+      },
+      "narrative_hits": 0,
+      "narrative_heat": 0.0,
+      "narrated_at": 0.0,
+      "kind": "episodic"
+    },
+    {
+      "name": "d042:22",
+      "content": "把重复的三段脚本合并成一个，少了两处不一致",
+      "tier": "event",
+      "tags": [
+        "重构",
+        "工程"
+      ],
+      "created_at": 1787733163.0455482,
+      "last_accessed": 1787733163.0455482,
+      "base_weight": 1.0,
+      "access_count": 1,
+      "pinned": false,
+      "origin": "external",
+      "consolidated_from": [],
+      "consolidated_into": null,
+      "fingerprint": null,
+      "revision": 0,
+      "affect": {
+        "valence": 0.12,
+        "arousal": 0.4,
+        "peak_arousal": 0.4,
+        "felt_at": 1787733163.0455482,
+        "arousal_half_life": 3.0,
+        "valence_half_life": 10.0,
+        "source": "explicit",
+        "drivers": []
+      },
+      "narrative_hits": 0,
+      "narrative_heat": 0.0,
+      "narrated_at": 0.0,
+      "kind": "episodic"
+    },
+    {
+      "name": "d048:25",
+      "content": "把 300 行的单文件拆成四个模块，编译时间没变但好读多了",
+      "tier": "event",
+      "tags": [
+        "重构"
+      ],
+      "created_at": 1788251563.0455482,
+      "last_accessed": 1788251563.0455482,
+      "base_weight": 1.0,
+      "access_count": 1,
+      "pinned": false,
+      "origin": "external",
+      "consolidated_from": [],
+      "consolidated_into": null,
+      "fingerprint": null,
+      "revision": 0,
+      "affect": {
+        "valence": 0.105,
+        "arousal": 0.35,
+        "peak_arousal": 0.35,
+        "felt_at": 1788251563.0455482,
+        "arousal_half_life": 3.0,
+        "valence_half_life": 10.0,
+        "source": "explicit",
+        "drivers": []
+      },
+      "narrative_hits": 0,
+      "narrative_heat": 0.0,
+      "narrated_at": 0.0,
+      "kind": "episodic"
+    },
+    {
+      "name": "d018:10",
+      "content": "把配置项逐字段对拍了一遍，发现两个字段被静默吞掉",
+      "tier": "trace",
+      "tags": [
+        "复盘",
+        "教训"
+      ],
+      "created_at": 1785659563.0455482,
+      "last_accessed": 1789720363.0455482,
+      "base_weight": 0.6711717860211331,
+      "access_count": 11,
+      "pinned": false,
+      "origin": "external",
+      "consolidated_from": [],
+      "consolidated_into": "core:e90f9cad",
+      "fingerprint": null,
+      "revision": 0,
+      "affect": {
+        "valence": 0.165,
+        "arousal": 0.55,
+        "peak_arousal": 0.55,
+        "felt_at": 1785659563.0455482,
+        "arousal_half_life": 3.0,
+        "valence_half_life": 10.0,
+        "source": "explicit",
+        "drivers": []
+      },
+      "narrative_hits": 0,
+      "narrative_heat": 0.0,
+      "narrated_at": 0.0,
+      "kind": "episodic"
+    },
+    {
+      "name": "d050:26",
+      "content": "用户说「别解释了，直接给方案」，记下来",
+      "tier": "event",
+      "tags": [
+        "偏好",
+        "沟通"
+      ],
+      "created_at": 1788424363.0455482,
+      "last_accessed": 1788424363.0455482,
+      "base_weight": 1.0,
+      "access_count": 1,
+      "pinned": false,
+      "origin": "external",
+      "consolidated_from": [],
+      "consolidated_into": null,
+      "fingerprint": null,
+      "revision": 0,
+      "affect": {
+        "valence": 0.12,
+        "arousal": 0.4,
+        "peak_arousal": 0.4,
+        "felt_at": 1788424363.0455482,
+        "arousal_half_life": 3.0,
+        "valence_half_life": 10.0,
+        "source": "explicit",
+        "drivers": []
+      },
+      "narrative_hits": 0,
+      "narrative_heat": 0.0,
+      "narrated_at": 0.0,
+      "kind": "episodic"
+    },
+    {
+      "name": "d054:28",
+      "content": "把「不确定」写进结论，反而更容易被信任",
+      "tier": "event",
+      "tags": [
+        "诚实",
+        "沟通"
+      ],
+      "created_at": 1788769963.0455482,
+      "last_accessed": 1788769963.0455482,
+      "base_weight": 1.0,
+      "access_count": 1,
+      "pinned": false,
+      "origin": "external",
+      "consolidated_from": [],
+      "consolidated_into": null,
+      "fingerprint": null,
+      "revision": 0,
+      "affect": {
+        "valence": 0.15,
+        "arousal": 0.5,
+        "peak_arousal": 0.5,
+        "felt_at": 1788769963.0455482,
+        "arousal_half_life": 3.0,
+        "valence_half_life": 10.0,
+        "source": "explicit",
+        "drivers": []
+      },
+      "narrative_hits": 0,
+      "narrative_heat": 0.0,
+      "narrated_at": 0.0,
+      "kind": "episodic"
+    },
+    {
+      "name": "d056:29",
+      "content": "压测时连接池打满，扩了一倍才稳住",
+      "tier": "trace",
+      "tags": [
+        "性能",
+        "工程"
+      ],
+      "created_at": 1788942763.0455482,
+      "last_accessed": 1788942763.0455482,
+      "base_weight": 1.0,
+      "access_count": 1,
+      "pinned": false,
+      "origin": "external",
+      "consolidated_from": [],
+      "consolidated_into": "core:b665353e",
+      "fingerprint": null,
+      "revision": 0,
+      "affect": {
+        "valence": 0.18,
+        "arousal": 0.6,
+        "peak_arousal": 0.6,
+        "felt_at": 1788942763.0455482,
+        "arousal_half_life": 3.0,
+        "valence_half_life": 10.0,
+        "source": "explicit",
+        "drivers": []
+      },
+      "narrative_hits": 0,
+      "narrative_heat": 0.0,
+      "narrated_at": 0.0,
+      "kind": "episodic"
+    },
+    {
+      "name": "d058:30",
+      "content": "把一次慢查询从 1.2 秒压到 90 毫秒，加了索引",
+      "tier": "trace",
+      "tags": [
+        "性能",
+        "工程"
+      ],
+      "created_at": 1789115563.0455482,
+      "last_accessed": 1789115563.0455482,
+      "base_weight": 1.0,
+      "access_count": 1,
+      "pinned": false,
+      "origin": "external",
+      "consolidated_from": [],
+      "consolidated_into": "core:b665353e",
+      "fingerprint": null,
+      "revision": 0,
+      "affect": {
+        "valence": 0.165,
+        "arousal": 0.55,
+        "peak_arousal": 0.55,
+        "felt_at": 1789115563.0455482,
+        "arousal_half_life": 3.0,
+        "valence_half_life": 10.0,
+        "source": "explicit",
+        "drivers": []
+      },
+      "narrative_hits": 0,
+      "narrative_heat": 0.0,
+      "narrated_at": 0.0,
+      "kind": "episodic"
+    },
+    {
+      "name": "d060:31",
+      "content": "批量任务改成流式处理，内存占用从 2G 降到 200M",
+      "tier": "trace",
+      "tags": [
+        "性能",
+        "工程"
+      ],
+      "created_at": 1789288363.0455482,
+      "last_accessed": 1789288363.0455482,
+      "base_weight": 1.0,
+      "access_count": 1,
+      "pinned": false,
+      "origin": "external",
+      "consolidated_from": [],
+      "consolidated_into": "core:b665353e",
+      "fingerprint": null,
+      "revision": 0,
+      "affect": {
+        "valence": 0.18,
+        "arousal": 0.6,
+        "peak_arousal": 0.6,
+        "felt_at": 1789288363.0455482,
+        "arousal_half_life": 3.0,
+        "valence_half_life": 10.0,
+        "source": "explicit",
+        "drivers": []
+      },
+      "narrative_hits": 0,
+      "narrative_heat": 0.0,
+      "narrated_at": 0.0,
+      "kind": "episodic"
+    },
+    {
+      "name": "d064:33",
+      "content": "删掉了三个「以防万一」的配置项，没人发现",
+      "tier": "event",
+      "tags": [
+        "重构",
+        "简化"
+      ],
+      "created_at": 1789633963.0455482,
+      "last_accessed": 1789633963.0455482,
+      "base_weight": 1.0,
+      "access_count": 1,
+      "pinned": false,
+      "origin": "external",
+      "consolidated_from": [],
+      "consolidated_into": null,
+      "fingerprint": null,
+      "revision": 0,
+      "affect": {
+        "valence": 0.12,
+        "arousal": 0.4,
+        "peak_arousal": 0.4,
+        "felt_at": 1789633963.0455482,
+        "arousal_half_life": 3.0,
+        "valence_half_life": 10.0,
+        "source": "explicit",
+        "drivers": []
+      },
+      "narrative_hits": 0,
+      "narrative_heat": 0.0,
+      "narrated_at": 0.0,
+      "kind": "episodic"
+    },
+    {
+      "name": "d066:34",
+      "content": "把默认值写进文档，省掉了一轮问答",
+      "tier": "event",
+      "tags": [
+        "文档",
+        "体验"
+      ],
+      "created_at": 1789806763.0455482,
+      "last_accessed": 1789806763.0455482,
+      "base_weight": 1.0,
+      "access_count": 1,
+      "pinned": false,
+      "origin": "external",
+      "consolidated_from": [],
+      "consolidated_into": null,
+      "fingerprint": null,
+      "revision": 0,
+      "affect": {
+        "valence": 0.105,
+        "arousal": 0.35,
+        "peak_arousal": 0.35,
+        "felt_at": 1789806763.0455482,
+        "arousal_half_life": 3.0,
+        "valence_half_life": 10.0,
+        "source": "explicit",
+        "drivers": []
+      },
+      "narrative_hits": 0,
+      "narrative_heat": 0.0,
+      "narrated_at": 0.0,
+      "kind": "episodic"
+    },
+    {
+      "name": "d068:35",
+      "content": "给失败路径补了测试，覆盖率从 61% 到 84%",
+      "tier": "event",
+      "tags": [
+        "测试",
+        "工程"
+      ],
+      "created_at": 1789979563.0455482,
+      "last_accessed": 1789979563.0455482,
+      "base_weight": 1.0,
+      "access_count": 1,
+      "pinned": false,
+      "origin": "external",
+      "consolidated_from": [],
+      "consolidated_into": null,
+      "fingerprint": null,
+      "revision": 0,
+      "affect": {
+        "valence": 0.15,
+        "arousal": 0.5,
+        "peak_arousal": 0.5,
+        "felt_at": 1789979563.0455482,
+        "arousal_half_life": 3.0,
+        "valence_half_life": 10.0,
+        "source": "explicit",
+        "drivers": []
+      },
+      "narrative_hits": 0,
+      "narrative_heat": 0.0,
+      "narrated_at": 0.0,
+      "kind": "episodic"
+    },
+    {
+      "name": "d020:11",
+      "content": "先写失败用例再修，比盯着代码猜快得多",
+      "tier": "event",
+      "tags": [
+        "方法",
+        "习惯"
+      ],
+      "created_at": 1785832363.0455482,
+      "last_accessed": 1785832363.0455482,
+      "base_weight": 1.0,
+      "access_count": 1,
+      "pinned": false,
+      "origin": "external",
+      "consolidated_from": [],
+      "consolidated_into": null,
+      "fingerprint": null,
+      "revision": 0,
+      "affect": {
+        "valence": 0.135,
+        "arousal": 0.45,
+        "peak_arousal": 0.45,
+        "felt_at": 1785832363.0455482,
+        "arousal_half_life": 3.0,
+        "valence_half_life": 10.0,
+        "source": "explicit",
+        "drivers": []
+      },
+      "narrative_hits": 0,
+      "narrative_heat": 0.0,
+      "narrated_at": 0.0,
+      "kind": "procedural"
+    },
+    {
+      "name": "d022:12",
+      "content": "给每个结论都标了概率，读者反馈说清楚多了",
+      "tier": "event",
+      "tags": [
+        "方法",
+        "沟通"
+      ],
+      "created_at": 1786005163.0455482,
+      "last_accessed": 1786005163.0455482,
+      "base_weight": 1.0,
+      "access_count": 1,
+      "pinned": false,
+      "origin": "external",
+      "consolidated_from": [],
+      "consolidated_into": null,
+      "fingerprint": null,
+      "revision": 0,
+      "affect": {
+        "valence": 0.12,
+        "arousal": 0.4,
+        "peak_arousal": 0.4,
+        "felt_at": 1786005163.0455482,
+        "arousal_half_life": 3.0,
+        "valence_half_life": 10.0,
+        "source": "explicit",
+        "drivers": []
+      },
+      "narrative_hits": 0,
+      "narrative_heat": 0.0,
+      "narrated_at": 0.0,
+      "kind": "procedural"
+    },
+    {
+      "name": "d024:13",
+      "content": "把「查不到」和「没有」分开说，避免了两次误判",
+      "tier": "event",
+      "tags": [
+        "方法",
+        "诚实"
+      ],
+      "created_at": 1786177963.0455482,
+      "last_accessed": 1786177963.0455482,
+      "base_weight": 1.0,
+      "access_count": 1,
+      "pinned": false,
+      "origin": "external",
+      "consolidated_from": [],
+      "consolidated_into": null,
+      "fingerprint": null,
+      "revision": 0,
+      "affect": {
+        "valence": 0.15,
+        "arousal": 0.5,
+        "peak_arousal": 0.5,
+        "felt_at": 1786177963.0455482,
+        "arousal_half_life": 3.0,
+        "valence_half_life": 10.0,
+        "source": "explicit",
+        "drivers": []
+      },
+      "narrative_hits": 1,
+      "narrative_heat": 0.125,
+      "narrated_at": 1786696363.0455482,
+      "kind": "procedural"
+    }
+  ],
+  "last_report": {
+    "generated_at": 1794472363.0455482,
+    "window_days": 30.0,
+    "metrics": {
+      "events_in_window": 41.0,
+      "retrieval_coverage": 1.0,
+      "retrieval_attempts": 18.0,
+      "consolidation_yield": 0.4706,
+      "core_hit_ratio": 0.7037,
+      "forget_pressure": 0.4138,
+      "gc_deletes": 12.0,
+      "consolidations": 0.0,
+      "crystallizations": 0.0,
+      "decrystallizations": 0.0,
+      "restores": 0.0,
+      "style_conflict_pairs": 1.0,
+      "active_style_conflicts": 0.0,
+      "unresolved_style_conflicts": 2.0,
+      "avg_style_confidence": 0.8631,
+      "loose_fragments": 9.0,
+      "tombstone_size": 32.0,
+      "semantic_recalls": 0.0,
+      "semantic_only_hits": 0.0,
+      "avg_top_score": 0.0,
+      "logic_edges": 4.0,
+      "contested": 0.0,
+      "entropy": 0.883014,
+      "attention_top_share": 0.121743,
+      "attention_top3_share": 0.341411,
+      "structure_isolated": 0.352941,
+      "structure_fragmentation": 0.470588,
+      "structure_degree_entropy": 0.756613,
+      "structure_giant_share": 0.352941,
+      "grasp_coverage": 0.3077,
+      "ungrabbed_share": 0.692308,
+      "narrative_coherence": 0.96875,
+      "narrative_reliability": 0.896944,
+      "narrative_monopoly": 0.455291,
+      "foundation_version": 1.0,
+      "persona_drift": 0.0,
+      "persona_oversell": 0.0,
+      "persona_switches": 0.0,
+      "persona_unjustified": 0.0
+    },
+    "findings": [
+      "仍有 9 条未沉淀碎片但本窗口零沉淀，聚类阈值可能过严。",
+      "遗忘压力 41% 过高，单轮清理占节点总量比重偏大。",
+      "2 条风格因对立证据不足被停用，未参与输出：concise(ambiguous), verbose(ambiguous) —— 需要更多证据或人工裁决。",
+      "重要性分布几乎无梯度（前三条合计只占 34%），什么都一样重要，等于没有取舍。",
+      "记忆碎成 8 个互不相连的块（最大一块只占 35%）：这不是「主题丰富」，是彼此推不出对方。"
+    ],
+    "suggestions": [
+      {
+        "param": "consolidate_similarity",
+        "current": 0.42,
+        "suggested": 0.37,
+        "reason": "放宽语义相似度门槛，让相近碎片有机会聚类。"
+      },
+      {
+        "param": "forget_w",
+        "current": 0.02,
+        "suggested": 0.01,
+        "reason": "降低遗忘阈值，让弱记忆多留一个观察窗口。"
+      },
+      {
+        "param": "importance_w_support",
+        "current": 0.8,
+        "suggested": 0.9,
+        "reason": "让有凭据的记忆在价值判断里拉开差距，避免一切等价。"
+      }
+    ],
+    "narrative": "第 3 轮自我回看：窗口 30 天内 41 次事件，沉淀 0 次、遗忘 12 条、风格固化 0 次 / 撤销 0 次；当前 17 个节点中 8 个为高层记忆。发现 5 项待核查信号，提出 3 条参数建议（不自动执行）。｜第 8 次自述：17 条记忆里，我留下 9 条、放下 8 条。线索是 起源「硬规则」4条 → 转折「偏好」2条 → 转折「踩坑」2条 → 当下「复盘」1条。连续性 0.97，可靠度 0.90，单主题占比 0.46。"
+  }
+}
