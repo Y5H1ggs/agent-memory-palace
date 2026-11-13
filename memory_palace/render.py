@@ -93,20 +93,31 @@ def _bar(value: float, scale: float, width: int = 12) -> str:
     return "█" * filled + "·" * (width - filled)
 
 
-def text_report(palace, limit: int = 10, horizon_days: float = 30) -> str:
+def text_report(
+    palace, limit: int = 10, horizon_days: float = 30, scope: str = "auto"
+) -> str:
+    from .scope import scopes_for
+
     now = palace.now()
     cfg = palace._config
     snap = palace.snapshot()
+    scopes = scopes_for(scope, palace.project) if scope != "all" else None
     assessment = palace.assessment(now)
     # 失效的记忆单列：它们不是「不重要的记忆」，是「已经不作数的记忆」，
     # 混进重要性排序里会让读者以为「这条不太重要」，其实它只是过期了。
-    live = [n for n in palace.graph.all_nodes() if not n.is_retired()]
-    retired = [n for n in palace.graph.all_nodes() if n.is_retired()]
+    live = [
+        n for n in palace.graph.all_nodes()
+        if not n.is_retired() and (scopes is None or n.scope in scopes)
+    ]
+    retired = [
+        n for n in palace.graph.all_nodes()
+        if n.is_retired() and (scopes is None or n.scope in scopes)
+    ]
     nodes = sorted(live, key=lambda n: -assessment.get(n.name, {}).get("total", 0.0))
     scale = max((assessment.get(n.name, {}).get("total", 0.0) for n in nodes), default=1.0) or 1.0
 
     lines = [
-        f"记忆宫殿 · {snap['nodes']} 节点（失效 {len(retired)}）/ {snap['edges']} 边"
+        f"记忆宫殿 · {len(live)} 条在册（本视图；库共 {snap['nodes']}）/ {snap['edges']} 边"
         f" / 墓碑 {snap['tombstone']} / 事件 {snap['events']}",
         f"价值 {HEALTH_ZH.get(snap['entropy_health'], snap['entropy_health'])}"
         f"（top1 占 {snap['attention']['top_share']:.0%}）"
@@ -298,15 +309,37 @@ def _short(text: str, n: int) -> str:
 # ---------------------------------------------------------------- HTML 面板
 
 
-def html_report(palace, title: str = "记忆宫殿", horizon_days: float = 30) -> str:
+def html_report(
+    palace,
+    title: str = "记忆宫殿",
+    horizon_days: float = 30,
+    scope: str = "auto",
+) -> str:
+    """一张自包含的记忆面板。
+
+    `scope` 决定看哪些：auto = 全局 + 当前项目（默认）/ all = 全部。
+    面板上永远显示"当前在看什么"—— 一张不说明自己视野的仪表盘，会让人误以为看到的是全部。
+    """
+    from .scope import GLOBAL, label as scope_label, scopes_for
+
     now = palace.now()
     cfg = palace._config
     snap = palace.snapshot()
-    assessment = palace.assessment(now)
+    scopes = scopes_for(scope, palace.project) if scope != "all" else None
+    assessment = {
+        k: v for k, v in palace.assessment(now).items()
+        if scopes is None or (palace.graph.get(k) and palace.graph.get(k).scope in scopes)
+    }
     # 失效的记忆单列：它们不是「不重要的记忆」，是「已经不作数的记忆」，
     # 混进重要性排序里会让读者以为「这条不太重要」，其实它只是过期了。
-    live = [n for n in palace.graph.all_nodes() if not n.is_retired()]
-    retired = [n for n in palace.graph.all_nodes() if n.is_retired()]
+    live = [
+        n for n in palace.graph.all_nodes()
+        if not n.is_retired() and (scopes is None or n.scope in scopes)
+    ]
+    retired = [
+        n for n in palace.graph.all_nodes()
+        if n.is_retired() and (scopes is None or n.scope in scopes)
+    ]
     nodes = sorted(live, key=lambda n: -assessment.get(n.name, {}).get("total", 0.0))
     top = nodes[:7]
     total_mass = sum(max(0.0, v["total"]) for v in assessment.values()) or 1.0
@@ -322,6 +355,17 @@ def html_report(palace, title: str = "记忆宫殿", horizon_days: float = 30) -
         f"{len(dying)} 条会在一个月内跌破遗忘线，"
         f"{snap['tombstone']} 条已经被主动放下。"
     )
+
+    counts = palace.scope_counts()
+    view_total = sum(v for k, v in counts.items() if scopes is None or k in scopes) or 1
+    scope_rows = "".join(
+        f'<div class="row"><span class="name">{_esc(scope_label(k))}'
+        f'{" ←当前" if k == palace.project else ""}</span>'
+        f'<span class="track"><span style="width:{v / view_total * 100:.1f}%;'
+        f'background:{"var(--accent)" if k == GLOBAL else "var(--ink)"};opacity:.85"></span></span>'
+        f'<span class="pct">{v}</span></div>'
+        for k, v in counts.items() if scopes is None or k in scopes
+    ) or '<p class="muted">这个视图里还没有记忆</p>'
 
     cards = []
     for node in nodes:
@@ -358,6 +402,7 @@ def html_report(palace, title: str = "记忆宫殿", horizon_days: float = 30) -
         cards.append(
             f'''<article class="card">
   <div class="card-top">
+    <span class="scope-b">{_esc(scope_label(node.scope))}</span>
     <span class="tier" style="color:{TIER_COLOR.get(node.tier, "#6b6b66")}">{_esc(TIER_LABEL.get(node.tier, node.tier))}</span>
     <span class="tags">{_esc(" · ".join(node.tags) or "无标签")}</span>
     <span class="score">{score:.2f}</span>
@@ -446,6 +491,13 @@ svg.chart{{width:100%;height:auto;display:block}}
 @media (max-width:820px){{.grid2{{grid-template-columns:1fr}}}}
 .cards{{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}}
 @media (max-width:820px){{.cards{{grid-template-columns:1fr}}}}
+.scope-b{{font-size:10.5px;border:1px solid var(--line);border-radius:999px;padding:1px 7px;
+ color:var(--muted);white-space:nowrap}}
+.row{{display:flex;align-items:center;gap:10px;margin:7px 0;font-size:12.5px}}
+.row .name{{width:150px;flex:none;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}}
+.row .track{{flex:1;height:7px;background:var(--line);border-radius:999px;overflow:hidden}}
+.row .track span{{display:block;height:100%;border-radius:999px}}
+.row .pct{{width:46px;text-align:right;color:var(--muted);font-variant-numeric:tabular-nums}}
 .card{{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:13px 15px;
  box-shadow:var(--shadow);display:flex;flex-direction:column;min-height:132px}}
 .card-top{{display:flex;align-items:baseline;gap:8px;font-size:11px;color:var(--muted)}}
@@ -504,9 +556,16 @@ ul.grave li b{{color:var(--ink);font-weight:500;min-width:120px;flex:none}}
   <div class="kpi"><div class="v">{snap["nodes"]}</div><div class="l">在册记忆</div></div>
   <div class="kpi"><div class="v">{snap["tombstone"]}</div><div class="l">已主动放下</div></div>
   <div class="kpi"><div class="v">{len(dying)}</div><div class="l">30 天内将跌破遗忘线</div></div>
-  <div class="kpi"><div class="v">{(sum(avg_life) / len(avg_life)):.0f}<span style="font-size:13px"> 天</span></div>
+  <div class="kpi"><div class="v">{(f"{sum(avg_life) / len(avg_life):.0f}" if avg_life else "—")}<span style="font-size:13px"> 天</span></div>
     <div class="l">平均剩余寿命（不含钉死）</div></div>
 </div>
+
+<section>
+  <h2>作用域<small>全局 = 换项目也记得；项目内 = 只在这里有效</small></h2>
+  <div class="panel">{scope_rows}
+    <p class="chart-note">当前视图：{_esc(scope_label(palace.project))} + 全局；共 {len(live)} 条在册，{len(retired)} 条已失效。</p>
+  </div>
+</section>
 
 <section>
   <h2>还能记住多久<small>按剩余寿命分桶；跨过遗忘线就会被放手</small></h2>

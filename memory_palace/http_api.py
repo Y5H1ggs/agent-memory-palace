@@ -227,8 +227,26 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def _send_html(self, code: int, html: str) -> None:
+        body = html.encode("utf-8")
+        self.send_response(code)
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Cache-Control", "no-store")
+        self.end_headers()
+        self.wfile.write(body)
+
     def do_GET(self) -> None:  # noqa: N802
-        if self.path.rstrip("/") in ("/health", ""):
+        if self.path.rstrip("/") in ("/panel", "/panel.html", "/"):
+            try:
+                from .render import html_report
+
+                palace = open_palace(_store())
+                self._send_html(200, html_report(palace, scope="auto"))
+            except Exception as exc:  # noqa: BLE001
+                self._send_html(500, f"<pre>记忆面板生成失败：{exc}</pre>")
+            return
+        if self.path.rstrip("/") in ("/health",):
             try:
                 palace = open_palace(_store())
                 self._send(200, {"ok": True, "nodes": len(palace.graph), "store": _store()})
@@ -239,7 +257,8 @@ class Handler(BaseHTTPRequestHandler):
             host, port = self.server.server_address[:2]
             self._send(200, openapi_spec(str(host), int(port)))
             return
-        self._send(404, {"error": "not found", "paths": sorted(ROUTES) + ["/health", "/openapi.json"]})
+        self._send(404, {"error": "not found",
+                         "paths": sorted(ROUTES) + ["/health", "/openapi.json", "/panel"]})
 
     def do_POST(self) -> None:  # noqa: N802
         route = self.path.rstrip("/")

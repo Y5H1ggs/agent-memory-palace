@@ -1,0 +1,24 @@
+# DeepSeek Harness（DSH）插件配置
+#
+# 用法（二选一）：
+#   1) 临时加载：  dsh web --patch ./dsh/cordis.yml
+#   2) 永久生效：  把下面的 - insert: 段并入 ~/.dsh/profiles/<profile>/cordis.patch.yml
+#                  保存后约 1 秒热重载（patchReload: live）
+#
+# 路径必须写**绝对路径**：DSH 从自己的进程目录加载，相对路径会解析到别处。
+
+- insert:
+    - id: memory-palace
+      # 指向本插件的入口文件（不是包名，除非你把它 npm link / 发布了）
+      name: '__REPO__/dsh/src/index.js'
+      config:
+        # host 半不通过 DSH 的 config 读取，直接用环境变量；
+        # 这里写注释是提醒：DSH 启动子进程前会剥掉名字含 KEY/PASSWORD/SECRET/TOKEN 的变量，
+        # 所以 MEMORY_PALACE_* 这类一定要显式配。
+        env:
+          MEMORY_PALACE_PYTHON: 'python'
+          MEMORY_PALACE_STORE: '__HOME__/.memory-palace/store.json'
+          # 记忆归属哪个项目。不填则按 git remote / 目录名推断。
+          # 想验证隔离效果，可以在这里改成另一个名字，看注入块是否变化。
+          MEMORY_PALACE_PROJECT: ''
+          MEMORY_PALACE_REPO: '__REPO__'

@@ -197,6 +197,43 @@ def main() -> None:
             twin_view.stdout.splitlines()[1] if twin_view.stdout else twin_view.stderr[-60:],
         )
 
+        # ★ 作用域：跨项目共享 / 项目内隔离
+        scoped = os.path.join(tmp, "scoped.json")
+        run(scoped, "init")
+        run(scoped, "remember", "全局：不确定就说不确定", "--tags", "硬规则",
+            "--tier", "core", "--pin", "--scope", "global", "--project", "p1")
+        run(scoped, "remember", "P1 的部署脚本要先 source env.sh", "--tags", "部署",
+            "--project", "p1")
+        p1 = json.loads(run(scoped, "recall", "部署脚本", "--project", "p1", "--json").stdout)
+        p2 = json.loads(run(scoped, "recall", "部署脚本", "--project", "p2", "--json").stdout)
+        check(
+            "跨项目隔离：p1 看得到自己的部署记忆",
+            any(r["name"] for r in p1),
+            str([r["name"] for r in p1]),
+        )
+        check(
+            "跨项目隔离：p2 看不到 p1 的部署记忆（不串味）",
+            not any("部署脚本" in r["content"] for r in p2),
+            str([r["content"] for r in p2]),
+        )
+        check(
+            "但全局记忆在 p2 仍可见（跨项目共享的正是这类）",
+            any("不确定就说不确定" in r["content"] for r in p2),
+            str([r["content"] for r in p2]),
+        )
+        ctx2 = run(scoped, "context", "--query", "部署脚本", "--project", "p2", "--status-only")
+        check(
+            "p2 的注入状态明确写出「无相关记忆」，而不是硬凑",
+            "无相关记忆" in ctx2.stdout,
+            ctx2.stdout.strip(),
+        )
+        proj = run(scoped, "projects", "--project", "p1")
+        check(
+            "projects 能列出作用域分布",
+            "全局" in proj.stdout and "项目·p1" in proj.stdout,
+            proj.stdout.splitlines()[2] if len(proj.stdout.splitlines()) > 2 else "",
+        )
+
         empty = os.path.join(tmp, "empty.json")
         run(empty, "init")
         empty_snap = json.loads(run(empty, "status", "--json").stdout)

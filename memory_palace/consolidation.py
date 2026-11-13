@@ -134,6 +134,10 @@ class ConsolidationEngine:
         by_name = {n.name: n for n in candidates}
         adj: dict[str, set[str]] = {n.name: set() for n in candidates}
         for a, b in self._pairs(candidates):
+            # 跨项目不聚类：把 A 项目的碎片和 B 项目的碎片沉淀成一条「结论」，
+            # 等于制造一条不属于任何项目的记忆 —— 它会被两边都当成自己的。
+            if a.scope != b.scope:
+                continue
             if self._similarity(a, b, graph) >= self.config.consolidate_similarity:
                 adj[a.name].add(b.name)
                 adj[b.name].add(a.name)
@@ -235,6 +239,8 @@ class ConsolidationEngine:
                     origin="consolidated",
                     consolidated_from=tuple(names),
                     fingerprint=fp,
+                    # 结论继承碎片的作用域（同组必然同域），否则它会飘成"全局"
+                    scope=members[0].scope,
                 )
                 graph.add_node(target)
                 result.created.append(target.name)

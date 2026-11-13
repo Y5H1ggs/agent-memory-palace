@@ -26,10 +26,18 @@ from typing import Any
 
 from ._console import ensure_utf8_console
 from .palace import MemoryPalace
+from .scope import GLOBAL, SCOPE_MODES, label as scope_label, normalize_scope, scopes_for
 from .render import html_report, status_line, text_report
 from .tree import build_tree, render_tree, tree_stats
 
 DEFAULT_STORE = os.path.join(os.path.expanduser("~"), ".memory-palace", "store.json")
+SCOPE_VIEW_ZH = {
+    "auto": "全局+本项目",
+    "global": "仅全局",
+    "project": "仅本项目",
+    "session": "仅本次会话",
+    "all": "全部作用域",
+}
 _RELATIVE = re.compile(r"^[+-]?(\d+(?:\.\d+)?)d$")
 
 
@@ -71,8 +79,11 @@ def resolve_store(explicit: str | None) -> str:
     return os.path.abspath(os.path.expanduser(path))
 
 
-def open_palace(path: str, autosave: bool = False) -> MemoryPalace:
-    return MemoryPalace(path=path, autosave=autosave)
+def open_palace(
+    path: str, project: str | None = None, autosave: bool = False
+) -> MemoryPalace:
+    """打开记忆库，并带上「当前是哪个项目」——它决定默认写哪里、默认读哪些。"""
+    return MemoryPalace(path=path, autosave=autosave, project=project)
 
 
 def parse_tags(raw: str | None) -> tuple[str, ...]:
@@ -103,6 +114,7 @@ def build_context(
     limit: int = 6,
     budget: int = 900,
     names: list[str] | None = None,
+    scope_mode: str = "auto",
 ) -> dict[str, Any]:
     """把「现在该想起什么」变成一段受预算约束的文本。
 
@@ -118,7 +130,12 @@ def build_context(
     """
     now = palace.now()
     cfg = palace._config
-    nodes = palace.graph.all_nodes()
+    # 视窗：auto = 全局 + 当前项目。这是「跨项目但不串味」的那条线。
+    scopes = scopes_for(scope_mode, palace.project)
+    nodes = [
+        n for n in palace.graph.all_nodes()
+        if scopes is None or n.scope in scopes
+    ]
     if not nodes:
         return {
             "how": "空库",
@@ -131,9 +148,14 @@ def build_context(
         }
 
     assessment = palace.value.assess(palace.graph, now, palace.logic.support_map())
+    if scopes is not None:
+        assessment = {
+            k: v for k, v in assessment.items()
+            if (node := palace.graph.get(k)) is not None and node.scope in scopes
+        }
     max_importance = max((v["total"] for v in assessment.values()), default=0.0) or 1e-9
     rows = (
-        {r["name"]: r for r in palace.score_breakdown(query)}
+        {r["name"]: r for r in palace.score_breakdown(query, scopes=scopes)}
         if query
         else {}
     )
@@ -258,7 +280,7 @@ def build_context(
             f"{len(pending)} 条风格因对立证据不足被停用："
             + "、".join(p["key"] for p in pending)
         )
-    dist = palace.entropy()
+    dist = palace.entropy(scopes)
     if dist["health"] == "flat":
         warnings.append("重要性分布几乎无梯度：这套记忆还没有取舍，考虑钉死真正要紧的")
     elif dist["health"] == "narrow":
@@ -271,6 +293,7 @@ def build_context(
 
     return {
         "how": how,
+        "scope": scope_mode,
         "budget": budget,
         "used": used,
         "total_candidates": len(assessment),
@@ -284,7 +307,9 @@ def build_context(
 def format_context(ctx: dict[str, Any]) -> str:
     lines = [
         f"# 记忆上下文（候选 {ctx['total_candidates']} 条 → 取 {len(ctx['items'])} 条，"
-        f"{ctx['used']}/{ctx['budget']} 字，{ctx['how']}）"
+        f"{ctx['used']}/{ctx['budget']} 字，{ctx['how']}"
+        + (f"，{SCOPE_VIEW_ZH.get(ctx.get('scope', 'auto'), '')}" if ctx.get("scope") else "")
+        + "）"
     ]
     if not ctx["items"]:
         lines.append("（空：这套记忆里还没有相关条目）")
@@ -320,7 +345,7 @@ def cmd_init(args) -> int:
     if os.path.exists(path) and not args.force:
         print(f"已存在：{path}（要重建请加 --force）")
         return 0
-    palace = open_palace(path)
+    palace = open_palace(path, getattr(args, "project", None))
     palace.save()
     print(f"已初始化：{path}")
     return 0
@@ -332,7 +357,7 @@ def cmd_remember(args) -> int:
         print("内容为空", file=sys.stderr)
         return 2
     path = resolve_store(args.store)
-    palace = open_palace(path)
+    palace = open_palace(path, getattr(args, "project", None))
     name = args.name or auto_name(content)
     if name in palace.graph and not args.replace:
         print(f"已存在同名记忆 {name}，未覆盖（要覆盖加 --replace）")
@@ -349,6 +374,7 @@ def cmd_remember(args) -> int:
         kind=args.kind or "",
         supersedes=supersedes,
         merge=not args.no_merge,
+        scope=args.scope or "",
     )
     palace.save()
     if node.name != name:
@@ -363,10 +389,13 @@ def cmd_remember(args) -> int:
 
 def cmd_recall(args) -> int:
     path = resolve_store(args.store)
-    palace = open_palace(path)
+    palace = open_palace(path, getattr(args, "project", None))
     names = list(args.name) if args.name else None
     as_of = parse_moment(getattr(args, "as_of", None), palace.now())
-    hits = palace.recall(names=names, query=args.query, limit=args.k, as_of=as_of)
+    hits = palace.recall(
+        names=names, query=args.query, limit=args.k, as_of=as_of,
+        scopes=scopes_for(args.scope, palace.project),
+    )
     if args.json:
         print(json.dumps(
             [{"name": n.name, "content": n.content, "tags": list(n.tags),
@@ -389,13 +418,14 @@ def cmd_recall(args) -> int:
 
 def cmd_context(args) -> int:
     path = resolve_store(args.store)
-    palace = open_palace(path)
+    palace = open_palace(path, getattr(args, "project", None))
     ctx = build_context(
         palace,
         query=args.query,
         limit=args.k,
         budget=args.budget,
         names=list(args.name) if args.name else None,
+        scope_mode=args.scope,
     )
     if args.tree:
         scores = {
@@ -445,27 +475,33 @@ def cmd_context(args) -> int:
 
 def cmd_view(args) -> int:
     """终端视图：不离开命令行就能看到「谁快被忘掉了」。"""
-    palace = open_palace(resolve_store(args.store))
-    print(text_report(palace, limit=args.limit, horizon_days=args.days))
+    palace = open_palace(resolve_store(args.store), getattr(args, "project", None))
+    print(text_report(
+        palace, limit=args.limit, horizon_days=args.days,
+        scope=getattr(args, "scope", "auto"),
+    ))
     return 0
 
 
 def cmd_render(args) -> int:
     """生成自包含 HTML 面板（含衰减曲线），双击即可看。"""
-    palace = open_palace(resolve_store(args.store))
+    palace = open_palace(resolve_store(args.store), getattr(args, "project", None))
     out = os.path.abspath(os.path.expanduser(args.out))
     parent = os.path.dirname(out)
     if parent:
         os.makedirs(parent, exist_ok=True)
     with open(out, "w", encoding="utf-8") as f:
-        f.write(html_report(palace, title=args.title, horizon_days=args.days))
+        f.write(html_report(
+            palace, title=args.title, horizon_days=args.days,
+            scope=getattr(args, "scope", "auto"),
+        ))
     print(f"已生成 {out}（{os.path.getsize(out) / 1024:.1f} KB，自包含，无需联网）")
     return 0
 
 
 def cmd_cycle(args) -> int:
     path = resolve_store(args.store)
-    palace = open_palace(path)
+    palace = open_palace(path, getattr(args, "project", None))
     report = palace.run_cycle()
     palace.save()
     if args.json:
@@ -486,7 +522,7 @@ def cmd_cycle(args) -> int:
 
 def cmd_status(args) -> int:
     path = resolve_store(args.store)
-    palace = open_palace(path)
+    palace = open_palace(path, getattr(args, "project", None))
     snap = palace.snapshot()
     if args.json:
         print(json.dumps(snap, ensure_ascii=False, indent=2))
@@ -497,6 +533,10 @@ def cmd_status(args) -> int:
     print(f"节点 {snap['nodes']}｜边 {snap['edges']}｜事件 {snap['events']}｜墓碑 {snap['tombstone']}"
           + (f"｜已失效 {retired}（可 as-of 回看）" if retired else ""))
     print(f"层级 {snap['tiers']}")
+    counts = palace.scope_counts()
+    if counts:
+        shown = "｜".join(f"{scope_label(k)} {v}" for k, v in counts.items())
+        print(f"作用域 {shown}（当前 {scope_label(palace.project)}）")
     print(f"价值健康 {snap['entropy_health']}｜结构 {snap['structure_health']}"
           f"（孤立 {snap['structure']['isolated_share']:.0%}）")
     print(f"生效风格 {snap['active_style'] or '（无）'}")
@@ -506,9 +546,39 @@ def cmd_status(args) -> int:
     return 0
 
 
+def cmd_promote(args) -> int:
+    """把一条记忆升为跨项目。显式动作，不是自动泛化。"""
+    palace = open_palace(resolve_store(args.store), getattr(args, "project", None))
+    node = palace.promote(args.name, args.to)
+    if node is None:
+        print(f"没有叫 {args.name} 的记忆", file=sys.stderr)
+        return 1
+    palace.save()
+    print(f"{node.name} → {scope_label(node.scope)}（换项目也会记得它）")
+    return 0
+
+
+def cmd_projects(args) -> int:
+    """列出记忆分布在哪些作用域，以及当前项目是哪个。"""
+    palace = open_palace(resolve_store(args.store), getattr(args, "project", None))
+    counts = palace.scope_counts()
+    print(f"当前项目 {scope_label(palace.project)}")
+    if not counts:
+        print("（还没有任何记忆）")
+        return 0
+    total = sum(counts.values())
+    print()
+    for scope, count in counts.items():
+        mark = " ←当前" if scope == palace.project else ("  ·共享" if scope == GLOBAL else "")
+        bar = "█" * max(1, round(count / max(counts.values()) * 18))
+        print(f"{bar:<18} {count:>3}  {scope_label(scope)}{mark}")
+    print(f"{'':<18} {total:>3}  合计")
+    return 0
+
+
 def cmd_explain(args) -> int:
     path = resolve_store(args.store)
-    palace = open_palace(path)
+    palace = open_palace(path, getattr(args, "project", None))
     detail = palace.semantic_explain(args.query)
     print("概念投影：", json.dumps(detail.get("concepts", {}), ensure_ascii=False))
     if detail.get("ambiguous"):
@@ -531,7 +601,7 @@ def cmd_outcome(args) -> int:
         print(f"未知结果类型 {args.result}（可选 {sorted(set(OUTCOME_ALIASES.values()))}）", file=sys.stderr)
         return 2
     path = resolve_store(args.store)
-    palace = open_palace(path)
+    palace = open_palace(path, getattr(args, "project", None))
     node = palace.feel_outcome(args.name, outcome)
     if node is None:
         print(f"没有这条记忆：{args.name}", file=sys.stderr)
@@ -543,7 +613,7 @@ def cmd_outcome(args) -> int:
 
 def cmd_pin(args) -> int:
     path = resolve_store(args.store)
-    palace = open_palace(path)
+    palace = open_palace(path, getattr(args, "project", None))
     node = palace.pin(args.name, pinned=not args.unpin)
     if node is None:
         print(f"没有这条记忆：{args.name}", file=sys.stderr)
@@ -555,7 +625,7 @@ def cmd_pin(args) -> int:
 
 def cmd_forget(args) -> int:
     path = resolve_store(args.store)
-    palace = open_palace(path)
+    palace = open_palace(path, getattr(args, "project", None))
     if not palace.drop(args.name, reason=args.reason):
         print(f"没有这条记忆：{args.name}", file=sys.stderr)
         return 1
@@ -637,7 +707,7 @@ MEMORY_PALACE_STORE={_slash(store)}""")
 
 def cmd_style(args) -> int:
     path = resolve_store(args.store)
-    palace = open_palace(path)
+    palace = open_palace(path, getattr(args, "project", None))
     if args.action == "observe":
         if args.sign not in (1, -1):
             print("--sign 只能是 +1 或 -1", file=sys.stderr)
@@ -661,6 +731,10 @@ def cmd_style(args) -> int:
 def build_parser() -> argparse.ArgumentParser:
     common = argparse.ArgumentParser(add_help=False)
     common.add_argument("--store", help=f"记忆库路径（默认 {DEFAULT_STORE}）")
+    common.add_argument(
+        "--project",
+        help="当前项目标识（默认按 git remote / 目录名自动推断；决定默认写哪里、读哪些）",
+    )
 
     parser = argparse.ArgumentParser(
         prog="memory-palace",
@@ -688,12 +762,16 @@ def build_parser() -> argparse.ArgumentParser:
                    help="被本条取代的旧记忆名（旧的不删，而是到期，可 as-of 回看）")
     p.add_argument("--no-merge", action="store_true",
                    help="关闭去重：内容几乎相同时默认合并到已有条目，而不是新开一条")
+    p.add_argument("--scope", default="",
+                   help="写到哪里：global=跨项目共享 / project=当前项目（默认） / session=仅本次会话")
     p.set_defaults(func=cmd_remember)
 
     p = sub.add_parser("recall", parents=[common], help="检索（语义 / 名字）")
     p.add_argument("query", nargs="?", help="语义查询")
     p.add_argument("--as-of", dest="as_of",
                    help="回看某个时刻当时为真的记忆（30d 或 2026-10-01）")
+    p.add_argument("--scope", default="auto", choices=list(SCOPE_MODES),
+                   help="auto（默认）/ global / project / session / all")
     p.add_argument("--name", action="append", help="按名字精确取（可多次）")
     p.add_argument("-k", type=int, default=6, help="返回条数（默认 6）")
     p.add_argument("--json", action="store_true")
@@ -707,17 +785,23 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--json", action="store_true")
     p.add_argument("--status-only", action="store_true",
                    help="只输出一行状态（记忆 5/12 · 钉死1 · 存疑2 · 412/800字），用于贴给用户看")
+    p.add_argument("--scope", default="auto", choices=list(SCOPE_MODES),
+                   help="看哪些记忆：auto=全局+当前项目（默认）/ global=只要跨项目 / project=只要本项目 / all=全部")
     p.add_argument("--tree", action="store_true", help="改用树状注入（根常驻、枝按需展开、其余折叠）")
     p.add_argument("--expand", type=int, default=1, help="树状模式下展开几个枝（默认 1）")
     p.add_argument("--compare", action="store_true", help="同时算出扁平注入的用量，报告省了多少字")
     p.set_defaults(func=cmd_context)
 
     p = sub.add_parser("view", parents=[common], help="终端视图：谁重要、谁快被忘掉")
+    p.add_argument("--scope", default="auto", choices=list(SCOPE_MODES),
+                   help="auto（默认）/ global / project / all")
     p.add_argument("--limit", type=int, default=10)
     p.add_argument("--days", type=float, default=30, help="寿命预警窗口（天）")
     p.set_defaults(func=cmd_view)
 
     p = sub.add_parser("render", parents=[common], help="生成自包含 HTML 记忆面板（含衰减曲线）")
+    p.add_argument("--scope", default="auto", choices=list(SCOPE_MODES),
+                   help="auto（默认）/ global / project / all")
     p.add_argument("--out", default="memory-palace.html", help="输出路径")
     p.add_argument("--title", default="记忆宫殿")
     p.add_argument("--days", type=float, default=60, help="衰减曲线跨度（天）")
@@ -730,6 +814,14 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("status", parents=[common], help="看库的体检报告")
     p.add_argument("--json", action="store_true")
     p.set_defaults(func=cmd_status)
+
+    p = sub.add_parser("promote", parents=[common], help="把一条记忆升为跨项目（global）")
+    p.add_argument("name", help="记忆名")
+    p.add_argument("--to", default="global", help="目标作用域（默认 global）")
+    p.set_defaults(func=cmd_promote)
+
+    p = sub.add_parser("projects", parents=[common], help="记忆分布在哪些作用域")
+    p.set_defaults(func=cmd_projects)
 
     p = sub.add_parser("explain", parents=[common], help="这条查询凭什么命中 / 归到哪个概念")
     p.add_argument("query")

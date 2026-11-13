@@ -381,6 +381,9 @@ class MemoryNode:
     narrative_heat: float = 0.0
     narrated_at: float = 0.0
     kind: str = ""  # 记忆类型（空 = 未分类，由 MemoryModel 推断并写回）
+    # 归属：global = 跨项目共享（偏好/硬规则/通用教训）；proj:X = 只属于某个项目。
+    # 默认 global 是为了兼容旧快照 —— 老库里每一条本来就是"这个人的"，不该被划进某个项目。
+    scope: str = "global"
     # —— 双时态：事实有有效期，不是「有没有」而是「什么时候为真」——
     # 用户改主意是最高频的真实事件。直接删掉旧的，会毁掉「上个月我确实这么想过」；
     # 不删又不标，检索会把两句话一起端上去，让模型自己猜哪句作数。
@@ -537,6 +540,10 @@ class MemoryNode:
             raise ValueError(f"{self.name}.valid_from 不能为负: {self.valid_from!r}")
         if not isinstance(self.supersedes, tuple):
             raise ValueError(f"{self.name}.supersedes 必须是 tuple: {self.supersedes!r}")
+        if not isinstance(self.scope, str) or not self.scope.strip():
+            raise ValueError(f"{self.name}.scope 非法: {self.scope!r}")
+        if any(ch.isspace() for ch in self.scope):
+            raise ValueError(f"{self.name}.scope 不能含空白: {self.scope!r}")
         if (
             isinstance(self.narrative_heat, bool)
             or not isinstance(self.narrative_heat, (int, float))

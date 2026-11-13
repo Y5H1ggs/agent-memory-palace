@@ -1,0 +1,16 @@
+{
+  "name": "dsh-plugin-memory-palace",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "DeepSeek Harness 插件：把 memory-palace 的记忆能力接进 DSH（分层作用域 / 预算化注入 / 弃答）",
+  "main": "./src/index.js",
+  "engines": {
+    "node": ">=20"
+  },
+  "dsh": {
+    "minVersion": "0.2.0"
+  },
+  "keywords": ["dsh", "plugin", "memory", "cordis"],
+  "license": "MIT"
+}

@@ -42,6 +42,15 @@ TOOLS: list[dict[str, Any]] = [
                 "budget": {"type": "integer", "description": "字符预算，默认 900", "default": 900},
                 "limit": {"type": "integer", "description": "最多几条，默认 6", "default": 6},
                 "names": {"type": "array", "items": {"type": "string"}, "description": "必须包含的记忆名"},
+                "scope": {
+                    "type": "string",
+                    "enum": ["auto", "global", "project", "all"],
+                    "default": "auto",
+                    "description": (
+                        "看哪些记忆：auto=全局+当前项目（默认）/ global=只要跨项目共享的 / "
+                        "project=只要本项目的 / all=全部"
+                    ),
+                },
                 "tree": {
                     "type": "boolean",
                     "description": "用树状注入（根常驻、枝按需展开、其余折叠）。记忆多于 ~30 条时更省 token",
@@ -66,6 +75,13 @@ TOOLS: list[dict[str, Any]] = [
                 "name": {"type": "string"},
                 "valence": {"type": "number", "description": "效价 [-1,1]，省略则由文本推断"},
                 "arousal": {"type": "number", "description": "唤醒 [0,1]，省略则由文本推断"},
+                "scope": {
+                    "type": "string",
+                    "description": (
+                        "写到哪里：global=跨项目共享（用户偏好/硬规则/通用教训）/ "
+                        "project=本项目（默认）/ session=仅本次会话"
+                    ),
+                },
                 "supersedes": {
                     "type": "array",
                     "items": {"type": "string"},
@@ -92,6 +108,21 @@ TOOLS: list[dict[str, Any]] = [
                     "description": "回看某个时刻当时为真的记忆（30d 或 2026-10-01）。问「以前是怎么定的」时用",
                 },
             },
+        },
+    },
+    {
+        "name": "memory_promote",
+        "description": (
+            "把一条项目记忆升为跨项目共享。当某个项目的教训其实是通用的"
+            "（例如「上线前必须先跑迁移」），用它让下个项目也记得。"
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "name": {"type": "string", "description": "记忆名"},
+                "to": {"type": "string", "default": "global", "description": "目标作用域，默认 global"},
+            },
+            "required": ["name"],
         },
     },
     {
@@ -185,6 +216,7 @@ def tool_context(args: dict[str, Any]) -> dict[str, Any]:
         limit=int(args.get("limit", 6)),
         budget=budget,
         names=args.get("names") or None,
+        scope_mode=str(args.get("scope") or "auto"),
     )
     return _text(format_context(ctx))
 
@@ -206,6 +238,7 @@ def tool_remember(args: dict[str, Any]) -> dict[str, Any]:
         valence=args.get("valence"),
         arousal=args.get("arousal"),
         supersedes=list(args.get("supersedes") or []),
+        scope=str(args.get("scope") or ""),
         # agent 入口默认去重：同一句话反复记，不该攒成一堆近义节点
         merge=True,
     )
@@ -246,6 +279,15 @@ def tool_recall(args: dict[str, Any]) -> dict[str, Any]:
         for n in hits
     ]
     return _text(json.dumps(rows, ensure_ascii=False, indent=2))
+
+
+def tool_promote(args: dict[str, Any]) -> dict[str, Any]:
+    palace = open_palace(_store())
+    node = palace.promote(str(args.get("name", "")), str(args.get("to") or "global"))
+    if node is None:
+        return _fail("没有这条记忆")
+    palace.save()
+    return _text(f"{node.name} 已提升为 {node.scope}：换项目也会记得它")
 
 
 def tool_outcome(args: dict[str, Any]) -> dict[str, Any]:
@@ -329,6 +371,7 @@ HANDLERS: dict[str, Callable[[dict[str, Any]], dict[str, Any]]] = {
     "memory_context": tool_context,
     "memory_remember": tool_remember,
     "memory_recall": tool_recall,
+    "memory_promote": tool_promote,
     "memory_outcome": tool_outcome,
     "memory_forget": tool_forget,
     "memory_status": tool_status,

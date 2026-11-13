@@ -14,6 +14,43 @@ SemVer 里 `1.0.0` 的含义是「公开 API 已稳定，可以放心依赖」�
 
 ---
 
+## [0.7.0] - 2026-11-13
+
+跨项目记忆、DSH 插件、以及能看的面板。
+
+### Added
+
+- **作用域（`scope.py`）**：记忆分 `global`（跨项目：偏好/硬规则/通用教训）与
+  `proj:owner/repo`（项目内：架构决策/踩过的坑）。默认视图 `auto` = 全局 + 当前项目。
+  `--scope global|project|session|all` 自由切换；`promote` 把项目教训升为通用。
+  项目标识按 `--project` → `MEMORY_PALACE_PROJECT` → **git remote** → 目录名+哈希 推断，
+  所以换目录、换机器、重新 clone 还是同一个项目。
+- **沉淀按作用域隔离**：跨项目的碎片不再被聚成一类 —— 否则会结晶出一条"不属于任何项目"的结论。
+- **`projects` 命令**：一眼看出记忆分布在哪些作用域、当前在哪个。
+- **DSH 插件（`dsh/`）**：host 半注册 5 个工具（context / remember / recall / promote / status），
+  按 `defineTool` 契约写、`node --check` 验过语法；`cordis.yml` 给绝对路径与 env 模板。
+  面板不嵌 DSH 打包链，走 `GET /panel`（见下），避免随宿主 rc 版本碎掉。
+- **`GET /panel`**：`python -m memory_palace.http_api --port 8765` 后浏览器直接开，
+  页面按作用域过滤，含作用域分布、剩余寿命分桶、进出账、卡片、自述、墓碑。
+
+### Changed
+
+- `view` / `render` / `context` / `recall` 全部支持 `--scope`；面板与健康度读数跟随视图
+  （看着项目视图却报全库熵，会让人误判注意力很集中，其实是被别的项目摊平了）。
+- MCP 工具新增 `memory_promote`，`memory_context` / `memory_remember` 支持 `scope`。
+- `text_report` 的总数改为"本视图在册数（库共 N）"，不再只报全库。
+
+### Fixed
+
+- `text_report` 引用未定义的 `scopes`（作用域过滤加进去时漏了参数），`view --scope` 直接崩。
+- 只有钉死记忆时 `html_report` 的平均剩余寿命除零。
+- `scopes_for` 未归一项目名：传裸名 `repo-a` 与节点上存的 `proj:repo-a` 不相等，
+  过滤会**静默失效**（表现为"串味"，但不报错）。
+
+自测：215 + 30 + 17 + 23 + 24 = **309**（含 3 条反事实）。
+
+---
+
 ## [0.6.0] - 2026-11-13
 
 看完同类项目之后补的三处**语义漏洞**（不是新功能），以及一份调研结论。

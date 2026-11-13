@@ -51,6 +51,13 @@ from .persona import (
 )
 from .reflection import ReflectionEngine, ReflectionReport
 from .selfcorrect import SelfCorrector
+from .scope import (
+    GLOBAL,
+    detect_project,
+    normalize_project,
+    normalize_scope,
+    scopes_for,
+)
 from .semantics import Encoder, SemanticIndex, cosine
 from .style import StyleEngine
 from .value import ValueModel
@@ -72,6 +79,7 @@ class MemoryPalace:
         summarizer: Summarizer | None = None,
         encoder: Encoder | None = None,
         autosave: bool = False,
+        project: str | None = None,
     ) -> None:
         self._lock = threading.RLock()
         self._clock: Clock = clock or wall_clock
@@ -79,6 +87,8 @@ class MemoryPalace:
         self._summarizer = summarizer
         self._autosave = autosave
         self._path = path
+        # 当前项目：决定「默认写进哪里」与「默认读哪些」。显式传优先，否则按 cwd 推断。
+        self.project = normalize_project(project) if project else detect_project()
 
         self.graph = MemoryGraph()
         self.style = StyleEngine(self._config)
@@ -163,6 +173,7 @@ class MemoryPalace:
         kind: str = "",
         supersedes: tuple[str, ...] | list[str] | str = (),
         merge: bool = False,
+        scope: str = "",
     ) -> MemoryNode:
         """写入一条记忆。情绪是**写入时**的属性，不是事后贴的标签。
 
@@ -214,6 +225,7 @@ class MemoryPalace:
                 origin=origin,
                 affect=self.affect.blank(now),
                 kind=kind,
+                scope=normalize_scope(scope, self.project),
             )
             if valence is not None or arousal is not None:
                 v = 0.0 if valence is None else float(valence)
@@ -438,12 +450,21 @@ class MemoryPalace:
                 return None
             return self.value.importance(node, self.now(), self.logic.support(name))
 
-    def entropy(self) -> dict[str, Any]:
+    def entropy(self, scopes: set[str] | None = None) -> dict[str, Any]:
         """「我在乎的东西」的分布 + 图本身的形状：全平=什么都无所谓，过陡=只押一件事，
-        全是孤岛=记下了却彼此无关。三个读数分开报，不合成一个自我安慰的总分。"""
+        全是孤岛=记下了却彼此无关。三个读数分开报，不合成一个自我安慰的总分。
+
+        `scopes` 让读数与「当前视图」一致：看着项目视图却报全库的熵，
+        会让人误判「我的注意力很集中」，其实是被别的项目的数据摊平了。
+        """
         with self._lock:
             now = self.now()
             assessment = self.assessment(now)
+            if scopes is not None:
+                assessment = {
+                    k: v for k, v in assessment.items()
+                    if (node := self.graph.get(k)) is not None and node.scope in scopes
+                }
             dist = self.value.distribution(assessment)
             struct = self.structural(now)
             return {
@@ -484,6 +505,33 @@ class MemoryPalace:
             self._maybe_save()
             return node
 
+    def promote(self, name: str, to: str = GLOBAL) -> MemoryNode | None:
+        """把一条记忆提升为跨项目（或改成指定作用域）。
+
+        存在的理由：项目里学到的教训，常常是「原来这类问题都该这么办」。
+        让它留在项目里，下个项目会重新踩一遍；直接写全局，又会把项目细节带到别处。
+        所以提升是**一次显式决定**，不是自动泛化 —— 自动泛化必然把特例当通例。
+        """
+        with self._lock:
+            node = self.graph.get(name)
+            if node is None:
+                return None
+            before = node.scope
+            node.scope = normalize_project(to) if to != GLOBAL else GLOBAL
+            self._log(
+                "promote",
+                {"name": name, "from": before, "to": node.scope},
+                self.now(),
+            )
+            self._maybe_save()
+            return node
+
+    def scope_counts(self) -> dict[str, int]:
+        counts: dict[str, int] = {}
+        for node in self.graph.all_nodes():
+            counts[node.scope] = counts.get(node.scope, 0) + 1
+        return dict(sorted(counts.items(), key=lambda kv: (-kv[1], kv[0])))
+
     def drop(self, name: str, reason: str = "user_requested") -> bool:
         """显式丢弃一条记忆（人要求的删除，不是系统判的遗忘）。
 
@@ -504,7 +552,11 @@ class MemoryPalace:
             return True
 
     def _score_components(
-        self, query: str, query_tags: tuple[str, ...], now: float
+        self,
+        query: str,
+        query_tags: tuple[str, ...],
+        now: float,
+        scopes: set[str] | None = None,
     ) -> list[dict[str, Any]]:
         """三路打分的拆解：语义 / 标签 / 时近。公开给 score_breakdown，保证可解释。"""
         cfg = self._config
@@ -517,6 +569,8 @@ class MemoryPalace:
         for node in self.graph.all_nodes():
             if not node.is_valid_at(now):
                 continue  # 已到期的旧事实不参与现在的检索
+            if scopes is not None and node.scope not in scopes:
+                continue  # 别的项目的记忆不该出现在这个项目的候选里
             sem = sem_scores.get(node.name, 0.0)
             tag = len(wanted & set(node.tags)) / max(1, len(wanted)) if wanted else 0.0
             rec = min(1.0, max(0.0, node.effective_weight(now)))
@@ -538,11 +592,15 @@ class MemoryPalace:
         return rows
 
     def score_breakdown(
-        self, query: str, query_tags: tuple[str, ...] = (), top_k: int | None = None
+        self,
+        query: str,
+        query_tags: tuple[str, ...] = (),
+        top_k: int | None = None,
+        scopes: set[str] | None = None,
     ) -> list[dict[str, Any]]:
         """为什么这条记忆被召回？三路分量逐一列出，不让人对着一个数字猜。"""
         with self._lock:
-            rows = self._score_components(query, query_tags, self.now())
+            rows = self._score_components(query, query_tags, self.now(), scopes)
             return rows[:top_k] if top_k else rows
 
     def recall(
@@ -553,6 +611,7 @@ class MemoryPalace:
         query: str | None = None,
         min_score: float | None = None,
         as_of: float | None = None,
+        scopes: set[str] | None = None,
     ) -> list[MemoryNode]:
         """三种入口：精确名字 / 语义查询 / 标签。语义与标签可叠加为混合打分。
 
@@ -577,7 +636,11 @@ class MemoryPalace:
                     # 无查询条件 = 按显著度召回，等价于「现在最容易被想起的是什么」。
                     # 这里才用得上记忆类型偏向：没有具体目标时，手上的与身份性的先浮上来。
                     retrieval = "salience"
-                    live = [n for n in self.graph.all_nodes() if n.is_valid_at(moment)]
+                    live = [
+                        n for n in self.graph.all_nodes()
+                        if n.is_valid_at(moment)
+                        and (scopes is None or n.scope in scopes)
+                    ]
                     ranked = sorted(
                         live,
                         key=lambda n: (-n.effective_weight(moment) * self.memory.bias(n), n.name),
@@ -590,7 +653,7 @@ class MemoryPalace:
                     )
                 else:
                     retrieval = "semantic" if text else "tags"
-                    rows = self._score_components(text, query_tags, moment)
+                    rows = self._score_components(text, query_tags, moment, scopes)
                     above = [r for r in rows if r["score"] >= gate]
                     # 相对门槛：低于最高分一半的命中只是「字面沾边」，一并挡掉。
                     floor = above[0]["score"] * self._config.semantic_relative_floor if above else 0.0

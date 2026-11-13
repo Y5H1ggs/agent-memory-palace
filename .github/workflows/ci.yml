@@ -35,6 +35,8 @@ jobs:
         run: python tests/test_integrations.py
       - name: 双时态 / 去重 / 弃答自测
         run: python tests/test_temporal.py
+      - name: 跨项目作用域自测
+        run: python tests/test_scope.py
       - name: 基准冒烟（200 条）
         run: python -m memory_palace.bench 200
       - name: 演示库可生成

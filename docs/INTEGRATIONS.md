@@ -71,7 +71,37 @@ Codex 还会读仓库根目录的 `AGENTS.md` —— 本仓库自带一份，写
 { "mcpServers": { "memory-palace": { "command": "memory-palace-mcp" } } }
 ```
 
-### DSH（DeepSeek Harness）
+#
+## DSH 插件（不是 MCP 桥接）
+
+DSH 有两种接法，别混：
+
+| 方式 | 适合 | 文件 |
+|---|---|---|
+| **MCP 桥接**（`@deepseek-ai/dsh-mcp-client`） | 想直接把现成的 MCP server 挂进来 | `cordis.patch.yml` 里的 `dsh-mcp-client` 段 |
+| **DSH 插件**（`dsh/`） | 想按 Cordis 插件形态装、跟随 DSH 生命周期热重载 | `dsh/src/index.js` + `dsh/cordis.yml` |
+
+后者已经在本仓库里：
+
+```bash
+dsh web --patch ./dsh/cordis.yml    # 临时加载（编辑 cordis.yml 换绝对路径）
+```
+
+插件注册 5 个工具：`memory_context` / `memory_remember` / `memory_recall` /
+`memory_promote` / `memory_status`，全部是调 CLI 的适配层 —— 语义只有一处定义。
+
+面板不在 DSH 的打包链里，走本地只读页：
+
+```bash
+python -m memory_palace.http_api --port 8765
+# → http://127.0.0.1:8765/panel
+```
+
+**为什么不做 client 半**：DSH 的浏览器半需要按 loader 期望产出 lazy-CJS factory bundle，
+开发机上没有 DSH 可验证，写一份跑不通的打包配置比不写更糟。要挂 slot 的话，
+在你的插件里注册一个 iframe 指向 `/panel` 即可。详见 [dsh/README.md](../dsh/README.md)。
+
+## DSH（DeepSeek Harness）
 
 DSH 不直接读 `mcp.json`，而是通过官方桥接插件 `@deepseek-ai/dsh-mcp-client`，
 配置写在 **每个 profile 一份** 的 `cordis.patch.yml` 里，保存后约 1 秒热重载（`patchReload: live`）。
