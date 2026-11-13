@@ -14,6 +14,68 @@ SemVer 里 `1.0.0` 的含义是「公开 API 已稳定，可以放心依赖」�
 
 ---
 
+## [0.3.0] - 2026-11-13
+
+不做某个平台的专用件。三个接入面覆盖主流 agent：**MCP（stdio）/ HTTP + OpenAPI / CLI + 库**。
+
+### Added
+
+- **MCP 服务（`memory_palace/mcp_server.py`）**：stdio 传输，换行分隔 JSON-RPC（不是 LSP 的
+  Content-Length），8 个工具 —— `memory_context / remember / recall / outcome / forget / status /
+  explain / cycle`。工具描述写的是「什么时候该用」，工具级失败用 `isError` 交给模型自行纠正，
+  协议错误才用 JSON-RPC error。入口 `memory-palace-mcp`。
+- **HTTP + OpenAPI（`memory_palace/http_api.py`）**：`/context /remember /recall /outcome /status
+  /cycle /health /openapi.json`，OpenAPI 3.0 可被 Dify / Coze / n8n / GPT Actions 直接导入。
+  默认只绑 127.0.0.1 且无鉴权，非本机绑定需显式 `--allow-remote`。入口 `memory-palace-http`。
+- **`docs/INTEGRATIONS.md`**：Claude Code（`.mcp.json`）、Codex CLI（`config.toml`）、Cursor、
+  Cline、Windsurf、Zed、Gemini CLI、Dify、Coze、n8n、LangChain、OpenAI function calling
+  的逐条配置；并说明 `inputSchema` 可直接当 function calling 的 `parameters` 用，不必重抄 schema。
+- **`AGENTS.md`**：任何读仓库约定的 agent（Codex / Claude Code）都能照着用的时序与硬约束。
+- **`tests/test_integrations.py`**：15 项协议层契约（握手 / 工具清单 / 错误语义 / OpenAPI 形状 / 404 与 400 的区分）。
+
+### Changed
+
+- CLI 的 `context` 排序改为三档：钉死永远在 → 两条背景 → `0.6×语义 + 0.4×重要性`。
+  修掉「无关查询下硬规则被语义门槛挡掉」的问题 —— 那是规则变成资料的典型退化。
+- `pyproject` 增加 `memory-palace-mcp` / `memory-palace-http` 两个入口。
+
+### Fixed
+
+- `context` 在语义门槛较高时只返回 1~2 条，导致注入块几乎没有信息量。
+
+---
+
+## [0.2.0] - 2026-11-13
+
+从「库」到「agent 能用的工具」。核心判断：agent 缺的不是相似文档，而是
+「我该记住什么、该放下什么、这条还能不能信」，所以接口不是 `search() -> chunks`，
+而是 `context(task, budget) -> 一小块可注入的文本`。
+
+### Added
+
+- **CLI（`memory_palace/cli.py`）**：`init / remember / recall / context / cycle / status / explain /
+  outcome / pin / forget / style`。默认存储 `~/.memory-palace/store.json`，
+  可用 `--store` 或 `MEMORY_PALACE_STORE` 覆盖；`pip install` 后入口为 `memory-palace`。
+- **`context` 三档排序**：钉死记忆永远在（规则不是资料）→ 两条背景（当前最重要）→
+  其余按 `0.6×语义 + 0.4×重要性` 混合。带可信度警示、风格约束、预算用量，
+  `--json` 可拿结构化结果。
+- **`MemoryPalace.pin() / drop()`**：用户主权的两个开关。`drop` 走与 GC 相同的清理路径
+  （墓碑 → 出图 → 出语义索引 → 剪逻辑边），不留幽灵。
+- **`docs/AGENT_INTEGRATION.md`**：三种接入时机（注入 / 固化 / 反馈）、多库划分、成本，以及**不该用它**的场景。
+- **`tests/test_cli.py`**：16 项契约自测，CI 增加一步。
+
+### Changed
+
+- `retrieval_coverage` 在「一次检索都没有」时返回 1.0 而不是 0.0，并新增 `retrieval_attempts` 指标；
+  `retrieval_narrow` 规则要求 `retrieval_attempts >= 5` 才触发。
+  **修掉的真实副作用**：新库第一轮 `cycle` 会误判「召回路径过窄」，去下调语义门槛。
+
+### Fixed
+
+- 空库/新库跑第一轮 `cycle` 会凭空产生一条自修正（零样本被当成零覆盖率）。
+
+---
+
 ## [0.1.0] - 2026-11-13
 
 首个公开版本。核心是「记忆的生命周期」，不是「检索的一次调用」。

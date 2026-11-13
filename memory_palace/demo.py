@@ -1451,6 +1451,7 @@ def main() -> None:
         "restores": 3.0,
         "forget_pressure": 0.0,
         "retrieval_coverage": 0.20,
+        "retrieval_attempts": 20.0,  # 样本够多，覆盖率才有意义（少了这一项规则不该触发）
         "decrystallizations": 0.0,
         "loose_fragments": 0,
         "consolidations": 1,

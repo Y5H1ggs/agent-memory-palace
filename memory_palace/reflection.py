@@ -52,6 +52,10 @@ class ReflectionEngine:
             return sum(1 for e in window if e.kind == kind)
 
         recalls, misses = count("recall"), count("miss")
+        attempts = recalls + misses
+        # 一次都没检索过 ≠ 覆盖率 0%。没有证据时说「未知」而不是「很窄」，
+        # 否则刚建的库第一轮就会去下调语义门槛 —— 为了一个不存在的症状改参数。
+        retrieval_coverage = recalls / attempts if attempts else 1.0
         gc_deletes = sum(
             len(e.payload.get("deleted", [])) for e in window if e.kind == "gc"
         )
@@ -96,7 +100,8 @@ class ReflectionEngine:
 
         metrics = {
             "events_in_window": float(len(window)),
-            "retrieval_coverage": round(recalls / max(1, recalls + misses), 4),
+            "retrieval_coverage": round(retrieval_coverage, 4),
+            "retrieval_attempts": float(attempts),
             "consolidation_yield": round(len(core_nodes) / max(1, len(nodes)), 4),
             "core_hit_ratio": round(core_hits / max(1, total_hits), 4),
             "forget_pressure": round(gc_deletes / max(1, len(nodes) + gc_deletes), 4),

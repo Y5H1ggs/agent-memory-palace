@@ -352,6 +352,41 @@ class MemoryPalace:
                 node.last_accessed -= days * DAY
             return node
 
+    def pin(self, name: str, pinned: bool = True) -> MemoryNode | None:
+        """钉死 / 解钉。钉死 = 不衰减、不参与自动遗忘，只能在解钉后才会被放手。
+
+        这是用户对系统唯一的「主权开关」：自动遗忘可以很聪明，但「这条不许动」
+        必须由人说了算。钉死时顺手把强度抬到初始值，否则解钉瞬间它可能已经烂掉。
+        """
+        with self._lock:
+            node = self.graph.get(name)
+            if node is None:
+                return None
+            node.pinned = pinned
+            if pinned:
+                node.base_weight = max(node.base_weight, 1.0)
+            self._log("pin" if pinned else "unpin", {"name": name}, self.now())
+            self._maybe_save()
+            return node
+
+    def drop(self, name: str, reason: str = "user_requested") -> bool:
+        """显式丢弃一条记忆（人要求的删除，不是系统判的遗忘）。
+
+        走与 GC 相同的清理路径：进墓碑（可 restore）→ 移出图 → 移出语义索引 →
+        剪掉指向它的逻辑断言。少任何一步都会留下幽灵：悬空的推理边或检索命中已删记忆。
+        """
+        with self._lock:
+            node = self.graph.get(name)
+            if node is None:
+                return False
+            self.tombstone[name] = node
+            self.graph.remove_nodes_from([name])
+            self.semantics.forget(name)
+            self.logic.prune([name])
+            self._log("drop", {"name": name, "reason": reason}, self.now())
+            self._maybe_save()
+            return True
+
     def _score_components(
         self, query: str, query_tags: tuple[str, ...], now: float
     ) -> list[dict[str, Any]]:

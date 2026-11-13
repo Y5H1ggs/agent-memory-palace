@@ -205,7 +205,8 @@ class SelfCorrector:
             )
 
         coverage = metrics.get("retrieval_coverage", 1.0)
-        if coverage < 0.5:
+        # 样本太少时覆盖率没有意义：3 次检索里 1 次命中，不该被判成「召回路径过窄」。
+        if coverage < 0.5 and metrics.get("retrieval_attempts", 0) >= 5:
             add(
                 "retrieval_narrow",
                 "semantic_min_score",

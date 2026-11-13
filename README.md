@@ -7,7 +7,7 @@
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](pyproject.toml)
 
-**TL;DR (English)** — A dependency-free Python reference implementation of a *memory lifecycle*: idempotent decay, affect that both hardens and distorts recall, consolidation with a one-way door, value-based forgetting with a fixed attention budget, self-narrative as a projection (not a node), a four-layer persona, and self-correction bounded by a whitelist, value ranges and anti-lag verification. 8.4k lines, 215 assertions, 18 mutation audits. Not a vector database; not production-ready.
+**TL;DR (English)** — A dependency-free Python reference implementation of a *memory lifecycle*: idempotent decay, affect that both hardens and distorts recall, consolidation with a one-way door, value-based forgetting with a fixed attention budget, self-narrative as a projection (not a node), a four-layer persona, and self-correction bounded by a whitelist, value ranges and anti-lag verification. Ships an MCP server, an HTTP+OpenAPI shim and a CLI so any agent can inject a budgeted memory block. 10k lines, 246 assertions, 18 mutation audits. Not a vector database; not production-ready.
 
 ---
 
@@ -58,6 +58,51 @@ palace.run_cycle()                           # 沉淀→抓取→遗忘→自述
 最近遗忘判决: [('rule:no-absolute', 'kept', 'pinned_by_user'), ('loss:0914', 'kept', 'valued'), ...]
 ```
 
+## 接进任何 agent：MCP / HTTP / CLI 三条路
+
+不是某个平台的专用件。三个接入面，覆盖 2026 年主流 agent：
+
+| 接入面 | 谁用 | 一行启动 |
+|---|---|---|
+| **MCP**（stdio，8 个工具） | Claude Code、Codex CLI、Cursor、Cline、Windsurf、Zed、Gemini CLI | `memory-palace-mcp` |
+| **HTTP + OpenAPI** | Dify、Coze、n8n、自定义 GPT Actions、低代码 | `memory-palace-http --port 8765` |
+| **CLI / 库** | 自己写循环的 agent、脚本、定时任务 | `memory-palace context --query "…"` |
+
+Claude Code / Cursor 的 MCP 配置（同一份 JSON，Codex 用 TOML）：
+
+```json
+{ "mcpServers": { "memory-palace": { "command": "memory-palace-mcp",
+  "env": { "MEMORY_PALACE_STORE": "~/.memory-palace/store.json" } } } }
+```
+
+```bash
+memory-palace context --query "仓位怎么分配" --budget 800   # ← 会话开始：注入一块
+memory-palace remember "用户要求所有输出表格化" --tags 偏好 --tier fact
+memory-palace outcome m:719af3d5 contradicted               # 用户纠正了你
+memory-palace cycle                                         # 会话结束：沉淀/遗忘/自述/反思
+```
+
+`context` 的输出可以直接拼进 system prompt，**钉死的硬规则永远在**（哪怕与当前问题无关），
+并带可信度提示：
+
+```
+# 记忆上下文（候选 12 条 → 取 5 条，412/800 字，语义检索「仓位分配」）
+- [硬规则] 禁止绝对化措辞，所有判断都带概率（钉死）
+- [仓位] 半凯利：单笔不超过总资金三分之一
+- [教训] 追高后逆板块阴跌，亏三个点，很后悔（细节可能失真 0.67）
+
+## 自述（第 4 版）
+起源「输出」2条 → 转折「复盘」3条 → 当下「仓位」2条｜可靠度 0.91｜单主题占比 0.32
+```
+
+为什么不给 `search(query) -> chunks`：agent 真正缺的不是相似文档，而是
+**「我该记住什么、该放下什么、这条还能不能信」**。
+
+- 各宿主的完整配置（Claude Code / Codex / Cursor / Cline / Windsurf / Zed / Gemini CLI /
+  Dify / Coze / n8n / LangChain / OpenAI function calling）：[docs/INTEGRATIONS.md](docs/INTEGRATIONS.md)
+- 三种接入时机（注入/固化/反馈）、多库划分、**什么时候不该用**：[docs/AGENT_INTEGRATION.md](docs/AGENT_INTEGRATION.md)
+- agent 读得懂的约定：[AGENTS.md](AGENTS.md)
+
 ## 十个机制，以及它们各自守住的不变量
 
 | 模块 | 管什么 | 关键不变量 |
@@ -87,7 +132,9 @@ palace.run_cycle()                           # 沉淀→抓取→遗忘→自述
 ## 证据：它凭什么说自己是对的
 
 ```bash
-python -m memory_palace.demo    # 215 项断言，18 条突变审计
+python -m memory_palace.demo        # 215 项断言，18 条突变审计
+python tests/test_cli.py            # 16 项 CLI 契约
+python tests/test_integrations.py   # 15 项 MCP / HTTP 协议层契约
 ```
 
 自测不是「跑通就算过」，里面有三类专门用来打自己的脸的东西：
@@ -143,9 +190,17 @@ memory_palace/
   selfcorrect.py   自修正（白名单 / 值域 / 冷却 / 回滚 / 抗滞后）
   semantics.py     语义检索（多义词裁决 + 词典自增长）
   palace.py        顶层编排（每轮固定次序）
+  cli.py           命令行：remember / context / cycle / outcome / explain
+  mcp_server.py    MCP 服务（stdio，8 个工具）—— Claude Code / Codex / Cursor / Cline 等通用
+  http_api.py      本地 HTTP + OpenAPI 3.0 —— Dify / Coze / n8n / GPT Actions 通用
   demo.py          20+1 幕剧本与自测（215 项断言 + 18 条突变审计）
 examples/quickstart.py
-docs/ARCHITECTURE.md  设计细节与次序的理由
+tests/test_cli.py            CLI 契约（16 项：退出码 / 预算 / 无幽灵 / 空库不自修正）
+tests/test_integrations.py   MCP 与 HTTP 协议层契约（15 项：握手 / 工具 / 错误语义 / OpenAPI）
+docs/ARCHITECTURE.md         设计细节与次序的理由
+docs/INTEGRATIONS.md         各宿主配置：Claude Code / Codex / Cursor / Dify / Coze / n8n / LangChain…
+docs/AGENT_INTEGRATION.md    三种接入时机、成本、以及不该用它的场景
+AGENTS.md                    agent 读得懂的约定（Codex / Claude Code 自动加载）
 ```
 
 ## 版本策略

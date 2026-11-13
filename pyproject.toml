@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "memory-palace"
-version = "0.1.0"
+version = "0.3.0"
 description = "A dependency-free memory lifecycle: idempotent decay, affect, consolidation, value-based forgetting, self-narrative and bounded self-correction."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -32,6 +32,11 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
 ]
 dependencies = []
+
+[project.scripts]
+memory-palace = "memory_palace.cli:main"
+memory-palace-mcp = "memory_palace.mcp_server:main"
+memory-palace-http = "memory_palace.http_api:main"
 
 [project.optional-dependencies]
 dev = ["pytest>=8"]

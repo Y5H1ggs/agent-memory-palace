@@ -29,3 +29,7 @@ jobs:
         run: python examples/quickstart.py
       - name: 完整自测（215 项断言 + 18 条突变审计）
         run: python -m memory_palace.demo
+      - name: CLI 契约自测
+        run: python tests/test_cli.py
+      - name: MCP / HTTP 接入层自测
+        run: python tests/test_integrations.py
