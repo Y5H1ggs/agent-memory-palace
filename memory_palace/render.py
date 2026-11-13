@@ -126,10 +126,12 @@ def text_report(palace, limit: int = 10, horizon_days: float = 30) -> str:
     if len(nodes) > limit:
         lines.append(f"… 另有 {len(nodes) - limit} 条")
 
+    # 排序键必须带名字：两条记忆剩余寿命相同时，比较节点对象会 TypeError
     dying = sorted(
-        (d, n) for n in nodes
-        if (d := _days_to_floor(n, now, cfg.forget_w, cfg.affect_stability_gain)) is not None
-        and 0 < d <= horizon_days
+        ((d, n) for n in nodes
+         if (d := _days_to_floor(n, now, cfg.forget_w, cfg.affect_stability_gain)) is not None
+         and 0 < d <= horizon_days),
+        key=lambda pair: (pair[0], pair[1].name),
     )
     lines.append("")
     if dying:

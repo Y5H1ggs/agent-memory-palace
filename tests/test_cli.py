@@ -185,6 +185,18 @@ def main() -> None:
             conf.stdout.splitlines()[3] if conf.stdout else "",
         )
 
+        # 回归：两条记忆剩余寿命完全相同时，排序不得去比较节点对象（CI 抓到过）
+        twin = os.path.join(tmp, "twin.json")
+        run(twin, "init")
+        run(twin, "remember", "同一时刻写入的第一条", "--tags", "复盘")
+        run(twin, "remember", "同一时刻写入的第二条", "--tags", "复盘")
+        twin_view = run(twin, "view")
+        check(
+            "剩余寿命相同时 view 不崩（排序键必须可比较）",
+            twin_view.returncode == 0 and "遗忘线" in twin_view.stdout,
+            twin_view.stdout.splitlines()[1] if twin_view.stdout else twin_view.stderr[-60:],
+        )
+
         empty = os.path.join(tmp, "empty.json")
         run(empty, "init")
         empty_snap = json.loads(run(empty, "status", "--json").stdout)
