@@ -24,6 +24,7 @@ from typing import Any
 
 from ._console import ensure_utf8_console
 from .palace import MemoryPalace
+from .render import html_report, status_line, text_report
 
 DEFAULT_STORE = os.path.join(os.path.expanduser("~"), ".memory-palace", "store.json")
 OUTCOME_ALIASES = {
@@ -323,10 +324,34 @@ def cmd_context(args) -> int:
         budget=args.budget,
         names=list(args.name) if args.name else None,
     )
+    if args.status_only:
+        rev = (ctx.get("narrative") or {}).get("rev")
+        print(status_line(ctx, rev))
+        return 0
     if args.json:
         print(json.dumps(ctx, ensure_ascii=False, indent=2))
     else:
         print(format_context(ctx))
+    return 0
+
+
+def cmd_view(args) -> int:
+    """终端视图：不离开命令行就能看到「谁快被忘掉了」。"""
+    palace = open_palace(resolve_store(args.store))
+    print(text_report(palace, limit=args.limit, horizon_days=args.days))
+    return 0
+
+
+def cmd_render(args) -> int:
+    """生成自包含 HTML 面板（含衰减曲线），双击即可看。"""
+    palace = open_palace(resolve_store(args.store))
+    out = os.path.abspath(os.path.expanduser(args.out))
+    parent = os.path.dirname(out)
+    if parent:
+        os.makedirs(parent, exist_ok=True)
+    with open(out, "w", encoding="utf-8") as f:
+        f.write(html_report(palace, title=args.title, horizon_days=args.days))
+    print(f"已生成 {out}（{os.path.getsize(out) / 1024:.1f} KB，自包含，无需联网）")
     return 0
 
 
@@ -493,7 +518,20 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("-k", type=int, default=6, help="最多条数（默认 6）")
     p.add_argument("--budget", type=int, default=900, help="字符预算（默认 900）")
     p.add_argument("--json", action="store_true")
+    p.add_argument("--status-only", action="store_true",
+                   help="只输出一行状态（记忆 5/12 · 钉死1 · 存疑2 · 412/800字），用于贴给用户看")
     p.set_defaults(func=cmd_context)
+
+    p = sub.add_parser("view", parents=[common], help="终端视图：谁重要、谁快被忘掉")
+    p.add_argument("--limit", type=int, default=10)
+    p.add_argument("--days", type=float, default=30, help="寿命预警窗口（天）")
+    p.set_defaults(func=cmd_view)
+
+    p = sub.add_parser("render", parents=[common], help="生成自包含 HTML 记忆面板（含衰减曲线）")
+    p.add_argument("--out", default="memory-palace.html", help="输出路径")
+    p.add_argument("--title", default="记忆宫殿")
+    p.add_argument("--days", type=float, default=60, help="衰减曲线跨度（天）")
+    p.set_defaults(func=cmd_render)
 
     p = sub.add_parser("cycle", parents=[common], help="跑一轮代谢（沉淀/遗忘/自述/反思/自修正）")
     p.add_argument("--json", action="store_true")

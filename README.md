@@ -7,7 +7,7 @@
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](pyproject.toml)
 
-**TL;DR (English)** — A dependency-free Python reference implementation of a *memory lifecycle*: idempotent decay, affect that both hardens and distorts recall, consolidation with a one-way door, value-based forgetting with a fixed attention budget, self-narrative as a projection (not a node), a four-layer persona, and self-correction bounded by a whitelist, value ranges and anti-lag verification. Ships an MCP server, an HTTP+OpenAPI shim and a CLI so any agent can inject a budgeted memory block. 10k lines, 246 assertions, 18 mutation audits. Not a vector database; not production-ready.
+**TL;DR (English)** — A dependency-free Python reference implementation of a *memory lifecycle*: idempotent decay, affect that both hardens and distorts recall, consolidation with a one-way door, value-based forgetting with a fixed attention budget, self-narrative as a projection (not a node), a four-layer persona, and self-correction bounded by a whitelist, value ranges and anti-lag verification. Ships an MCP server, an HTTP+OpenAPI shim and a CLI so any agent can inject a budgeted memory block. 10.5k lines, 251 assertions, 18 mutation audits. Not a vector database; not production-ready.
 
 ---
 
@@ -103,6 +103,49 @@ memory-palace cycle                                         # 会话结束：沉
 - 三种接入时机（注入/固化/反馈）、多库划分、**什么时候不该用**：[docs/AGENT_INTEGRATION.md](docs/AGENT_INTEGRATION.md)
 - agent 读得懂的约定：[AGENTS.md](AGENTS.md)
 
+## 看得见的记忆（这是最容易被忽略的一层）
+
+记忆系统改的是 prompt 里的一小段 —— **用户看不见**。「用了很久」和「根本没生效」在体验上完全一样。
+所以这里有三层可见物：
+
+**① 一行状态**（每次注入后，agent 用它交代「这次用了什么」）
+
+```bash
+memory-palace context --query "仓位怎么配" --status-only
+[记忆 6/9 · 钉死 2 · 147/900字 · 自述 rev1]
+```
+
+**② 终端视图**（谁最重要、谁最快被忘掉）
+
+```bash
+memory-palace view
+```
+```
+记忆宫殿 · 9 节点 / 3 边 / 墓碑 3 / 事件 12
+价值 flat（top1 占 15%）｜结构 isolated（孤立 67%）
+
+重要性              寿命      记忆
+██████████████ 1.55 29天     [复盘] 追高汉缆后逆板块阴跌，亏三个点，很后悔
+██████████···· 1.14 钉死      [硬规则] 禁止绝对化措辞，所有判断都带概率
+██████████···· 1.14 74天     [仓位] 半凯利仓位：单笔不超过总资金三分之一
+██████████···· 1.14 极稳（>5年）  [硬规则] 风险提示必须放在末尾，不构成投资建议
+
+30 天内将跌破遗忘线：3 条（noise:1、lesson:win、loss:0914）
+已遗忘：noise:2、old:1、tmp:1
+```
+
+**③ HTML 面板**（遗忘是*怎么*发生的）
+
+```bash
+memory-palace render --out palace.html    # 自包含单文件，双击即开，无 CDN/无图片
+```
+
+含四块：记忆卡片（重要度 + 剩余寿命 + 可靠度）、**未来 60 天衰减曲线**（钉死的是平线）、
+注意力份额、墓碑（被主动放下的，仍可溯源）。
+
+三条读法：条形长但寿命短 = 现在很亮但很快会忘（如果不重要，这是对的）；
+曲线最先触底的就是系统认为最该放手的；墓碑不是失败，是取舍 —— 全部保留等于没有取舍。
+
 ## 十个机制，以及它们各自守住的不变量
 
 | 模块 | 管什么 | 关键不变量 |
@@ -133,7 +176,7 @@ memory-palace cycle                                         # 会话结束：沉
 
 ```bash
 python -m memory_palace.demo        # 215 项断言，18 条突变审计
-python tests/test_cli.py            # 16 项 CLI 契约
+python tests/test_cli.py            # 21 项 CLI 契约（含展现层）
 python tests/test_integrations.py   # 15 项 MCP / HTTP 协议层契约
 ```
 
@@ -190,12 +233,13 @@ memory_palace/
   selfcorrect.py   自修正（白名单 / 值域 / 冷却 / 回滚 / 抗滞后）
   semantics.py     语义检索（多义词裁决 + 词典自增长）
   palace.py        顶层编排（每轮固定次序）
-  cli.py           命令行：remember / context / cycle / outcome / explain
+  cli.py           命令行：remember / context / view / render / cycle / outcome / explain
+  render.py        展现层：状态行 / 终端视图 / 自包含 HTML 面板（衰减曲线）
   mcp_server.py    MCP 服务（stdio，8 个工具）—— Claude Code / Codex / Cursor / Cline 等通用
   http_api.py      本地 HTTP + OpenAPI 3.0 —— Dify / Coze / n8n / GPT Actions 通用
   demo.py          20+1 幕剧本与自测（215 项断言 + 18 条突变审计）
 examples/quickstart.py
-tests/test_cli.py            CLI 契约（16 项：退出码 / 预算 / 无幽灵 / 空库不自修正）
+tests/test_cli.py            CLI 契约（21 项：退出码 / 预算 / 无幽灵 / 空库不自修正 / 三层展现）
 tests/test_integrations.py   MCP 与 HTTP 协议层契约（15 项：握手 / 工具 / 错误语义 / OpenAPI）
 docs/ARCHITECTURE.md         设计细节与次序的理由
 docs/INTEGRATIONS.md         各宿主配置：Claude Code / Codex / Cursor / Dify / Coze / n8n / LangChain…

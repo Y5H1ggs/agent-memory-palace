@@ -120,6 +120,48 @@ def main() -> None:
         bad = run(store, "style", "observe")
         check("参数缺失给出用法错误退出码", bad.returncode == 2, str(bad.returncode))
 
+        # ★ 展现层：用户必须能看见「这次用了几条 / 谁快被忘掉 / 遗忘长什么样」
+        status = run(store, "context", "--query", "仓位", "--status-only")
+        line = status.stdout.strip()
+        check(
+            "context --status-only 只输出一行、且以 [记忆 开头（可贴给用户看）",
+            status.returncode == 0 and len(line.splitlines()) == 1 and line.startswith("[记忆"),
+            line,
+        )
+
+        view = run(store, "view")
+        check(
+            "view 给出重要度条形、剩余寿命与遗忘预警",
+            view.returncode == 0 and "寿命" in view.stdout and "遗忘线" in view.stdout,
+            view.stdout.splitlines()[2] if view.stdout else "",
+        )
+
+        out = os.path.join(tmp, "palace.html")
+        rendered = run(store, "render", "--out", out)
+        html = open(out, encoding="utf-8").read() if os.path.exists(out) else ""
+        check(
+            "render 生成自包含 HTML（有卡片与衰减曲线，无外链）",
+            rendered.returncode == 0
+            and "<article" in html
+            and "<svg" in html
+            and "衰减曲线" in html
+            and "http" not in html.split("<style>")[0],
+            f"{len(html.encode())} 字节",
+        )
+        check(
+            "HTML 里有墓碑区与自述章节（被遗忘的也看得见）",
+            "墓碑" in html and "自述" in html,
+        )
+
+        empty = os.path.join(tmp, "empty.json")
+        run(empty, "init")
+        empty_snap = json.loads(run(empty, "status", "--json").stdout)
+        check(
+            "空库的结构健康是 empty，而不是被误判成「单枢纽」",
+            empty_snap["structure_health"] == "empty",
+            empty_snap["structure_health"],
+        )
+
     print("\nCLI 契约自测通过 ✅")
 
 

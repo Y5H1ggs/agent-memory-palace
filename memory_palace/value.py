@@ -212,6 +212,8 @@ class ValueModel:
     def structure_health(self, struct: dict[str, float]) -> str:
         """结构健康与价值健康分开判：一个系统可以「价值有梯度」但「结构是散的」。"""
         cfg = self.config
+        if struct.get("components", 0.0) <= 0.0:
+            return "empty"  # 没有节点时不能说它「单枢纽」，那是把空库判成病
         if struct.get("components", 0.0) <= 1.0:
             return "connected" if struct.get("degree_entropy", 0.0) >= cfg.structure_hub_below else "hub"
         if struct.get("isolated_share", 0.0) >= cfg.structure_isolated_warn:
