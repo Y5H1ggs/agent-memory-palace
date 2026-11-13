@@ -1,0 +1,1357 @@
+"""palace.py - 顶层编排：把情感、沉淀、遗忘、叙事、风格、反思串成一个可运行的生命周期。
+
+每轮固定顺序：
+  风格结算 → 沉淀 → 拼命抓住（预算）→ 遗忘 → 自述 → 人格结算 → 反思 → 自修正
+
+次序都是刻意排的：沉淀必须早于 GC，否则刚要结晶的碎片会先被扫走；
+「抓住」必须早于 GC，否则想留的留不下；自述必须晚于 GC，否则会讲到已经不在的东西；
+人格结算排在自述之后，因为它要读「这一轮讲了什么故事」来判断自己有没有变；
+反思必须最后，才看得见本轮全部事件；自修正读的就是这份反思，且只能在它之后 ——
+先验旧账再结新账，否则新修正会叠在未验证的假设上。
+
+写入侧还有一件容易被忽略的事：情绪不是调用方拍出来的数字。
+remember() 不传 valence / arousal 时走评价器（文本依据），运行时用 feel_outcome()
+从结果反推 —— 两个数永远带着来源，可以追问「它凭什么发烫」。
+"""
+from __future__ import annotations
+
+import os
+import threading
+from collections import Counter
+from typing import Any
+
+from .affect import AffectEngine
+from .consolidation import ConsolidationEngine, ConsolidationResult, Summarizer
+from .core import (
+    DAY,
+    WRITE_STATS,
+    Clock,
+    Event,
+    MemoryGraph,
+    MemoryNode,
+    PalaceConfig,
+    atomic_write_json,
+    dataclass_field_names,
+    read_json,
+    wall_clock,
+)
+from .logic import LogicGraph, Relation
+from .memory_model import MemoryModel, classify, kind_spec
+from .narrative import NarrativeEngine, NarrativeRevision
+from .persona import (
+    Amendment,
+    Foundation,
+    Persona,
+    PersonaEngine,
+    PersonaRevision,
+    PersonalityEngine,
+    TraitSpec,
+    default_foundation,
+    drift_report,
+)
+from .reflection import ReflectionEngine, ReflectionReport
+from .selfcorrect import SelfCorrector
+from .semantics import Encoder, SemanticIndex
+from .style import StyleEngine
+from .value import ValueModel
+
+STATE_VERSION = 5
+# v4 快照没有叙事热度与情绪来源字段，但节点结构兼容（缺字段走默认值），可直接迁移。
+SUPPORTED_STATE_VERSIONS = (4, 5)
+
+# amend_foundation 的哨兵：traits={"__remove__": ["playfulness"]} 表示删除维度
+_REMOVE = "__remove__"
+
+
+class MemoryPalace:
+    def __init__(
+        self,
+        path: str | None = None,
+        clock: Clock | None = None,
+        config: PalaceConfig | None = None,
+        summarizer: Summarizer | None = None,
+        encoder: Encoder | None = None,
+        autosave: bool = False,
+    ) -> None:
+        self._lock = threading.RLock()
+        self._clock: Clock = clock or wall_clock
+        self._config = config or PalaceConfig()
+        self._summarizer = summarizer
+        self._autosave = autosave
+        self._path = path
+
+        self.graph = MemoryGraph()
+        self.style = StyleEngine(self._config)
+        self.semantics = SemanticIndex(encoder, config=self._config)
+        self.consolidation = ConsolidationEngine(
+            self._config, summarizer, vector_lookup=self._vector_of
+        )
+        self.reflection = ReflectionEngine(self._config)
+        self.affect = AffectEngine(self._config)
+        self.logic = LogicGraph()
+        self.value = ValueModel(self._config)
+        self.narrative = NarrativeEngine(self._config)
+        # 人格三层：基座（只读）→ 人格（生长）→ 人设（可选可换）
+        self.foundation = default_foundation(0.0)
+        self.personality = PersonalityEngine(self._config, self.foundation)
+        self.persona = PersonaEngine(self._config)
+        self.memory = MemoryModel(self._config)
+        self.corrector = SelfCorrector(self._config)
+        self.events: list[Event] = []
+        self.tombstone: dict[str, MemoryNode] = {}
+        self.last_report: dict[str, Any] | None = None
+        self.last_gc: list[dict[str, Any]] = []
+        # None = 本轮根本没抓过（不能据此判「预算不足」）；[] = 抓过但一条没抓到。
+        self._last_grasp: list[dict[str, Any]] | None = None
+        self._last_persona_health: tuple[str, bool, bool] | None = None
+
+        if path and os.path.exists(path):
+            self._load_unlocked(path, config_override=config)
+
+    def now(self) -> float:
+        return self._clock()
+
+    def _vector_of(self, node: MemoryNode) -> list[float] | None:
+        """沉淀聚类取向量；未建索引的节点按需补建，缺了就诚实返回 None。"""
+        vec = self.semantics.vector(node.name)
+        if vec is None:
+            try:
+                self.semantics.upsert(node)
+            except ValueError:
+                return None
+            vec = self.semantics.vector(node.name)
+        return vec
+
+    # ---------- 内部工具 ----------
+
+    def _log(self, kind: str, payload: dict[str, Any] | None = None, ts: float | None = None) -> None:
+        self.events.append(Event(ts if ts is not None else self.now(), kind, payload or {}))
+        self._trim_events()
+
+    def _trim_events(self) -> None:
+        limit = self._config.max_events
+        if len(self.events) > limit:
+            self.events = self.events[-limit:]
+
+    def _maybe_save(self) -> bool:
+        """自动保存失败不得炸穿主流程，但必须留下可观测的痕迹。"""
+        if not (self._autosave and self._path):
+            return True
+        try:
+            self._save_unlocked(self._path)
+            return True
+        except OSError as exc:
+            self._log("save_failed", {"path": self._path, "error": str(exc)})
+            return False
+
+    # ---------- 写入与检索 ----------
+
+    def remember(
+        self,
+        name: str,
+        content: str,
+        tags: tuple[str, ...] = (),
+        tier: str = "event",
+        pinned: bool = False,
+        origin: str = "external",
+        valence: float | None = None,
+        arousal: float | None = None,
+        kind: str = "",
+    ) -> MemoryNode:
+        """写入一条记忆。情绪是**写入时**的属性，不是事后贴的标签。
+
+        不传 valence / arousal 时，由评价器从内容与标签推断 —— 这是「情绪从哪来」
+        的答案：不是凭空一个 0.9，而是「因为文本里出现了『重挫』和『极其』」。
+        显式传值永远优先，且不会被评价器覆盖。
+
+        kind 决定它属于哪种记忆（工作/情景/语义/程序/身份），
+        因而决定它的寿命量级与能否被遗忘。不填就按属性推断。
+        """
+        with self._lock:
+            now = self.now()
+            node = MemoryNode(
+                name=name,
+                content=content,
+                tier=tier,
+                tags=tuple(tags),
+                created_at=now,
+                last_accessed=now,
+                pinned=pinned,
+                origin=origin,
+                affect=self.affect.blank(now),
+                kind=kind,
+            )
+            if valence is not None or arousal is not None:
+                v = 0.0 if valence is None else float(valence)
+                a = 0.0 if arousal is None else float(arousal)
+                self.affect.feel(node.affect, now, v, a)
+                node.affect.source = "explicit" if (v or a) else "neutral"
+            else:
+                appraisal = self.affect.appraise(content)
+                self.affect.feel_appraisal(node.affect, now, appraisal)
+                if appraisal.drivers:
+                    self._log(
+                        "appraise",
+                        {"name": name, **appraisal.to_dict()},
+                        now,
+                    )
+            self.memory.enroll(node)
+            node.validate()  # 类型名拼错必须当场炸
+            self.graph.add_node(node)
+            self.semantics.upsert(node)
+            self._maybe_save()
+            return node
+
+    # ---------- 情感 ----------
+
+    def feel(self, name: str, valence: float, arousal: float) -> MemoryNode | None:
+        """给一条已存在的记忆追加情绪。注意：这**不会**强化它，只改它的衰减速度。"""
+        with self._lock:
+            node = self.graph.get(name)
+            if node is None:
+                return None
+            now = self.now()
+            self.affect.feel(node.affect, now, valence, arousal)
+            self._log(
+                "feel",
+                {"name": name, "valence": node.affect.valence, "arousal": node.affect.arousal},
+                now,
+            )
+            self._maybe_save()
+            return node
+
+    def feel_outcome(self, name: str, outcome: str) -> MemoryNode | None:
+        """运行时结果反馈：止损兑现 / 被反证 / 顺利想起 —— 情绪由此而来。
+
+        与 `feel` 一样，只改情绪档案，**不强化记忆**（不碰 base_weight / last_access）。
+        """
+        with self._lock:
+            node = self.graph.get(name)
+            if node is None:
+                return None
+            now = self.now()
+            self.affect.feel_outcome(node.affect, now, outcome)
+            self._log(
+                "feel_outcome",
+                {
+                    "name": name,
+                    "outcome": outcome,
+                    "valence": node.affect.valence,
+                    "arousal": node.affect.arousal,
+                    "drivers": list(node.affect.drivers),
+                },
+                now,
+            )
+            self._maybe_save()
+            return node
+
+    def reappraise(self, name: str, valence: float) -> MemoryNode | None:
+        """重估：改的是「现在怎么看」，不是「当时发生了什么」。内容与强度都不动。"""
+        with self._lock:
+            node = self.graph.get(name)
+            if node is None:
+                return None
+            now = self.now()
+            before = node.affect.valence
+            self.affect.reappraise(node.affect, now, valence)
+            self._log(
+                "reappraise",
+                {"name": name, "from": before, "to": valence, "content_intact": True},
+                now,
+            )
+            self._maybe_save()
+            return node
+
+    # ---------- 逻辑关联 ----------
+
+    def assert_relation(
+        self,
+        src: str,
+        dst: str,
+        kind: str | Relation,
+        strength: float = 1.0,
+    ) -> None:
+        """声明一条逻辑关系。两端必须真实存在 —— 悬空断言一律拒绝。"""
+        with self._lock:
+            for name in (src, dst):
+                if name not in self.graph:
+                    raise KeyError(f"关系端点不存在: {name}")
+            now = self.now()
+            edge = self.logic.assert_relation(src, dst, kind, strength, now)
+            self._log(
+                "assert_relation",
+                {
+                    "src": edge.src,
+                    "dst": edge.dst,
+                    "kind": edge.kind,
+                    "strength": round(edge.strength, 6),
+                },
+                now,
+            )
+            self._maybe_save()
+
+    def support_of(self, name: str) -> float:
+        """这条记忆有多少凭据。孤立碎片 = 0，孤证不立不是修辞。"""
+        with self._lock:
+            return self.logic.support(name)
+
+    def consequences(self, name: str, max_hops: int | None = None) -> dict[str, float]:
+        """从它出发能推出什么、强度多少。"""
+        with self._lock:
+            hops = self._config.logic_max_hops if max_hops is None else max_hops
+            return self.logic.closure(name, max_hops=hops, hop_decay=self._config.logic_hop_decay)
+
+    # ---------- 自我叙事 ----------
+
+    def tell(self) -> NarrativeRevision:
+        """让系统把此刻的自己讲一遍，并如实交出它放下了什么。"""
+        with self._lock:
+            revision = self._narrate_unlocked(self.now())
+            self._maybe_save()
+            return revision
+
+    def narrative_head(self) -> dict[str, Any] | None:
+        with self._lock:
+            head = self.narrative.head
+            return head.to_dict() if head else None
+
+    def importance_of(self, name: str) -> dict[str, float] | None:
+        """一条记忆为什么值得留 / 该被放手：四个分量逐一列出。"""
+        with self._lock:
+            node = self.graph.get(name)
+            if node is None:
+                return None
+            return self.value.importance(node, self.now(), self.logic.support(name))
+
+    def entropy(self) -> dict[str, Any]:
+        """「我在乎的东西」的分布 + 图本身的形状：全平=什么都无所谓，过陡=只押一件事，
+        全是孤岛=记下了却彼此无关。三个读数分开报，不合成一个自我安慰的总分。"""
+        with self._lock:
+            now = self.now()
+            assessment = self.value.assess(self.graph, now, self.logic.support_map())
+            dist = self.value.distribution(assessment)
+            struct = self.value.structural(self.graph, now)
+            return {
+                **dist,
+                "structure": struct,
+                "health": self.value.health(dist),
+                "structure_health": self.value.structure_health(struct),
+            }
+
+    def semantic_explain(self, text: str) -> dict[str, Any]:
+        """这条查询为什么命中这些概念？多义词被分给了谁？哪些词是从语料学来的？"""
+        with self._lock:
+            self.semantics.sync(self.graph)
+            return self.semantics.explain(text)
+
+    def age(self, name: str, days: float) -> MemoryNode | None:
+        """把某条记忆的最后访问时间往回拨（管理/测试用）。"""
+        with self._lock:
+            node = self.graph.get(name)
+            if node is not None:
+                node.last_accessed -= days * DAY
+            return node
+
+    def _score_components(
+        self, query: str, query_tags: tuple[str, ...], now: float
+    ) -> list[dict[str, Any]]:
+        """三路打分的拆解：语义 / 标签 / 时近。公开给 score_breakdown，保证可解释。"""
+        cfg = self._config
+        wanted = set(query_tags)
+        text = (query or "").strip()
+        if text:
+            self.semantics.sync(self.graph)  # 语料变了先重学词典，再检索
+        sem_scores = self.semantics.scores(text) if text else {}
+        rows: list[dict[str, Any]] = []
+        for node in self.graph.all_nodes():
+            sem = sem_scores.get(node.name, 0.0)
+            tag = len(wanted & set(node.tags)) / max(1, len(wanted)) if wanted else 0.0
+            rec = min(1.0, max(0.0, node.effective_weight(now)))
+            total = (
+                cfg.semantic_alpha * sem
+                + cfg.semantic_tag_beta * tag
+                + cfg.semantic_recency_gamma * rec
+            )
+            rows.append(
+                {
+                    "name": node.name,
+                    "score": round(total, 6),
+                    "semantic": round(sem, 6),
+                    "tag": round(tag, 6),
+                    "recency": round(rec, 6),
+                }
+            )
+        rows.sort(key=lambda r: (-r["score"], r["name"]))
+        return rows
+
+    def score_breakdown(
+        self, query: str, query_tags: tuple[str, ...] = (), top_k: int | None = None
+    ) -> list[dict[str, Any]]:
+        """为什么这条记忆被召回？三路分量逐一列出，不让人对着一个数字猜。"""
+        with self._lock:
+            rows = self._score_components(query, query_tags, self.now())
+            return rows[:top_k] if top_k else rows
+
+    def recall(
+        self,
+        names: list[str] | None = None,
+        query_tags: tuple[str, ...] = (),
+        limit: int = 8,
+        query: str | None = None,
+        min_score: float | None = None,
+    ) -> list[MemoryNode]:
+        """三种入口：精确名字 / 语义查询 / 标签。语义与标签可叠加为混合打分。"""
+        with self._lock:
+            now = self.now()
+            retrieval = "names"
+            top_score = 0.0
+            decisive: list[str] = []
+
+            if names is not None:
+                # 同一节点在名单里出现多次，只能强化一次。
+                hits = [self.graph.get(n) for n in dict.fromkeys(names)]
+                hits = [n for n in hits if n is not None]
+            else:
+                text = (query or "").strip()
+                gate = self._config.semantic_min_score if min_score is None else min_score
+                if not text and not query_tags:
+                    # 无查询条件 = 按显著度召回，等价于「现在最容易被想起的是什么」。
+                    # 这里才用得上记忆类型偏向：没有具体目标时，手上的与身份性的先浮上来。
+                    retrieval = "salience"
+                    ranked = sorted(
+                        self.graph.all_nodes(),
+                        key=lambda n: (-n.effective_weight(now) * self.memory.bias(n), n.name),
+                    )[:limit]
+                    hits = ranked
+                    top_score = (
+                        round(hits[0].effective_weight(now) * self.memory.bias(hits[0]), 6)
+                        if hits
+                        else 0.0
+                    )
+                else:
+                    retrieval = "semantic" if text else "tags"
+                    rows = self._score_components(text, query_tags, now)
+                    above = [r for r in rows if r["score"] >= gate]
+                    # 相对门槛：低于最高分一半的命中只是「字面沾边」，一并挡掉。
+                    floor = above[0]["score"] * self._config.semantic_relative_floor if above else 0.0
+                    kept = [r for r in above if r["score"] >= floor][:limit]
+                    hits = [self.graph.get(r["name"]) for r in kept]
+                    hits = [n for n in hits if n is not None]
+                    top_score = kept[0]["score"] if kept else 0.0
+                    # 语义「独有贡献」：去掉语义分量就过不了门槛 —— 这才是语义真的在干活。
+                    for r in kept:
+                        without_sem = r["score"] - self._config.semantic_alpha * r["semantic"]
+                        if r["semantic"] > 0 and without_sem < gate <= r["score"]:
+                            decisive.append(r["name"])
+
+            if not hits:
+                self._log(
+                    "miss",
+                    {"query_tags": list(query_tags), "query": query, "retrieval": retrieval},
+                    now,
+                )
+                return []
+
+            hit_names = [n.name for n in hits]
+
+            # 顺理成章：想起一件事，沿着逻辑关系想起另一件。
+            # 这条路和语义余弦不是一回事 —— 它读的是「推得出」，不是「长得像」。
+            spread_hits: list[str] = []
+            if len(self.logic) and self._config.logic_max_hops > 0:
+                activation = self.logic.spread(
+                    hit_names,
+                    max_hops=self._config.logic_max_hops,
+                    hop_decay=self._config.logic_hop_decay,
+                )
+                extra = sorted(
+                    (
+                        (act, name)
+                        for name, act in activation.items()
+                        if act >= self._config.logic_spread_threshold and name not in hit_names
+                    ),
+                    key=lambda pair: (-pair[0], pair[1]),
+                )
+                room = max(0, limit - len(hits))
+                for _act, name in extra[:room]:
+                    node = self.graph.get(name)
+                    if node is not None:
+                        hits.append(node)
+                        spread_hits.append(name)
+                hit_names = [n.name for n in hits]
+
+            for node in hits:
+                node.access(now, self._config.access_gain)
+            self.graph.coactivate(hit_names, now)
+            self._log(
+                "recall",
+                {
+                    "names": hit_names,
+                    "retrieval": retrieval,
+                    "top_score": top_score,
+                    "semantic_only": decisive,
+                    "spread_hits": spread_hits,
+                    "core_hits": [n.name for n in hits if n.tier in ("core", "fact")],
+                },
+                now,
+            )
+            self._maybe_save()
+            return hits
+
+    def observe_style(
+        self,
+        key: str,
+        statement: str,
+        signal: float,
+        weight: float = 1.0,
+        opposes: tuple[str, ...] = (),
+        pinned_by_user: bool = False,
+    ) -> None:
+        with self._lock:
+            self.style.observe(
+                key, statement, signal, self.now(), weight, opposes, pinned_by_user
+            )
+            self._maybe_save()
+
+    def active_style(self) -> list[str]:
+        """风格固化的落地点：只有真正生效的条目才能影响对外输出。"""
+        with self._lock:
+            return self.style.active_statements(self.now())
+
+    def adjudications(self, limit: int = 10) -> list[dict[str, Any]]:
+        """裁决史：每一次「谁赢、为什么赢、差多少」都可回溯。"""
+        with self._lock:
+            return [a.to_dict() for a in self.style.adjudication_log[-limit:]]
+
+    def pin_style(self, key: str, statement: str = "") -> None:
+        """人工裁决入口：钉死一条，系统据此抑制与它对立的条目。证据不动。"""
+        with self._lock:
+            self.style.observe(
+                key, statement or key, +1.0, self.now(), weight=0.0, pinned_by_user=True
+            )
+            self._log("style_pin", {"key": key}, self.now())
+            self._maybe_save()
+
+    # ---------- 基础人格：宪法层，系统只读 ----------
+
+    def found(
+        self,
+        traits: dict[str, dict[str, Any]] | None = None,
+        axioms: tuple[str, ...] | None = None,
+        author: str = "user",
+        seal: bool = False,
+        replace: bool = True,
+    ) -> Foundation:
+        """用户构建基础人格。这是**唯一**能凭空造出基座的入口。
+
+        replace=False 时在现有基座上加维度（用于渐进构建），否则整体替换。
+        """
+        with self._lock:
+            now = self.now()
+            if traits is None:
+                foundation = default_foundation(now, author)
+                # 只给公理不给维度，是最常见的用法；这里必须真的生效，不能静默吞掉
+                if axioms is not None:
+                    foundation.axioms = tuple(axioms)
+                foundation.sealed = seal
+            else:
+                specs: dict[str, TraitSpec] = {}
+                for key, raw in traits.items():
+                    if isinstance(raw, TraitSpec):
+                        specs[key] = raw
+                    else:
+                        known = {
+                            k: v
+                            for k, v in raw.items()
+                            if k in dataclass_field_names(TraitSpec)
+                        }
+                        known.setdefault("label", key)
+                        known.setdefault("baseline", 0.5)
+                        specs[key] = TraitSpec(**known)
+                merged = {} if replace else dict(self.foundation.traits)
+                merged.update(specs)
+                foundation = Foundation(
+                    version=1 if replace else self.foundation.version + 1,
+                    created_at=now if replace else self.foundation.created_at,
+                    author=author,
+                    axioms=tuple(
+                        axioms
+                        if axioms is not None
+                        else (() if replace else self.foundation.axioms)
+                    ),
+                    traits=merged,
+                    amendments=(
+                        [] if replace else list(self.foundation.amendments)
+                    ),
+                    sealed=seal,
+                )
+            foundation.validate()
+            self.foundation = foundation
+            self.personality.rebuild(foundation)
+            self._log(
+                "found",
+                {
+                    "version": foundation.version,
+                    "author": author,
+                    "traits": len(foundation.traits),
+                    "axioms": len(foundation.axioms),
+                    "replaced": replace,
+                },
+                now,
+            )
+            self._maybe_save()
+            return foundation
+
+    def amend_foundation(
+        self,
+        reason: str,
+        traits: dict[str, dict[str, Any]] | None = None,
+        axioms: tuple[str, ...] | None = None,
+        author: str = "user",
+        force: bool = False,
+    ) -> Foundation:
+        """修宪。必须给理由；封印状态下必须显式 force —— 让「改基础」永远是一次郑重动作。"""
+        with self._lock:
+            if not reason.strip():
+                raise ValueError("修改基础人格必须给出理由")
+            if self.foundation.sealed and not force:
+                raise PermissionError("基础人格已封印，需显式 force 才能修改")
+            now = self.now()
+            changes: list[dict[str, Any]] = []
+            new_specs = dict(self.foundation.traits)
+            payload = dict(traits or {})
+            removals = list(payload.pop(_REMOVE, []) or [])
+            for key, raw in payload.items():
+                old = new_specs.get(key)
+                spec = (
+                    raw
+                    if isinstance(raw, TraitSpec)
+                    else TraitSpec(
+                        **{
+                            k: v
+                            for k, v in raw.items()
+                            if k in dataclass_field_names(TraitSpec)
+                        }
+                    )
+                )
+                if old is not None and old.locked and spec.floor < old.floor:
+                    raise PermissionError(f"{key} 已锁定，不得下调下界")
+                changes.append(
+                    {
+                        "key": key,
+                        "from": old.to_dict() if old else None,
+                        "to": spec.to_dict(),
+                    }
+                )
+                new_specs[key] = spec
+            for key in removals:
+                if key not in new_specs:
+                    raise KeyError(f"要删除的维度不存在: {key}")
+                if new_specs[key].locked:
+                    raise PermissionError(f"{key} 已锁定，不得删除")
+                changes.append(
+                    {"key": key, "from": new_specs.pop(key).to_dict(), "to": None}
+                )
+            foundation = Foundation(
+                version=self.foundation.version + 1,
+                created_at=self.foundation.created_at,
+                author=author,
+                axioms=tuple(axioms if axioms is not None else self.foundation.axioms),
+                traits=new_specs,
+                amendments=list(self.foundation.amendments)
+                + [
+                    Amendment(
+                        version=self.foundation.version + 1,
+                        at=now,
+                        author=author,
+                        reason=reason,
+                        changes=changes,
+                    )
+                ],
+                sealed=self.foundation.sealed,
+            )
+            foundation.validate()
+            self.foundation = foundation
+            self.personality.rebuild(foundation)
+            self._log(
+                "amend_foundation",
+                {"version": foundation.version, "reason": reason, "changes": changes},
+                now,
+            )
+            self._maybe_save()
+            return foundation
+
+    def foundation_status(self) -> dict[str, Any]:
+        with self._lock:
+            f = self.foundation
+            return {
+                "version": f.version,
+                "author": f.author,
+                "sealed": f.sealed,
+                "axioms": list(f.axioms),
+                "traits": {k: v.to_dict() for k, v in f.traits.items()},
+                "amendments": [a.to_dict() for a in f.amendments],
+            }
+
+    # ---------- 人格：逐步构筑 ----------
+
+    def observe_trait(
+        self, key: str, signal: float, weight: float = 1.0
+    ) -> dict[str, Any]:
+        """一条证据推动人格一格。返回位移账目（含是否被基座包络挡回）。"""
+        with self._lock:
+            now = self.now()
+            result = self.personality.observe(key, signal, now, weight)
+            if result["applied"] and result["delta"]:
+                self._log("trait_shift", result, now)
+            elif not result["applied"]:
+                self._log("trait_blocked", result, now)
+            self._maybe_save()
+            return result
+
+    def trait_values(self) -> dict[str, float]:
+        with self._lock:
+            return self.personality.values()
+
+    def drift(self) -> dict[str, Any]:
+        """人格离基座多远、走得多快。距离与速度是两个轴，不能合成一个数。"""
+        with self._lock:
+            return drift_report(
+                self.foundation, self.personality, self.now(), self._config
+            )
+
+    # ---------- 人设：建立、完善、变更 ----------
+
+    def define_persona(
+        self,
+        key: str,
+        name: str,
+        role: str,
+        voice: dict[str, float] | None = None,
+        emphasis: tuple[str, ...] = (),
+        suppress: tuple[str, ...] = (),
+        boundaries: tuple[str, ...] = (),
+        author: str = "user",
+    ) -> Persona:
+        with self._lock:
+            now = self.now()
+            persona = Persona(
+                key=key,
+                name=name,
+                role=role,
+                voice={k: float(v) for k, v in (voice or {}).items()},
+                emphasis=tuple(emphasis),
+                suppress=tuple(suppress),
+                boundaries=tuple(boundaries),
+                author=author,
+                created_at=now,
+                updated_at=now,
+            )
+            for dim in list(persona.voice) + list(persona.emphasis) + list(persona.suppress):
+                if dim not in self.personality.traits:
+                    raise KeyError(f"人设引用了人格里不存在的维度: {dim}")
+            self.persona.define(persona, now)
+            self._log(
+                "persona_define",
+                {"key": key, "revision": persona.revision, "role": role},
+                now,
+            )
+            self._maybe_save()
+            return persona
+
+    def activate_persona(
+        self, key: str, reason: str = "", author: str = "user"
+    ) -> PersonaRevision:
+        """换一张面孔。理由会被记下 —— 无理由频繁切换会被 churn 判据抓出来。"""
+        with self._lock:
+            now = self.now()
+            revision = self.persona.activate(key, now, reason, author)
+            self._log("persona_activate", revision.to_dict(), now)
+            self._maybe_save()
+            return revision
+
+    def rollback_persona(self, rev: int, author: str = "user") -> PersonaRevision:
+        with self._lock:
+            now = self.now()
+            revision = self.persona.rollback(rev, now, author)
+            self._log("persona_rollback", revision.to_dict(), now)
+            self._maybe_save()
+            return revision
+
+    def persona_history(self, limit: int = 20) -> list[dict[str, Any]]:
+        with self._lock:
+            return [r.to_dict() for r in self.persona.revisions[-limit:]]
+
+    def persona_voice(self) -> dict[str, Any]:
+        """人设的落地点：此刻该用什么口径说话。没有这一层，人设就只是记账。"""
+        with self._lock:
+            return self.persona.voice(self.personality)
+
+    def suggest_persona(self) -> dict[str, Any]:
+        """完善人设的两条路：改人设求诚实，或喂证据求成长。系统不替人选。"""
+        with self._lock:
+            return self.persona.suggest(self.personality)
+
+    def persona_status(self) -> dict[str, Any]:
+        with self._lock:
+            now = self.now()
+            active = self.persona.active()
+            drift = drift_report(self.foundation, self.personality, now, self._config)
+            consistency = self.persona.consistency(self.personality)
+            churn = self.persona.churn(now, self._config.reflection_window_days)
+            return {
+                "foundation_version": self.foundation.version,
+                "foundation_sealed": self.foundation.sealed,
+                "traits": self.personality.values(),
+                "drift": drift,
+                "active_persona": active.to_dict() if active else None,
+                "personas": sorted(self.persona.personas),
+                "revisions": len(self.persona.revisions),
+                "consistency": consistency,
+                "churn": churn,
+            }
+
+    # ---------- 三个引擎的内部版本（供 run_cycle 复用） ----------
+
+    def _style_cycle_unlocked(self, now: float) -> list[Event]:
+        produced = self.style.run_cycle(now)
+        self.events.extend(produced)
+        self._trim_events()
+        return produced
+
+    def _consolidate_unlocked(self, now: float) -> ConsolidationResult:
+        result = self.consolidation.run(self.graph, now)
+        for name in result.created:
+            node = self.graph.get(name)
+            if node is not None:
+                node.kind = "semantic"  # 沉淀出来的结论属于语义记忆
+                self.semantics.upsert(node)  # 新结晶必须立刻可被语义检索到
+        self.events.extend(result.events)
+        self._trim_events()
+        return result
+
+    def _grasp_unlocked(self, now: float) -> list[dict[str, Any]]:
+        log = self.value.grasp(self.graph, now, self.logic.support_map())
+        self._last_grasp = log
+        if log:
+            self._log(
+                "grasp",
+                {
+                    "grabbed": [row["name"] for row in log],
+                    "spent": round(sum(row["spent"] for row in log), 4),
+                },
+                now,
+            )
+        return log
+
+    def _gc_unlocked(self, now: float) -> list[str]:
+        """遗忘变成一次有理由的取舍：每条记忆都拿到判决 + 理由 + 四个分量。
+
+        两步，且顺序不可换：
+          1. 先结算注意力 —— 工作记忆拿不住的、被挤出的，一律沉为情景记忆；
+          2. 再判价值 —— 类型规则优先于价值判断：身份记忆再轻也不参与 GC，
+             「我是谁」不是一条可以被时间冲掉的事实，它只能被修宪改写。
+        """
+        demoted = self.memory.evict_working(self.graph, now, self._config.forget_w)
+        if demoted:
+            self._log(
+                "memory_demote",
+                {"count": len(demoted), "names": [d["name"] for d in demoted]},
+                now,
+            )
+        decisions = self.value.gc_decisions(self.graph, now, self.logic.support_map())
+        victims: list[str] = []
+        protected: list[str] = []
+        for d in decisions:
+            if d["verdict"] != "forgotten":
+                continue
+            node = self.graph.get(d["name"])
+            kind = (node.kind or classify(node)) if node is not None else "episodic"
+            if not kind_spec(kind).forgettable:
+                d["verdict"] = "kept"
+                d["reason"] = "kind_protected"
+                protected.append(d["name"])
+            else:
+                victims.append(d["name"])
+        self.last_gc = decisions
+        for name in victims:
+            node = self.graph.get(name)
+            if node is not None:
+                self.tombstone[name] = node
+        self.graph.remove_nodes_from(victims)
+        for name in victims:
+            self.semantics.forget(name)  # 幽灵向量会让检索命中已死记忆
+        pruned = self.logic.prune(victims)  # 节点没了，指向它的断言也必须消失
+        self._log(
+            "gc",
+            {
+                "deleted": victims,
+                "scanned": len(self.graph) + len(victims),
+                "reasons": {
+                    d["name"]: d["reason"] for d in decisions if d["verdict"] == "forgotten"
+                },
+                "protected_by_kind": protected,
+                "pruned_relations": [list(p) for p in pruned],
+            },
+            now,
+        )
+        return victims
+
+    # ---------- 自述 ----------
+
+    def _reliability_map(self) -> dict[str, float]:
+        """可靠度 = 情绪造成的编码失真 × 争议折价。它不会随时间恢复。"""
+        contested = self.logic.contested()
+        out: dict[str, float] = {}
+        for node in self.graph.all_nodes():
+            base = node.affect.fidelity(self._config.affect_distortion)
+            penalty = 1.0 - 0.25 * contested.get(node.name, 0.0)
+            out[node.name] = round(max(0.0, base * penalty), 6)
+        return out
+
+    def _narrate_unlocked(self, now: float) -> NarrativeRevision:
+        assessment = self.value.assess(self.graph, now, self.logic.support_map())
+        revision = self.narrative.compose(
+            self.graph,
+            assessment,
+            reliability=self._reliability_map(),
+            contested=self.logic.contested(),
+            now=now,
+        )
+        self.narrative.apply_centrality(self.graph, revision, now)
+        self._log(
+            "narrate",
+            {
+                "rev": revision.rev,
+                "selected": len(revision.selected),
+                "dropped": len(revision.dropped),
+                "coherence": revision.coherence,
+                "reliability": revision.reliability,
+                "monopoly": revision.monopoly,
+            },
+            now,
+        )
+        return revision
+
+    def _persona_cycle_unlocked(self, now: float) -> dict[str, Any]:
+        """人格结算：只观测与记账，绝不自动改基座，也绝不自动换人设。
+
+        自动「纠正」漂移等于替用户决定他是谁 —— 这一步只报警，不动手。
+        """
+        report = drift_report(self.foundation, self.personality, now, self._config)
+        consistency = self.persona.consistency(self.personality)
+        churn = self.persona.churn(now, self._config.reflection_window_days)
+        health = (report["health"], consistency["consistent"], churn["unstable"])
+        if health != self._last_persona_health:
+            self._log(
+                "persona_health",
+                {
+                    "health": report["health"],
+                    "distance": report["distance"],
+                    "consistent": consistency["consistent"],
+                    "oversell": consistency["oversell"],
+                    "churn_unstable": churn["unstable"],
+                },
+                now,
+            )
+            self._last_persona_health = health
+        return {"drift": report, "consistency": consistency, "churn": churn}
+
+    def _memory_cycle_unlocked(self, now: float) -> list[dict[str, Any]]:
+        """工作记忆退场已并入 GC 第一步（顺序不可拆），此处只做只读回放。"""
+        return list(self.memory.last_evictions)
+
+    def _selfcorrect_unlocked(self, now: float, report: ReflectionReport) -> dict[str, Any]:
+        """自修正一轮：先验旧账，再结新账。
+
+        顺序不能反：正在验证的修正必须先结算，否则新修正会叠在未验证的假设上。
+        """
+        metrics = dict(report.metrics)
+        self.corrector.observe(metrics, now)  # 先攒样本，判决只读观察窗之后的
+        settled = self.corrector.verify(metrics, now, metrics_at=report.generated_at)
+        candidates, escalations = self.corrector.detect(metrics, now)
+        self.corrector.escalations = escalations
+        proposed = self.corrector.propose(candidates, metrics, now)
+        applied = [p for p in proposed if self.corrector.apply(p)]
+        produced = self.corrector.events(settled + applied, now)
+        if produced:
+            self.events.extend(produced)
+            self._trim_events()
+        if escalations:
+            self._log(
+                "selfcorrect_escalate",
+                {"items": [e.to_dict() for e in escalations]},
+                now,
+            )
+        return {"settled": settled, "applied": applied, "escalations": escalations}
+
+    def _reflect_unlocked(self, now: float) -> ReflectionReport:
+        assessment = self.value.assess(self.graph, now, self.logic.support_map())
+        dist = self.value.distribution(assessment)
+        struct = self.value.structural(self.graph, now)
+        head = self.narrative.head
+        grasp_log = self._last_grasp
+        grabbed = {row["name"] for row in (grasp_log or [])}
+        candidates = [
+            n
+            for n in self.graph.all_nodes()
+            if not n.pinned and n.tier != "trace" and not n.consolidated_into
+        ]
+        ungrabbed_share = (
+            1.0 - len(grabbed & {n.name for n in candidates}) / len(candidates)
+            if (candidates and grasp_log is not None)
+            else 0.0
+        )
+        report = self.reflection.run(
+            self.graph,
+            self.style,
+            self.events,
+            self.tombstone,
+            now,
+            context={
+                "logic_edges": len(self.logic),
+                "contested": len(self.logic.contested()),
+                "entropy": dist["entropy"],
+                "entropy_health": self.value.health(dist),
+                "top_share": dist["top_share"],
+                "top3_share": dist["top3_share"],
+                "structure": struct,
+                "structure_health": self.value.structure_health(struct),
+                "ungrabbed_share": round(ungrabbed_share, 6),
+                "narrative_coherence": head.coherence if head else None,
+                "narrative_reliability": head.reliability if head else None,
+                "narrative_monopoly": head.monopoly if head else None,
+                "foundation_version": self.foundation.version,
+                "persona_drift": drift_report(
+                    self.foundation, self.personality, now, self._config
+                ),
+                "persona_consistency": self.persona.consistency(self.personality),
+                "persona_churn": self.persona.churn(
+                    now, self._config.reflection_window_days
+                ),
+            },
+        )
+        if head is not None:
+            report.narrative = f"{report.narrative}｜{head.text}"
+        self.last_report = report.to_dict()
+        self._log(
+            "reflect",
+            {
+                "findings": len(report.findings),
+                "suggestions": len(report.suggestions),
+                "narrative": report.narrative,
+            },
+            now,
+        )
+        return report
+
+    # ---------- 对外引擎入口 ----------
+
+    def consolidate(self) -> ConsolidationResult:
+        with self._lock:
+            result = self._consolidate_unlocked(self.now())
+            self._maybe_save()
+            return result
+
+    def gc(self) -> list[str]:
+        with self._lock:
+            victims = self._gc_unlocked(self.now())
+            self._maybe_save()
+            return victims
+
+    def reflect(self) -> ReflectionReport:
+        with self._lock:
+            report = self._reflect_unlocked(self.now())
+            self._maybe_save()
+            return report
+
+    def self_correct(self) -> dict[str, Any]:
+        """手动触发一次自修正。只动白名单内的派生参数，基座与人设一律不碰。"""
+        with self._lock:
+            now = self.now()
+            if self.last_report is None:
+                report = self._reflect_unlocked(now)
+            else:
+                report = ReflectionReport(
+                    generated_at=now,
+                    window_days=self._config.reflection_window_days,
+                    metrics=dict(self.last_report.get("metrics", {})),
+                    findings=list(self.last_report.get("findings", [])),
+                    suggestions=list(self.last_report.get("suggestions", [])),
+                    narrative=str(self.last_report.get("narrative", "")),
+                )
+            result = self._selfcorrect_unlocked(now, report)
+            self._maybe_save()
+            return {
+                "applied": [p.to_dict() for p in result["applied"]],
+                "settled": [p.to_dict() for p in result["settled"]],
+                "escalations": [e.to_dict() for e in result["escalations"]],
+            }
+
+    def correction_status(self) -> dict[str, Any]:
+        with self._lock:
+            return self.corrector.status()
+
+    def memory_composition(self) -> dict[str, Any]:
+        with self._lock:
+            return self.memory.describe(self.graph)
+
+    def run_cycle(self) -> dict[str, Any]:
+        """一轮完整的认知代谢。返回摘要，不抛异常吞状态。"""
+        with self._lock:
+            now = self.now()
+            style_events = self._style_cycle_unlocked(now)
+            cons = self._consolidate_unlocked(now)
+            grasp_log = self._grasp_unlocked(now)
+            demoted: list[dict[str, Any]] = []
+            victims = self._gc_unlocked(now)
+            demoted = self._memory_cycle_unlocked(now)
+            revision = self._narrate_unlocked(now)
+            persona_state = self._persona_cycle_unlocked(now)
+            report = self._reflect_unlocked(now)
+            correction = self._selfcorrect_unlocked(now, report)
+            self._maybe_save()
+            return {
+                "at": now,
+                "style_events": [e.kind for e in style_events],
+                "consolidated": cons.created,
+                "grasped": [row["name"] for row in grasp_log],
+                "demoted": [d["name"] for d in demoted],
+                "forgotten": victims,
+                "nodes": len(self.graph),
+                "narrative": revision.to_dict(),
+                "persona": {
+                    "health": persona_state["drift"]["health"],
+                    "distance": persona_state["drift"]["distance"],
+                    "consistent": persona_state["consistency"]["consistent"],
+                },
+                "selfcorrect": {
+                    "applied": [p.pid for p in correction["applied"]],
+                    "settled": [f"{p.pid}:{p.status}" for p in correction["settled"]],
+                    "escalated": [e.code for e in correction["escalations"]],
+                },
+                "report": report.to_dict(),
+            }
+
+    def restore(self, name: str) -> MemoryNode | None:
+        """误删可回滚：从墓碑复活，并给记忆一次完整的重生权重。"""
+        with self._lock:
+            node = self.tombstone.pop(name, None)
+            if node is None:
+                return None
+            now = self.now()
+            node.base_weight = max(1.0, node.base_weight)
+            node.last_accessed = now
+            node.access_count += 1
+            self.memory.enroll(node)
+            self.graph.add_node(node)
+            self.semantics.upsert(node)
+            self._log("restore", {"name": name}, now)
+            self._maybe_save()
+            return node
+
+    def apply_suggestion(self, param: str, value: Any) -> Any:
+        """显式采纳反思建议。三个引擎共享同一 config 对象，改一处即全局生效。"""
+        with self._lock:
+            fields = dataclass_field_names(PalaceConfig)
+            if param not in fields:
+                raise KeyError(f"未知参数: {param}")
+            old = getattr(self._config, param)
+            setattr(self._config, param, value)
+            try:
+                self._config.validate()
+            except ValueError:
+                setattr(self._config, param, old)  # 拒绝非法值并回滚，不留半坏配置
+                raise
+            self._log("config_change", {"param": param, "from": old, "to": value})
+            self._maybe_save()
+            return old
+
+    # ---------- 快照与持久化 ----------
+
+    def snapshot(self) -> dict[str, Any]:
+        with self._lock:
+            now = self.now()
+            graph_nodes = self.graph.all_nodes()
+            tiers = Counter(n.tier for n in graph_nodes)
+            assessment = self.value.assess(self.graph, now, self.logic.support_map())
+            dist = self.value.distribution(assessment)
+            struct = self.value.structural(self.graph, now)
+            head = self.narrative.head
+            return {
+                "now": now,
+                "nodes": len(graph_nodes),
+                "edges": len(self.graph.edges()),
+                "tiers": dict(tiers),
+                "tombstone": len(self.tombstone),
+                "events": len(self.events),
+                "active_style": self.style.active_statements(now),
+                "style_rules": sorted(self.style.rules),
+                "style_conflicts": [list(p) for p in self.style.conflicts(now)],
+                "active_style_conflicts": [
+                    list(p) for p in self.style.active_conflicts(now)
+                ],
+                "pending_style_conflicts": self.style.pending_conflicts(now),
+                "adjudications": len(self.style.adjudication_log),
+                "semantic_indexed": len(self.semantics),
+                "semantic_ghosts": self.semantics.ghosts(self.graph),
+                "logic_edges": len(self.logic),
+                "logic_ghosts": [list(g) for g in self.logic.ghosts(self.graph.nodes())],
+                "contested": sorted(self.logic.contested()),
+                "entropy": dist["entropy"],
+                "attention": {
+                    "top_share": dist["top_share"],
+                    "top3_share": dist["top3_share"],
+                    "effective_n": dist["effective_n"],
+                },
+                "entropy_health": self.value.health(dist),
+                "structure": struct,
+                "structure_health": self.value.structure_health(struct),
+                "semantic_learned": {k: list(v) for k, v in self.semantics.learned.items()},
+                "durability": dict(WRITE_STATS),
+                "self_model_revision": head.rev if head else 0,
+                "narrative": head.to_dict() if head else None,
+                "narrative_stability": self.narrative.stability_of_story(),
+                "foundation": {
+                    "version": self.foundation.version,
+                    "sealed": self.foundation.sealed,
+                    "axioms": list(self.foundation.axioms),
+                },
+                "personality": self.personality.values(),
+                "persona_drift": drift_report(
+                    self.foundation, self.personality, now, self._config
+                ),
+                "persona": {
+                    "active": self.persona.active_key,
+                    "available": sorted(self.persona.personas),
+                    "revisions": len(self.persona.revisions),
+                    "voice": self.persona.voice(self.personality),
+                    "consistency": self.persona.consistency(self.personality),
+                    "churn": self.persona.churn(
+                        now, self._config.reflection_window_days
+                    ),
+                },
+                "memory_model": self.memory.describe(self.graph),
+                "selfcorrect": {
+                    "applied": sum(1 for p in self.corrector.patches if p.status == "kept"),
+                    "pending": [p.pid for p in self.corrector.patches if p.status == "pending"],
+                    "reverted": sum(
+                        1 for p in self.corrector.patches if p.status == "reverted"
+                    ),
+                    "blocked": sorted(self.corrector.blocked),
+                    "escalations": [e.code for e in self.corrector.escalations],
+                },
+                "last_report": self.last_report,
+            }
+
+    def _save_unlocked(self, path: str | None) -> None:
+        if not path:
+            raise ValueError("未指定持久化路径")
+        state = {
+            "version": STATE_VERSION,
+            "saved_at": self.now(),
+            "config": self._config.to_dict(),
+            "graph": self.graph.to_dict(),
+            "logic": self.logic.to_dict(),
+            "style": self.style.to_dict(),
+            "narrative": self.narrative.to_dict(),
+            "foundation": self.foundation.to_dict(),
+            "personality": self.personality.to_dict(),
+            "persona": self.persona.to_dict(),
+            "selfcorrect": self.corrector.to_dict(),
+            "events": [e.to_dict() for e in self.events],
+            "tombstone": [n.to_dict() for n in self.tombstone.values()],
+            "last_report": self.last_report,
+        }
+        atomic_write_json(path, state)
+        self._path = path
+
+    def save(self, path: str | None = None) -> str:
+        with self._lock:
+            target = path or self._path
+            self._save_unlocked(target)
+            return target
+
+    REQUIRED_STATE_KEYS: tuple[str, ...] = (
+        "version",
+        "config",
+        "graph",
+        "logic",
+        "style",
+        "narrative",
+        "foundation",
+        "personality",
+        "persona",
+        "selfcorrect",
+        "events",
+        "tombstone",
+        "last_report",
+    )
+
+    @classmethod
+    def _validate_state(cls, state: Any, path: str) -> None:
+        """损坏的快照绝不能被当成「空记忆系统」安静地继续跑。"""
+        if not isinstance(state, dict):
+            raise ValueError(f"快照顶层不是对象: {path}")
+        if state.get("version") not in SUPPORTED_STATE_VERSIONS:
+            raise ValueError(
+                f"快照版本不支持: {state.get('version')!r}"
+                f"（支持 {list(SUPPORTED_STATE_VERSIONS)}）@ {path}"
+            )
+        missing = [k for k in cls.REQUIRED_STATE_KEYS if k not in state]
+        if missing:
+            raise ValueError(f"快照缺少顶层键 {missing} @ {path}")
+        graph = state["graph"]
+        if not isinstance(graph, dict) or "nodes" not in graph or "edges" not in graph:
+            raise ValueError(f"快照 graph 结构损坏 @ {path}")
+
+    def _load_unlocked(
+        self, path: str, config_override: PalaceConfig | None = None
+    ) -> None:
+        state = read_json(path)
+        self._validate_state(state, path)
+        cfg = PalaceConfig.from_dict(state["config"])
+        if config_override is not None:
+            # 快照是权威，但显式传入的 config 代表用户的覆写意图，不能被静默吞掉。
+            override = config_override.to_dict()
+            for key in dataclass_field_names(PalaceConfig):
+                setattr(cfg, key, override[key])
+            cfg.validate()
+        self._config = cfg
+        self.graph = MemoryGraph.from_dict(state["graph"])
+        self.logic = LogicGraph.from_dict(state.get("logic"), valid=self.graph.nodes())
+        self.style = StyleEngine.from_dict(state["style"], cfg)
+        self.consolidation = ConsolidationEngine(
+            cfg, self._summarizer, vector_lookup=self._vector_of
+        )
+        self.reflection = ReflectionEngine(cfg)
+        self.affect = AffectEngine(cfg)
+        self.value = ValueModel(cfg)
+        self.narrative = NarrativeEngine.from_dict(state.get("narrative"), cfg)
+        # 顺序不能反：人格的包络由基座给出，人设的维度合法性由人格给出。
+        self.foundation = Foundation.from_dict(state["foundation"])
+        self.personality = PersonalityEngine.from_dict(
+            state.get("personality"), cfg, self.foundation
+        )
+        self.persona = PersonaEngine.from_dict(state.get("persona"), cfg)
+        self._last_persona_health = None
+        # 这两个引擎持有 config 引用，必须用新加载的 cfg 重建，否则原子替换配置后它们还在改旧对象
+        self.memory = MemoryModel(cfg)
+        self.corrector = SelfCorrector.from_dict(state.get("selfcorrect"), cfg)
+        self.semantics.config = cfg  # 词典学习参数跟着新配置走
+        self.semantics.rebuild(self.graph)  # 向量不入盘，按内容重建 + 重学词典，避免陈旧向量
+        self.events = [Event.from_dict(e) for e in state["events"]]
+        restored = [MemoryNode.from_dict(n) for n in state["tombstone"]]
+        self.tombstone = {n.name: n for n in restored}
+        self.last_report = state["last_report"]
+        self._path = path
+
+    def load(self, path: str | None = None) -> None:
+        with self._lock:
+            self._load_unlocked(path or self._path)
+
+    def __enter__(self) -> "MemoryPalace":
+        return self
+
+    def __exit__(self, exc_type, exc, tb) -> None:
+        if self._path:
+            self.save()

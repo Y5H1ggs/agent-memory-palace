@@ -1,0 +1,50 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "memory-palace"
+version = "0.1.0"
+description = "A dependency-free memory lifecycle: idempotent decay, affect, consolidation, value-based forgetting, self-narrative and bounded self-correction."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "Howard", email = "110075474+Y5H1ggs@users.noreply.github.com" }]
+keywords = [
+    "memory",
+    "agent-memory",
+    "cognitive-architecture",
+    "forgetting-curve",
+    "self-narrative",
+    "python",
+    "zero-dependencies",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Libraries",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+dependencies = []
+
+[project.optional-dependencies]
+dev = ["pytest>=8"]
+
+[project.urls]
+Homepage = "https://github.com/Y5H1ggs/memory-palace"
+Source = "https://github.com/Y5H1ggs/memory-palace"
+Changelog = "https://github.com/Y5H1ggs/memory-palace/blob/main/CHANGELOG.md"
+Issues = "https://github.com/Y5H1ggs/memory-palace/issues"
+
+[tool.setuptools.packages.find]
+include = ["memory_palace*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"

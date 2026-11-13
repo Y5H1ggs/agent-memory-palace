@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.venv/
+venv/
+
+# 运行时状态快照（记忆数据，不入库）
+memory_palace*.json
+*.palace-state.json
+.palace-*.tmp
+
+# 编辑器 / 系统
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# 本地工作区（WorkBuddy 的项目数据，含个人笔记，绝不入库）
+.workbuddy/
+outputs/
