@@ -216,10 +216,13 @@ def main() -> None:
             not any("部署脚本" in r["content"] for r in p2),
             str([r["content"] for r in p2]),
         )
+        p2_rule = json.loads(
+            run(scoped, "recall", "不确定就该说不确定", "--project", "p2", "--json").stdout
+        )
         check(
             "但全局记忆在 p2 仍可见（跨项目共享的正是这类）",
-            any("不确定就说不确定" in r["content"] for r in p2),
-            str([r["content"] for r in p2]),
+            any("不确定就说不确定" in r["content"] for r in p2_rule),
+            str([r["content"] for r in p2_rule]),
         )
         ctx2 = run(scoped, "context", "--query", "部署脚本", "--project", "p2", "--status-only")
         check(

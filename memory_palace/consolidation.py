@@ -64,11 +64,21 @@ class ConsolidationEngine:
         self.config = config
         self.summarizer = summarizer or default_summary
         self.vector_lookup = vector_lookup
+        # 一轮聚类里每个节点只取一次向量。否则 N² 对候选会触发 2N² 次 lookup，
+        # 每次都过一个 sync 检查 —— 200 条就是 4 万次，直接吃掉 200ms。
+        self._vec_cache: dict[str, list[float] | None] = {}
 
     @staticmethod
     def _fingerprint(names: list[str]) -> str:
         digest = hashlib.sha1(",".join(sorted(names)).encode("utf-8")).hexdigest()
         return "c:" + digest[:12]
+
+    def _vector(self, node: MemoryNode) -> list[float] | None:
+        if self.vector_lookup is None:
+            return None
+        if node.name not in self._vec_cache:
+            self._vec_cache[node.name] = self.vector_lookup(node) or None
+        return self._vec_cache[node.name]
 
     def _similarity(self, a: MemoryNode, b: MemoryNode, graph: MemoryGraph) -> float:
         """标签同源 或 内容同义，任一成立即视为可聚类。
@@ -83,7 +93,7 @@ class ConsolidationEngine:
         structural = 0.75 * jaccard + 0.25 * co
         if self.vector_lookup is None:
             return structural
-        va, vb = self.vector_lookup(a), self.vector_lookup(b)
+        va, vb = self._vector(a), self._vector(b)
         if not va or not vb:
             return structural
         return max(structural, 0.85 * cosine(va, vb))
@@ -170,7 +180,7 @@ class ConsolidationEngine:
             return False
         vectors = []
         for m in members:
-            vec = self.vector_lookup(m)
+            vec = self._vector(m)
             if not vec:
                 return False
             vectors.append(vec)
@@ -183,6 +193,7 @@ class ConsolidationEngine:
 
     def run(self, graph: MemoryGraph, now: float) -> ConsolidationResult:
         cfg = self.config
+        self._vec_cache.clear()   # 每轮重取：语料与 IDF 可能已经变了
         candidates = [
             n
             for n in graph.all_nodes()

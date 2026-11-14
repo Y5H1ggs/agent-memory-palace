@@ -130,6 +130,9 @@ class MemoryPalace:
 
     def _vector_of(self, node: MemoryNode) -> list[float] | None:
         """沉淀聚类取向量；未建索引的节点按需补建，缺了就诚实返回 None。"""
+        # 先对齐：向量必须与库内同一把 IDF 尺算出来的才能比。
+        # 索引里可能还留着「写入时用旧语料编码」的向量，用它做聚类等于拿两把尺量。
+        self.semantics.sync(self.graph)
         vec = self.semantics.vector(node.name)
         if vec is None:
             try:
@@ -277,8 +280,11 @@ class MemoryPalace:
         text = (content or "").strip()
         if not text:
             return None
+        # 先对齐：库内向量是按「当前语料的 IDF」算的，查询侧必须用同一把尺，
+        # 否则余弦是在两个不同空间之间做比较，结果无意义。
+        self.semantics.sync(self.graph)
         try:
-            fresh = self.semantics.encoder.encode(text)
+            fresh = self.semantics.encode_query(text)
         except ValueError:
             return None
         best_sim, best_node = -1.0, None
@@ -657,7 +663,13 @@ class MemoryPalace:
                 else:
                     retrieval = "semantic" if text else "tags"
                     rows = self._score_components(text, query_tags, moment, scopes)
-                    above = [r for r in rows if r["score"] >= gate]
+                    # 「过了门槛」还不够：必须真的有时近之外的理由。
+                    # 总分里含 recency，刚写进来的任何东西都能靠它过线 ——
+                    # 那不是相关，是新鲜。语义全零、标签全空时应当召回不到。
+                    above = [
+                        r for r in rows
+                        if r["score"] >= gate and (r["semantic"] > 0 or r["tag"] > 0)
+                    ]
                     # 相对门槛：低于最高分一半的命中只是「字面沾边」，一并挡掉。
                     floor = above[0]["score"] * self._config.semantic_relative_floor if above else 0.0
                     kept = [r for r in above if r["score"] >= floor][:limit]

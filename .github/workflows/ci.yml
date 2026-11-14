@@ -39,6 +39,8 @@ jobs:
         run: python tests/test_scope.py
       - name: 扩展点自测（编码器 / 外部反思）
         run: python tests/test_extensions.py
+      - name: 词法层自测（含 IDF 反事实）
+        run: python tests/test_lexicon.py
       - name: 编码器示例可跑
         run: python examples/custom_encoder.py
       - name: 基准冒烟（200 条）

@@ -26,6 +26,7 @@ from collections import Counter, defaultdict
 from typing import Any, Callable, Iterable
 
 from .core import MemoryGraph, MemoryNode
+from .lexicon import NEGATION_BOOST, NEGATIONS, IdfModel, cached_tokens, tf_weight
 
 DEFAULT_CONCEPTS: dict[str, tuple[str, ...]] = {
     "position": ("仓位", "凯利", "半凯利", "资金管理", "下注", "分散", "持仓比例", "单笔"),
@@ -43,7 +44,7 @@ AMBIGUOUS_TERMS: dict[str, tuple[str, ...]] = {
     "止损": ("risk", "position"),
 }
 
-CHAR_DIM = 64
+CHAR_DIM = 256
 CONCEPT_W = 1.0
 CHAR_W = 0.22
 # 多义词的权重低于无歧义词：它本来就不该单独决定一条记忆属于什么主题。
@@ -143,15 +144,34 @@ class ConceptEncoder:
         return scores, resolved, len(cjk_bigrams(source))
 
     def encode(self, text: str) -> list[float]:
+        """无 IDF 的编码：给「只有一个查询、没有语料」的场景用（等价于全部词同权）。"""
+        return self.encode_with(None, text)
+
+    def encode_with(self, idf: "IdfModel | None", text: str) -> list[float]:
+        """词法编码：概念分量 + IDF 加权的词项分量。
+
+        为什么必须带 IDF：字符维原本是「每对字符等权加一」，于是
+        「输出」这种满语料都是的词与「凯利」权重相同 —— 余弦被高频虚词主导，
+        「构建机输出乱码」与「输出用表格」就会被判成同一件事。
+        IDF 把「到处都有」压下去，把「只有这里才有」抬上来。
+        """
         scores, _resolved, _chars = self.project(text)
         vec = [float(s) for s in scores] + [0.0] * self.char_dim
-        source = (text or "").lower()
-        chars = [c for c in source if not c.isspace()]
-        for a, b in zip(chars, chars[1:]):
-            bucket = int(
-                hashlib.blake2b((a + b).encode("utf-8"), digest_size=4).hexdigest(), 16
+        base = len(self.concept_keys)
+        # 空 IDF（还没语料）不能当「所有词权重 0」用 —— 那会把词项维整片抹掉，
+        # 只剩概念维，两条共享概念的记忆余弦会变成 1.0。
+        usable = idf if (idf is not None and idf.n > 0) else None
+        for term, count in cached_tokens(text).items():
+            weight = tf_weight(
+                count,
+                usable.weight(term) if usable is not None else 1.0,
+                NEGATION_BOOST if term in NEGATIONS else 1.0,
             )
-            vec[len(self.concept_keys) + bucket % self.char_dim] += self.char_weight
+            # 仍用哈希桶（维度固定、可序列化），但桶内权重带 IDF —— 碰撞不再等权叠加
+            bucket = int(
+                hashlib.blake2b(term.encode("utf-8"), digest_size=4).hexdigest(), 16
+            )
+            vec[base + bucket % self.char_dim] += self.char_weight * weight
         return _l2(vec)
 
     def __call__(self, text: str) -> list[float]:
@@ -273,6 +293,9 @@ class SemanticIndex:
         self._dim: int | None = getattr(self.encoder, "dim", None)
         # 脏标记代替「每次查询都哈希全语料」：写入/遗忘即脏，重建一次后转干净。
         self._dirty = True
+        # IDF 由语料现算（不落盘）：快照只存文本，权重是文本的函数，
+        # 换一批记忆权重自然跟着变，不会留下陈旧统计。
+        self._idf = IdfModel()
 
     def __len__(self) -> int:
         return len(self._vectors)
@@ -344,8 +367,17 @@ class SemanticIndex:
 
     # ---- 索引维护 ----
 
+    def _encode(self, text: str) -> list[float]:
+        """统一入口：支持 IDF 的编码器走 encode_with，其余走 encode。"""
+        encoder = self.encoder
+        if hasattr(encoder, "encode_with"):
+            return self._validate(encoder.encode_with(self._idf, text))
+        return self._validate(encoder.encode(text))
+
     def upsert(self, node: MemoryNode) -> None:
-        self._vectors[node.name] = self._validate(self.encoder.encode(node.content))
+        # 这里用的是「上一次重建时的 IDF」；随后置脏，下次检索会用全语料重算，
+        # 所以短暂的不一致不会留在最终索引里。
+        self._vectors[node.name] = self._encode(node.content)
         self._dirty = True  # 语料变了，概念词典可能要重学
 
     def forget(self, name: str) -> None:
@@ -357,10 +389,13 @@ class SemanticIndex:
         return self._vectors.get(name)
 
     def rebuild(self, graph: MemoryGraph) -> None:
-        self._learn_lexicon([n.content for n in graph.all_nodes()])
+        docs = [n.content for n in graph.all_nodes()]
+        self._learn_lexicon(docs)
+        # IDF 必须先于任何编码算完：同一批向量必须共享同一把尺子，否则余弦没有意义
+        self._idf = IdfModel(docs)
         self._vectors.clear()
         for node in graph.all_nodes():
-            self._vectors[node.name] = self._validate(self.encoder.encode(node.content))
+            self._vectors[node.name] = self._encode(node.content)
         self._dirty = False
 
     def sync(self, graph: MemoryGraph) -> None:
@@ -376,8 +411,16 @@ class SemanticIndex:
         """索引里存在、图里已删除的名字 —— 幽灵记忆检测。"""
         return sorted(set(self._vectors) - set(graph.nodes()))
 
+    def encode_query(self, text: str) -> list[float]:
+        """对外暴露「同尺编码」：任何要跟库内向量比余弦的地方都必须走这里。
+
+        直接用 encoder.encode() 会拿到「无 IDF 权重」的向量，与库内向量不在同一空间，
+        余弦算出来的数字没有意义 —— 去重因此会静默失效（踩过）。
+        """
+        return self._encode(text)
+
     def scores(self, query: str, min_score: float = 0.0) -> dict[str, float]:
-        q = self._validate(self.encoder.encode(query))
+        q = self._encode(query)
         if not any(q):
             return {}
         return {

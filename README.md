@@ -12,7 +12,7 @@
 
 <p align="center"><sub>↑ 由 <code>memory-palace render</code> 从一份 120 天的演示库直接生成（<a href="docs/sample-palace.html">在线样例</a>）。图上的每个数字都能用一条命令复现。</sub></p>
 
-**TL;DR (English)** — A dependency-free Python implementation of a *memory lifecycle*: idempotent decay, affect that both hardens and distorts recall, consolidation with a one-way door, value-based forgetting with a fixed attention budget, self-narrative as a projection, tree-shaped injection to save tokens, and self-correction bounded by whitelist + value ranges + anti-lag verification. Ships MCP / HTTP / CLI. 323 assertions, 18 mutation audits. Not a vector database; not production-ready.
+**TL;DR (English)** — A dependency-free Python implementation of a *memory lifecycle*: idempotent decay, affect that both hardens and distorts recall, consolidation with a one-way door, value-based forgetting with a fixed attention budget, self-narrative as a projection, tree-shaped injection to save tokens, and self-correction bounded by whitelist + value ranges + anti-lag verification. Ships MCP / HTTP / CLI. 340 assertions, 18 mutation audits. Not a vector database; not production-ready.
 
 ---
 
@@ -226,12 +226,41 @@ python tests/test_integrations.py   # 17 项 MCP / HTTP 协议层契约（含 sl
 python tests/test_temporal.py       # 23 项 双时态 / 去重 / 弃答（含反事实）
 python tests/test_scope.py          # 24 项 跨项目分层 / 隔离 / 提升 / 迁移
 python tests/test_extensions.py     # 14 项 编码器 / 外部反思的契约
+python tests/test_lexicon.py        # 16 项 词法层（含 IDF 反事实）
 python -m memory_palace.bench       # 性能与 token 基准
 ```
 
 自测里最有价值的不是「全绿」，是那 18 条**突变审计**：故意把实现弄坏（衰减带副作用、去掉风格裁决、
 假语义全零向量、白名单失效、结构熵写死……），断言必须变红。其中一条自己写错过 ——
 用 `lr=1.0` 制造「无惯性」，结果一步撞天花板，饱和伪装成惯性；已改成常数学习率的反事实并写进注释。
+
+## 词法层：语义的地基，也是最容易悄悄骗人的地方
+
+完整设计与性能账见 [docs/LEXICON.md](docs/LEXICON.md)。
+
+原来的字符维是「每对字符等权加一，哈希进 64 个桶」——于是 `输出`（满语料都是）
+和 `凯利`（只出现两次）权重相同。后果不是"召回不准"，是**沉淀把无关的两件事写成一条结论**。
+
+现在：
+
+| 处理 | 做法 | 一个具体后果 |
+|---|---|---|
+| 归一 | NFKC + 小写 | `ＵＴＦ－８` / `utf-8` / `UTF8` 是同一个词 |
+| 分词 | 中文双字 + 标识符（`env.sh` → `env.sh`/`env`/`sh`） | 技术文本里的标识符不再是噪声 |
+| 否定词 | `不没无非别勿禁未莫` 单字保留并 ×2 | 「不追高」与「追高」余弦 0.359，不是 1.0 |
+| IDF | `log((N+1)/(df+1))+1`，语料现算 | 见下 |
+
+**核心证据**（`tests/test_lexicon.py` 的反事实）：
+
+| | 「构建机输出乱码」vs「输出用表格」 | 会聚吗 |
+|---|---|---|
+| 关掉 IDF | 0.783 | 会（错） |
+| 打开 IDF | **0.448** | 不会（对） |
+
+同时「输出用表格」与「输出优先精简」仍然聚成一类——**该分的分开，该合的还合**。
+
+代价如实记账：200 条 `cycle` 19→51 ms，热查询 1.5→3.1 ms（维度 64→256）。
+三个缓存把损失从 12 倍压到 2.6 倍。详见 [docs/LEXICON.md](docs/LEXICON.md)。
 
 ## 两个扩展点：默认零依赖，但你可以换掉
 
@@ -284,7 +313,7 @@ Mem0 / Zep(Graphiti) / Letta / Cognee / TencentDB Agent Memory / progressive-mem
 |---|---|---|
 | 设计完整度 | 9/10 | 机制闭环，次序有理由，边界写在 docstring 里 |
 | 工程实现 | 7/10 | 原子写、RLock、零依赖、状态迁移、基准；但**没有跨进程文件锁** |
-| 测试可信度 | 7/10 | 323 断言 + 18 突变 + 3 条反事实；但断言是作者自证，无覆盖率门槛、无语义评测集 |
+| 测试可信度 | 7/10 | 340 断言 + 18 突变 + 3 条反事实；但断言是作者自证，无覆盖率门槛、无语义评测集 |
 | 可维护性 | 6/10 | `palace.py` 1300+ 行、`demo.py` 2100+ 行；剧本兼任测试 |
 | 生产就绪 | 3/10 | 单写者、无性能 SLA、无语义评测集、API 未冻结 |
 
@@ -312,6 +341,7 @@ memory_palace/
   semantics.py         语义检索（多义词裁决 + 词典自增长）
   tree.py              树状注入（根常驻 / 枝展开 / 折叠标注）
   scope.py             作用域：全局 / 项目 / 会话，项目标识推断
+  lexicon.py           词法层：归一 / 分词 / 否定词 / IDF
   palace.py            顶层编排
   cli.py               命令行
   mcp_server.py        MCP 服务（stdio，8 工具，slim/full 档）
@@ -327,11 +357,13 @@ docs/INTEGRATIONS.md     各宿主接入配置（含 DSH）
 docs/AGENT_INTEGRATION.md 三种时机、成本、不该用的场景
 docs/COMPETITIVE_ANALYSIS.md 同类项目调研：融合了什么、拒绝了什么、还缺什么
 docs/CRITIQUE_RESPONSE.md 三条批评的逐条核查：哪条成立、哪条论据被截断
+docs/LEXICON.md          词法层：四个决定、性能账、边界
 dsh/                     DeepSeek Harness 插件（host 半 + cordis 挂载配置 + 面板）
 AGENTS.md                agent 读得懂的约定
 tests/test_temporal.py   双时态 / 去重 / 弃答（含反事实断言）
 tests/test_scope.py      跨项目分层 / 隔离 / 提升 / 旧快照迁移
 tests/test_extensions.py 编码器 / 外部反思两个扩展点的契约
+tests/test_lexicon.py    词法层：归一 / 分词 / 否定 / IDF（含反事实）
 ```
 
 ## 版本

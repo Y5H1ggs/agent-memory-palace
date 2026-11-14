@@ -749,11 +749,17 @@ def main() -> None:
 
     semantic_engine = MemoryPalace(clock=MutableClock(t))
     semantic_engine.remember("s1", "半凯利仓位管理")
+    # 注意 patch 的是 encode_with：检索走的是带 IDF 的那条路径（encode 只是它的无 IDF 包装）。
+    # 只 patch encode 会「打空」—— 坏编码器根本没生效，这条审计就变成了假绿。
+    # 第一次改造时确实踩了：审计报 FAIL，不是它错了，是它抓到了自己过时。
+    original_with = ConceptEncoder.encode_with
     original_encode = ConceptEncoder.encode
-    ConceptEncoder.encode = lambda self, text: [0.0] * self.dim  # 复刻「假语义」：全零向量
+    ConceptEncoder.encode_with = lambda self, idf, text: [0.0] * self.dim
+    ConceptEncoder.encode = lambda self, text: [0.0] * self.dim
     try:
         blind_hits = semantic_engine.recall(query="凯利仓位怎么分配")
     finally:
+        ConceptEncoder.encode_with = original_with
         ConceptEncoder.encode = original_encode
     check(
         "语义检索断言能抓到全零假向量",

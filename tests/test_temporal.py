@@ -239,9 +239,17 @@ def test_abstain() -> None:
     loose.remember("kelly", "单笔不超过总资金三分之一", tags=("仓位",), tier="fact")
     loose_ctx = build_context(loose, query="周末去哪玩比较好", budget=400)
     check(
-        "把弃答线降到 0，同一个问题就不再弃答（阈值确实在起作用）",
-        loose_ctx["abstain"] is False and len(loose_ctx["items"]) > 1,
+        "把弃答线降到 0，完全无词法重叠的问题**仍然**弃答（闸门不止一道）",
+        loose_ctx["abstain"] is True,
         f"abstain={loose_ctx['abstain']} items={[i['name'] for i in loose_ctx['items']]}",
+    )
+    # 补一条：有真实词法重叠时，弃答线才是决定性的那一道
+    loose.remember("fmt", "输出用表格，别写长篇", tags=("格式",), tier="fact")
+    overlap = build_context(loose, query="输出格式怎么定", budget=400)
+    check(
+        "有词法重叠时正常召回，不弃答（否则第一道闸门就误杀）",
+        overlap["abstain"] is False and any(i["name"] == "fmt" for i in overlap["items"]),
+        f"abstain={overlap['abstain']} items={[i['name'] for i in overlap['items']]}",
     )
 
 
