@@ -89,6 +89,31 @@ def test_historical_docs_are_marked() -> None:
         assert "llms.txt" in head, f"{name} 的时效声明应指向 llms.txt"
 
 
+def test_llms_full_is_current() -> None:
+    """`llms-full.txt` 给评审模型用，过期比没有更糟：它会被当成现状引用。
+
+    这条检查是「改代码但忘了重新生成包」的唯一防线。
+    """
+    import subprocess
+
+    proc = subprocess.run(
+        [sys.executable, os.path.join(ROOT, "tools", "make_review_bundle.py"), "--check"],
+        capture_output=True,
+        text=True,
+    )
+    assert proc.returncode == 0, (proc.stdout + proc.stderr).strip()
+
+
+def test_llms_full_lists_storage_layer() -> None:
+    """包必须让「sqlite_store.py 存在」这件事一目了然。
+
+    这次评审的原始误判就是「没看到 SQLite」——所以直接钉住这一行。
+    """
+    text = _read("llms-full.txt")
+    assert "memory_palace/sqlite_store.py" in text
+    assert "tests/test_store.py" in text
+
+
 def test_readme_numbers_have_a_source() -> None:
     """README 里出现的性能数字必须能对上一条命令，否则就是「传说」。"""
     text = _read("README.md")

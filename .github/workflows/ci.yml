@@ -59,6 +59,8 @@ jobs:
         run: python tests/test_guardrails.py
       - name: 文档一致性（版本号 / 默认存储 / 历史文档时效声明）
         run: python tests/test_docs.py
+      - name: 评审包是否最新（llms-full.txt 由代码与文档生成）
+        run: python tools/make_review_bundle.py --check
       - name: 绿灯体检（变异测试，必须 0 漏洞）
         run: python tools/greenlight_audit.py
       - name: 编码器示例可跑

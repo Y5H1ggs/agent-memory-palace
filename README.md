@@ -13,6 +13,8 @@
 <sub>图由 `examples/make_diagrams.py` 生成；图上的数字来自 `bench` 与 `eval`，都能用一条命令复现。</sub>
 
 > 给读这个仓库的模型：机器可读的当前状态在 **[llms.txt](llms.txt)**。
+> 要整份交给评审模型（它会说"没看到某个文件"的时候），用 **[llms-full.txt](llms-full.txt)** ——
+> 32 KB，含文件清单（行数 + 哈希）与全部测试用例名。
 > `docs/` 里那两篇批评与调研是历史文档，描述的是 0.5.x / 0.9 时代，不要当成现状。
 
 **TL;DR (English)** — A dependency-free Python implementation of a *memory lifecycle*: idempotent decay, affect that both hardens and distorts recall, consolidation with a one-way door, value-based forgetting with a fixed attention budget, self-narrative as a projection, tree-shaped injection to save tokens, and self-correction bounded by whitelist + multi-objective guardrails.
@@ -436,7 +438,7 @@ python -m memory_palace.cli eval  # 召回 / 弃答 / 去重 / 沉淀
 
 ## 版本与结构
 
-当前 `0.11.0`。`0.x` 期间 API 可能变。升到 `1.0.0` 的条件见 [CHANGELOG](CHANGELOG.md)：
+当前 `0.11.1`。`0.x` 期间 API 可能变。升到 `1.0.0` 的条件见 [CHANGELOG](CHANGELOG.md)：
 外部使用者 ≥ 1（未达）· CI 三平台 ✅ · 公开评测集与基线数字 ✅ · 跨进程写锁 ✅。
 
 ```
