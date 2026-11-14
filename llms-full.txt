@@ -647,7 +647,7 @@ MIT © 2026 Howard
 | `memory_palace/render.py` | 622 | `a086c0f9` | 展现层：把「记忆库现在的样子」变成人能看的东西。 |
 | `memory_palace/scope.py` | 156 | `c216bd16` | 记忆属于谁：全局 / 某个项目 / 本次会话。 |
 | `memory_palace/selfcorrect.py` | 610 | `1d682f60` | 自修正：能发现自己错了，并且改得起、退得回。 |
-| `memory_palace/semantics.py` | 871 | `bf8065be` | 可解释的语义检索层（零第三方依赖）。 |
+| `memory_palace/semantics.py` | 875 | `2041c1b1` | 可解释的语义检索层（零第三方依赖）。 |
 | `memory_palace/sqlite_store.py` | 910 | `fa763329` | SQLite（WAL）后端：行级存储、单写多读、崩溃自前滚。 |
 | `memory_palace/store.py` | 679 | `a3a69cdc` | 持久化门面：SQLite（默认）与 JSON（可移植/旧库）两个后端。 |
 | `memory_palace/style.py` | 327 | `5f5215d6` | 风格固化与冲突裁决。 |

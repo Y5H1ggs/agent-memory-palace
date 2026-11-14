@@ -824,7 +824,11 @@ class SemanticIndex:
         return (1.0 - self._hybrid) * lex + self._hybrid * dense
 
     def scores_dense(self, query: str, min_score: float = 0.0) -> dict[str, float]:
-        """同上的稠密实现，只作对照用（测试里拿它验证稀疏分支没算错）。"""
+        """同上的稠密实现，只作对照用（测试里拿它验证稀疏分支没算错）。
+
+        过滤条件必须与 `lexical_scores` 完全一致（含 `> 0`）：这条路径存在的意义
+        就是「两套实现互相印证」，一边返回全库、一边只返回非零，对照就没意义了。
+        """
         q = self._encode(query)
         if not q:
             return {}
@@ -832,7 +836,7 @@ class SemanticIndex:
         return {
             name: round(score, 6)
             for name, vec in self._vectors.items()
-            if (score := cosine(dense, vec)) >= min_score
+            if (score := cosine(dense, vec)) >= min_score and score > 0.0
         }
 
     def search(
