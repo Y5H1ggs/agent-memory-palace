@@ -12,7 +12,7 @@
 
 <p align="center"><sub>↑ 由 <code>memory-palace render</code> 从一份 120 天的演示库直接生成（<a href="docs/sample-palace.html">在线样例</a>）。图上的每个数字都能用一条命令复现。</sub></p>
 
-**TL;DR (English)** — A dependency-free Python implementation of a *memory lifecycle*: idempotent decay, affect that both hardens and distorts recall, consolidation with a one-way door, value-based forgetting with a fixed attention budget, self-narrative as a projection, tree-shaped injection to save tokens, and self-correction bounded by whitelist + value ranges + anti-lag verification. Ships MCP / HTTP / CLI. 366 assertions, 18 mutation audits + 12 变异体检. Not a vector database; not production-ready.
+**TL;DR (English)** — A dependency-free Python implementation of a *memory lifecycle*: idempotent decay, affect that both hardens and distorts recall, consolidation with a one-way door, value-based forgetting with a fixed attention budget, self-narrative as a projection, tree-shaped injection to save tokens, and self-correction bounded by whitelist + value ranges + anti-lag verification. Ships MCP / HTTP / CLI. 395 assertions, 21 mutation audits. Not a vector database; not production-ready.
 
 ---
 
@@ -150,12 +150,56 @@ memory-palace-mcp --profile full    # 8 个（默认）
 
 | | 耗时 | 注入字数 |
 |---|---|---|
-| 扁平（6 条） | 23 ms | 371 字 |
-| 扁平（30 条，要覆盖面） | 31 ms | 1184 字 |
-| **树（同覆盖面）** | **8 ms** | **603 字（省 49%）** |
+| 扁平（6 条） | 15 ms | 375 字 |
+| 扁平（30 条，要覆盖面） | 17 ms | 1185 字 |
+| **树（同覆盖面）** | **1.1 ms** | **622 字（省 47%）** |
 
-诚实说明：**窄预算（只要 6 条细节）时树反而略贵**（603 vs 371 字），因为它默认给全貌。
+诚实说明：**窄预算（只要 6 条细节）时树反而略贵**（622 vs 375 字），因为它默认给全貌。
 两种注入不是替代关系，是两个档位 —— 要细节用扁平，要知道「我有什么」用树。
+
+## 性能：两次审计，七处改动，每步都有反事实证明
+
+`python -m memory_palace.bench`（1000 条，本机，取三次中位数）：
+
+| 指标 | 改前 | 改后 | |
+|---|---|---|---|
+| `cycle`（一轮代谢） | 530 ms | **108 ms** | **4.9×** |
+| 查询（冷：索引脏，含全量重建） | 113 ms | **37 ms** | **3.0×** |
+| 查询（热：索引干净） | 14.7 ms | **4.2 ms** | **3.5×** |
+| 200 条的 `cycle` | 45 ms | **17 ms** | 2.7× |
+| **读库**（JSON → 图，1000 条） | 142 ms | **34 ms** | **4.2×** |
+
+端到端（一次 CLI 调用，本机中位数）：
+
+| 环节 | 耗时 | 说明 |
+|---|---|---|
+| 解释器空转 | 111 ms | 环境地板（含 sitecustomize 65 ms），与我们无关 |
+| + `import memory_palace` | +60 ms | 15 个模块 |
+| + 读库 1000 条 | +30 ms | 反序列化 + 校验 |
+| `context --query` 全流程 | **269 ms** | **其中我们的部分 156 ms** |
+
+七处改动，按收益排序：
+
+| 改动 | 原来慢在哪 | 改后 |
+|---|---|---|
+| **稀疏向量** | 余弦是纯 Python 稠密循环：263 维里 245 个是零，44k 次调用 = 1170 万次乘加 | 只遍历非零分量（平均 18 个）：12.2µs → **1.6µs** |
+| **聚类早停** | `max(结构, 0.85×余弦)` 中，结构侧已过线时余弦算了也白算 —— 实测 45262 对**全部**属于这种 | 结构过线即返回，余弦调用降到 **0** |
+| **增量补建** | `sync()` 把「向量数 ≠ 节点数」当成「必须全量重建」；沉淀每造一条结论就重建一遍，一轮 `run_cycle` **8 次** | 只补缺失 O(k)，批末统一对齐 **1 次** |
+| **校验合并** | `_validate` 逐元素 `isinstance`+`isfinite`+`float` 跑四遍 = 27µs，与整个编码（30µs）相当 | `math.fsum` 一次 C 层扫描 = **2µs** |
+| **反射缓存** | 反序列化一条记忆问 20 多次「这个类有哪些字段」，1000 条 = 2.5 万次 `dataclasses.fields()` | `lru_cache`，读库 142→34 ms |
+| **去掉两个重导入** | `statistics`（求中位数）17 ms、`html`（转义 5 个字符）11.7 ms，每次起进程都要付 | 本地 `_median` + `str.translate` |
+| **索引按需构建** | 读库时立刻编码全库（37 ms），而 `status` / `view` 根本不查语义 | 只置脏，查询入口本来就有 `sync()` |
+
+三条纪律保证「快」不是拿语义换的，每一条都有断言 + 对应变异：
+
+1. 稀疏与稠密两条路径**逐条对分**（最大偏差 `0.0e+00`，集合差 0）
+2. 早停**必须保序**（同一批候选，早停前后的簇结构逐字相同）
+3. 增量补建**不许动已有向量**（按对象身份验证：31 条库里只编了新增那 1 条）
+
+代价如实记账：`learn_concepts` + `IdfModel` 仍占冷查询的一半（1000 条约 29ms）。它们是对全语料的两遍扫描，
+只在整个语料变了时才需要。**没有做增量** —— 增量 IDF 要维护 doc 级 df 与删除回滚，做错的代价
+（IDF 与向量不同尺，余弦失去意义）比慢一点更贵。这一条写在这里，是待办不是已完成。
+
 
 ## 跨项目记忆：分层，而不是二选一
 
@@ -228,11 +272,12 @@ python tests/test_scope.py          # 24 项 跨项目分层 / 隔离 / 提升 /
 python tests/test_extensions.py     # 14 项 编码器 / 外部反思的契约
 python tests/test_lexicon.py        # 16 项 词法层（含 IDF 反事实）
 python tests/test_pragmatics.py     # 26 项 语用层（撤回≠同意 / 模糊降级）
-python tools/greenlight_audit.py    # 绿灯体检：12 个变异，改坏实现看断言会不会红
+python tests/test_audit.py          # 29 项 代码审计：优化保序 / 并发 / 边界校验 / 落盘一致
+python tools/greenlight_audit.py    # 绿灯体检：21 个变异，改坏实现看断言会不会红
 python -m memory_palace.bench       # 性能与 token 基准
 ```
 
-自测里最有价值的不是「全绿」，是那 18 条**突变审计**：故意把实现弄坏（衰减带副作用、去掉风格裁决、
+自测里最有价值的不是「全绿」，是那 21 条**突变审计**：故意把实现弄坏（衰减带副作用、去掉风格裁决、
 假语义全零向量、白名单失效、结构熵写死……），断言必须变红。其中一条自己写错过 ——
 用 `lr=1.0` 制造「无惯性」，结果一步撞天花板，饱和伪装成惯性；已改成常数学习率的反事实并写进注释。
 
@@ -261,7 +306,7 @@ python -m memory_palace.bench       # 性能与 token 基准
 
 同时「输出用表格」与「输出优先精简」仍然聚成一类——**该分的分开，该合的还合**。
 
-代价如实记账：200 条 `cycle` 19→51 ms，热查询 1.5→3.1 ms（维度 64→256）。
+词法层当初带来的代价（200 条 `cycle` 19→51 ms）已在 0.9.2 收回：现在 17 ms、热查询 0.9 ms（见「性能」一节）。
 三个缓存把损失从 12 倍压到 2.6 倍。详见 [docs/LEXICON.md](docs/LEXICON.md)。
 
 ## 语用层：一句话是在做什么事
@@ -339,13 +384,36 @@ Mem0 / Zep(Graphiti) / Letta / Cognee / TencentDB Agent Memory / progressive-mem
   128k 上下文的模型直接塞进去就能得高分；独立审计发现它约 6.4% 的答案键是错的。
   所以下一步不是加功能，是建一个 50 条真实记忆 + 20 条查询、能测**遗忘正确性**与**弃答假阳性率**的评测。
 
+## 并发与落盘：实测数字，以及边界在哪
+
+这一块最容易被质疑，所以给数字而不是形容词。
+
+**进程内（多线程）**：所有公共入口持一把 `RLock`，图遍历返回物化副本
+（`all_nodes()` 是 `list(...)`，不是活视图）。实测：
+
+| 场景 | 结果 |
+|---|---|
+| 5 线程 × 40 次读同一条记忆 | `access_count` **恰好** +200，零丢失 |
+| 9 线程同时 `remember` / `recall` / `gc` / `run_cycle` | **0 异常**，钉死记忆不被误删 |
+| 边增删边 `graph.to_dict()` 300 次 | **0 异常**（这条曾经会抛 `RuntimeError`，0.9.3 修了） |
+
+**跨进程：不行，且不假装行。** JSON + `os.replace` 只保证「单次写是原子的」，
+不保证「两个人各读一份再各写一份」不互相覆盖 —— 那是 Last-Write-Wins，不报错。
+所以：**一个 store 同时只给一个写者用**。要并发写，得换成带版本号的乐观并发
+（state 里有 revision，save 前比对）或把写操作串到一个进程里。**这两样都没做**，是待办。
+
+**落盘失败**：`0.9.3` 起配置遵循「存不下就不算改过」—— 自修正改了某个参数但
+`autosave` 失败时，会把本轮应用的修正全部退回去，并把 `last_save_ok=false`
+写进 `snapshot()["durability"]`。记忆写入仍不回滚（调用方已经据它做了推理），
+但会记 `save_failed` 事件 —— 这一条是取舍，不是遗漏。
+
 ## 成熟度自评（先说不好听的）
 
 | 维度 | 分数 | 依据 |
 |---|---|---|
 | 设计完整度 | 9/10 | 机制闭环，次序有理由，边界写在 docstring 里 |
-| 工程实现 | 7/10 | 原子写、RLock、零依赖、状态迁移、基准；但**没有跨进程文件锁** |
-| 测试可信度 | 8/10 | 366 断言 + 18 突变 + 12 变异体检（绿灯审计，0 漏洞）；仍无语义评测集 |
+| 工程实现 | 8/10 | 原子写、RLock、零依赖、状态迁移、基准、稀疏索引；但**没有跨进程文件锁** |
+| 测试可信度 | 8/10 | 395 断言 + 21 变异体检（绿灯审计，0 漏洞）；仍无语义评测集 |
 | 可维护性 | 6/10 | `palace.py` 1300+ 行、`demo.py` 2100+ 行；剧本兼任测试 |
 | 生产就绪 | 3/10 | 单写者、无性能 SLA、无语义评测集、API 未冻结 |
 
@@ -400,6 +468,7 @@ tests/test_scope.py      跨项目分层 / 隔离 / 提升 / 旧快照迁移
 tests/test_extensions.py 编码器 / 外部反思两个扩展点的契约
 tests/test_lexicon.py    词法层：归一 / 分词 / 否定 / IDF（含反事实）
 tests/test_pragmatics.py 语用层：行为 / 强度 / 撤回≠同意 / 模糊降级
+tests/test_audit.py      代码审计：优化保序 / 边界校验 / 增量补建（含反事实）
 ```
 
 ## 版本

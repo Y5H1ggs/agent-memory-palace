@@ -61,7 +61,7 @@ from .selfcorrect import (
     Patch,
     SelfCorrector,
 )
-from .semantics import ConceptEncoder, SemanticIndex, cosine
+from .semantics import ConceptEncoder, SemanticIndex, SparseVector, cosine
 from .style import Adjudication, StyleEngine, StyleRule
 from .value import ValueModel
 
@@ -94,6 +94,7 @@ __all__ = [
     "SemanticIndex",
     "ConceptEncoder",
     "cosine",
+    "SparseVector",
     "Foundation",
     "TraitSpec",
     "Trait",

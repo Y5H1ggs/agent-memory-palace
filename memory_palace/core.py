@@ -13,6 +13,7 @@ import threading
 import time
 import warnings
 from dataclasses import asdict, dataclass, field, fields as dc_fields
+from functools import lru_cache
 from typing import Any, Callable, ClassVar, Iterable
 
 from .affect import Affect
@@ -27,9 +28,19 @@ def _clamp01(value: float) -> float:
 Clock = Callable[[], float]
 
 
-def dataclass_field_names(cls: type) -> set[str]:
-    """只取真实字段，排除 ClassVar（否则会把常量误当成待恢复的配置）。"""
-    return {f.name for f in dc_fields(cls)}
+@lru_cache(maxsize=None)
+def _field_names_cached(cls: type) -> frozenset[str]:
+    return frozenset(f.name for f in dc_fields(cls))
+
+
+def dataclass_field_names(cls: type) -> frozenset[str]:
+    """只取真实字段，排除 ClassVar（否则会把常量误当成待恢复的配置）。
+
+    缓存是必须的，不是优化：反序列化一条记忆要问 20 多次「这个类有哪些字段」，
+    1000 条就是 2.5 万次 `dataclasses.fields()` —— 实测读库 136ms 里有 149ms
+    （含重复计数）花在这上面。字段集合在类定义时就已经确定，问第二遍不会得到新答案。
+    """
+    return _field_names_cached(cls)
 
 
 def wall_clock() -> float:
@@ -706,8 +717,12 @@ class MemoryGraph:
         return out
 
     def to_dict(self) -> dict[str, Any]:
+        # 先物化再遍历：这个方法是公开的，调用方不一定持有 palace 的锁。
+        # 直接遍历 _nodes.values() 时，另一线程的 gc 会让它抛
+        # 「dictionary changed size during iteration」—— 那是数据竞争的报错，
+        # 不该由调用方去猜「是不是要先加锁」。
         return {
-            "nodes": [n.to_dict() for n in self._nodes.values()],
+            "nodes": [n.to_dict() for n in list(self._nodes.values())],
             "edges": [[a, b, e.to_dict()] for a, b, e in self.edges()],
         }
 

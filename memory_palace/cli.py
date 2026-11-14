@@ -26,8 +26,7 @@ from typing import Any
 
 from ._console import ensure_utf8_console
 from .palace import MemoryPalace
-from .scope import GLOBAL, SCOPE_MODES, label as scope_label, normalize_scope, scopes_for
-from .render import html_report, status_line, text_report
+from .scope import GLOBAL, SCOPE_MODES, label as scope_label, scopes_for
 from .tree import build_tree, render_tree, tree_stats
 
 DEFAULT_STORE = os.path.join(os.path.expanduser("~"), ".memory-palace", "store.json")
@@ -218,6 +217,10 @@ def build_context(
         pool = list(reasons)
     pool.sort(key=lambda n: (0 if reasons.get(n) == "钉死" else 1, -blend(n), n))
 
+    # budget <= 0 的语义就是「什么都不要」：调用方明确不要时，不该用「至少给一条」
+    # 的兜底覆盖它。原来 budget=0 也会返回一条，等于让预算参数说了不算。
+    if budget <= 0:
+        pool = []
     items: list[dict[str, Any]] = []
     used = 0
     for name in pool:
@@ -476,6 +479,8 @@ def cmd_context(args) -> int:
         return 0
     if args.status_only:
         rev = (ctx.get("narrative") or {}).get("rev")
+        from .render import status_line
+
         print(status_line(ctx, rev, abstain=bool(ctx.get("abstain"))))
         return 0
     if args.json:
@@ -488,6 +493,8 @@ def cmd_context(args) -> int:
 def cmd_view(args) -> int:
     """终端视图：不离开命令行就能看到「谁快被忘掉了」。"""
     palace = open_palace(resolve_store(args.store), getattr(args, "project", None))
+    from .render import text_report
+
     print(text_report(
         palace, limit=args.limit, horizon_days=args.days,
         scope=getattr(args, "scope", "auto"),
@@ -503,6 +510,8 @@ def cmd_render(args) -> int:
     if parent:
         os.makedirs(parent, exist_ok=True)
     with open(out, "w", encoding="utf-8") as f:
+        from .render import html_report
+
         f.write(html_report(
             palace, title=args.title, horizon_days=args.days,
             scope=getattr(args, "scope", "auto"),

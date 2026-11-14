@@ -57,7 +57,6 @@ from .scope import (
     detect_project,
     normalize_project,
     normalize_scope,
-    scopes_for,
 )
 from .semantics import Encoder, SemanticIndex, cosine
 from .style import StyleEngine
@@ -86,6 +85,11 @@ class MemoryPalace:
         self._lock = threading.RLock()
         self._clock: Clock = clock or wall_clock
         self._config = config or PalaceConfig()
+        # 边界必须校验：`PalaceConfig(...)` 本身不会自动验证，而一个坏参数不会报错，
+        # 只会让系统「安静地做错事」—— semantic_alpha=-5 会让检索永远返回空，
+        # forget_w=-1 会让所有记忆立刻可忘，grasp_budget=nan 会让预算判断全假。
+        # 到这里为止还没读过任何状态，是唯一能干净失败的位置。
+        self._config.validate()
         self._summarizer = summarizer
         self._autosave = autosave
         self._path = path
@@ -115,6 +119,9 @@ class MemoryPalace:
         self.tombstone: dict[str, MemoryNode] = {}
         self.last_report: dict[str, Any] | None = None
         self.last_gc: list[dict[str, Any]] = []
+        # 最近一次落盘是否成功。写到磁盘之前，任何「已保存」的说法都不成立，
+        # 调用方（尤其是自动化任务）需要一个能读到的位，而不是去翻事件流。
+        self.last_save_ok: bool = True
         # None = 本轮根本没抓过（不能据此判「预算不足」）；[] = 抓过但一条没抓到。
         self._last_grasp: list[dict[str, Any]] | None = None
         # 评估缓存：一次 context 里 assess 会被 entropy / snapshot / 排序各要一遍，
@@ -129,18 +136,22 @@ class MemoryPalace:
     def now(self) -> float:
         return self._clock()
 
-    def _vector_of(self, node: MemoryNode) -> list[float] | None:
-        """沉淀聚类取向量；未建索引的节点按需补建，缺了就诚实返回 None。"""
+    def _vector_of(self, node: MemoryNode) -> Any:
+        """沉淀聚类取向量；未建索引的节点按需补建，缺了就诚实返回 None。
+
+        返回稀疏向量：聚类要对 N² 对做余弦，稠密数组每对要扫 263 维，
+        而一条记忆平均只有 18 个非零分量 —— 这里也是量级差别。
+        """
         # 先对齐：向量必须与库内同一把 IDF 尺算出来的才能比。
         # 索引里可能还留着「写入时用旧语料编码」的向量，用它做聚类等于拿两把尺量。
         self.semantics.sync(self.graph)
-        vec = self.semantics.vector(node.name)
+        vec = self.semantics.sparse(node.name)
         if vec is None:
             try:
                 self.semantics.upsert(node)
             except ValueError:
                 return None
-            vec = self.semantics.vector(node.name)
+            vec = self.semantics.sparse(node.name)
         return vec
 
     # ---------- 内部工具 ----------
@@ -160,8 +171,10 @@ class MemoryPalace:
             return True
         try:
             self._save_unlocked(self._path)
+            self.last_save_ok = True
             return True
         except OSError as exc:
+            self.last_save_ok = False
             self._log("save_failed", {"path": self._path, "error": str(exc)})
             return False
 
@@ -309,7 +322,7 @@ class MemoryPalace:
             span = max(len(text), len(node.content))
             if span and min(len(text), len(node.content)) / span < self._config.dedupe_length_ratio:
                 continue
-            vec = self.semantics.vector(node.name)
+            vec = self.semantics.sparse(node.name)
             if vec is None:
                 continue
             sim = cosine(fresh, vec)
@@ -1072,11 +1085,17 @@ class MemoryPalace:
 
     def _consolidate_unlocked(self, now: float) -> ConsolidationResult:
         result = self.consolidation.run(self.graph, now)
+        if result.created:
+            # 沉淀造出的结论必须能立刻被检索到，但**不能逐条 upsert**：
+            # upsert 会置脏，而脏标记的语义是「下次检索前全量重建」，
+            # 一个簇一条 → 一次 run_cycle 里就是 8 次全量重建（实测占了 85% 的时间）。
+            # 这里只补缺失（O(k)），把「语料统计变了」留给批末统一对齐一次。
+            self.semantics._fill_missing(self.graph)
+            self.semantics.mark_dirty()
         for name in result.created:
             node = self.graph.get(name)
             if node is not None:
                 node.kind = "semantic"  # 沉淀出来的结论属于语义记忆
-                self.semantics.upsert(node)  # 新结晶必须立刻可被语义检索到
         self.events.extend(result.events)
         self._trim_events()
         return result
@@ -1117,7 +1136,12 @@ class MemoryPalace:
         expired = [
             name
             for name, node in retired.items()
-            if node.valid_to is not None and now - float(node.valid_to) >= horizon
+            # 钉死是用户主权：`gc_decisions` 里它拿的是 pinned_by_user，永远不会被价值判掉。
+            # 历史回收若绕过这一条，就等于「钉死的记忆在被取代 90 天后自己消失了」——
+            # 两条规则互相矛盾时，应该让更强的那个（用户显式钉死）赢。
+            if node.valid_to is not None
+            and not node.pinned
+            and now - float(node.valid_to) >= horizon
         ]
         decisions = self.value.gc_decisions(self.graph, now, self.logic.support_map())
         victims: list[str] = list(expired)
@@ -1385,7 +1409,24 @@ class MemoryPalace:
             persona_state = self._persona_cycle_unlocked(now)
             report = self._reflect_unlocked(now)
             correction = self._selfcorrect_unlocked(now, report)
-            self._maybe_save()
+            # 批末对齐：沉淀可能改了语料（多了结论节点），IDF 是所有向量共用的尺子，
+            # 在这里重建**一次**，比在每个簇后面各重建一次便宜一个量级，
+            # 而且保证「这一轮结束后索引与图严格一致」—— 不留冷查询给下一个调用方。
+            self.semantics.sync(self.graph)
+            persisted = self._maybe_save()
+            # 配置被自修正改过，但没落盘 → 趁还在本函数里，把它退回去。
+            # 否则磁盘上是旧值、内存里是新值，重启静默回滚，而这一轮的行为
+            # 已经按新值跑完了 —— 没有任何人会收到报错。
+            rolled_back: list[str] = []
+            if not persisted and correction["applied"]:
+                for patch in correction["applied"]:
+                    if self.corrector.rollback_unpersisted(patch):
+                        rolled_back.append(patch.pid)
+                self._log(
+                    "selfcorrect_unpersisted",
+                    {"rolled_back": rolled_back, "path": self._path},
+                    now,
+                )
             return {
                 "at": now,
                 "style_events": [e.kind for e in style_events],
@@ -1394,7 +1435,7 @@ class MemoryPalace:
                 "demoted": [d["name"] for d in demoted],
                 "forgotten": victims,
                 "nodes": len(self.graph),
-            "retired": sum(1 for n in self.graph.all_nodes() if n.is_retired()),
+                "retired": sum(1 for n in self.graph.all_nodes() if n.is_retired()),
                 "narrative": revision.to_dict(),
                 "persona": {
                     "health": persona_state["drift"]["health"],
@@ -1403,6 +1444,7 @@ class MemoryPalace:
                 },
                 "selfcorrect": {
                     "applied": [p.pid for p in correction["applied"]],
+                    "rolled_back": rolled_back,
                     "settled": [f"{p.pid}:{p.status}" for p in correction["settled"]],
                     "escalated": [e.code for e in correction["escalations"]],
                 },
@@ -1484,7 +1526,7 @@ class MemoryPalace:
                 "structure": struct,
                 "structure_health": self.value.structure_health(struct),
                 "semantic_learned": {k: list(v) for k, v in self.semantics.learned.items()},
-                "durability": dict(WRITE_STATS),
+                "durability": {**dict(WRITE_STATS), "last_save_ok": self.last_save_ok},
                 "self_model_revision": head.rev if head else 0,
                 "narrative": head.to_dict() if head else None,
                 "narrative_stability": self.narrative.stability_of_story(),
@@ -1620,7 +1662,11 @@ class MemoryPalace:
         self.memory = MemoryModel(cfg)
         self.corrector = SelfCorrector.from_dict(state.get("selfcorrect"), cfg)
         self.semantics.config = cfg  # 词典学习参数跟着新配置走
-        self.semantics.rebuild(self.graph)  # 向量不入盘，按内容重建 + 重学词典，避免陈旧向量
+        # 向量不入盘，必须按内容重建 + 重学词典。但**不在这里重建**：
+        # 建索引要编码全库（1000 条约 37ms），而 `status` / `view` / 只追加的 `remember`
+        # 根本不用它。置脏即可 —— 所有语义入口（scores / _score_components /
+        # _vector_of / _find_duplicate / explain）进门前都会先 sync()。
+        self.semantics.mark_dirty()
         self.events = [Event.from_dict(e) for e in state["events"]]
         restored = [MemoryNode.from_dict(n) for n in state["tombstone"]]
         self.tombstone = {n.name: n for n in restored}

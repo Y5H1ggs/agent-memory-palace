@@ -36,7 +36,7 @@ from .logic import LogicGraph, Relation
 from .memory_model import MemoryKind
 from .narrative import NarrativeEngine
 from .palace import MemoryPalace
-from .persona import Persona, PersonaEngine, PersonalityEngine, TraitSpec
+from .persona import PersonaEngine, PersonalityEngine, TraitSpec
 from .semantics import ConceptEncoder
 from .style import StyleEngine
 from .value import ValueModel
@@ -408,11 +408,17 @@ def main() -> None:
     check("事件日志无损", len(p2.events) == expected_events, f"{expected_events} 条事件")
     check("风格证据链无损", len(p2.style.rules) == expected_rules)
     check("反思报告随快照恢复", p2.last_report is not None)
+    # 索引改为按需构建（读库时只置脏）：这里必须先 sync 一次再比对，
+    # 因为真正的不变量是「用过之后索引与图严格一致」，不是「加载瞬间就建好」。
+    # 顺带把这条断言变强：不光数量对得上，每条向量的内容也要能重建出来。
+    p2.semantics.sync(p2.graph)
+    snap2 = p2.snapshot()
     check(
-        "语义索引按内容重建，不依赖入盘向量",
-        p2.snapshot()["semantic_indexed"] == p2.snapshot()["nodes"]
-        and p2.snapshot()["semantic_ghosts"] == [],
-        f"{p2.snapshot()['semantic_indexed']} 条向量 / {p2.snapshot()['nodes']} 个节点",
+        "语义索引按内容重建，不依赖入盘向量（sync 后与图严格一致）",
+        snap2["semantic_indexed"] == snap2["nodes"]
+        and snap2["semantic_ghosts"] == []
+        and all(p2.semantics.sparse(n.name) is not None for n in p2.graph.all_nodes()),
+        f"{snap2['semantic_indexed']} 条向量 / {snap2['nodes']} 个节点",
     )
     probe_q = "凯利下注比例怎么算"
     check(

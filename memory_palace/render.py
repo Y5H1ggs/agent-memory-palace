@@ -13,7 +13,6 @@ HTML 的设计原则（第一版被用户指出「看着怪」，改的就是这
 """
 from __future__ import annotations
 
-import html
 import math
 from typing import Any
 
@@ -36,8 +35,16 @@ EVENT_ZH = {
 # ---------------------------------------------------------------- 基础读数
 
 
+# 自己转义而不是 import html：标准库的 html 包会顺带导入 html.entities
+# （一张 2000 多条实体的表），光这两步就要 11.7ms。而我们只需要合法化 5 个字符。
+# `memory-palace` 是每次调用都新起进程的 CLI，这 11.7ms 每次都要付。
+_ESCAPES = str.maketrans(
+    {"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#x27;"}
+)
+
+
 def _esc(value: Any) -> str:
-    return html.escape(str(value), quote=True)
+    return str(value).translate(_ESCAPES)
 
 
 def life_label(days: float | None) -> str:

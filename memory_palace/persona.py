@@ -26,7 +26,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import asdict, dataclass, field
-from typing import Any, Iterable
+from typing import Any
 
 from .core import DAY, Event, PalaceConfig, dataclass_field_names
 

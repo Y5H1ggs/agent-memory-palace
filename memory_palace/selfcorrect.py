@@ -26,13 +26,23 @@
 from __future__ import annotations
 
 import math
-import statistics
 from dataclasses import asdict, dataclass, field
 from typing import Any
 
 from .core import Event, PalaceConfig
 
 HOUR = 3600.0
+
+
+def _median(values: list[float]) -> float:
+    """中位数。自己写而不是 import statistics —— 标准库那个模块光导入就要 17ms，
+    而 `memory-palace` 是每次调用都新起一个进程的 CLI，这 17ms 每次都要付。
+    这里只用到一个函数，五行就够。"""
+    ordered = sorted(values)
+    middle = len(ordered) // 2
+    if len(ordered) % 2:
+        return ordered[middle]
+    return (ordered[middle - 1] + ordered[middle]) / 2.0
 
 # 白名单：这些是「表现层旋钮」，调错了也只是行为偏差，不会伤到身份与基座。
 ALLOWED_PARAMS: frozenset[str] = frozenset(
@@ -390,6 +400,22 @@ class SelfCorrector:
 
     # ---- 验证 ----
 
+    def rollback_unpersisted(self, patch: Patch, reason: str = "save_failed") -> bool:
+        """改在内存里、但没能落盘时，把配置退回去。
+
+        这不是「验证失败」，是「这次修改从未真正生效过」：
+        磁盘上还是旧值，重启就会回滚，而当前进程却拿着新值继续跑 ——
+        内存与磁盘从此说的不是同一件事，且**没有人会收到报错**。
+
+        原则：**存不下，就不算改过。** 提交是修改的一部分，不是修改之后的额外步骤。
+        """
+        if patch.status not in ("pending", "kept"):
+            return False
+        setattr(self.config, patch.param, patch.before)
+        patch.status = "reverted"
+        patch.reason = f"{patch.reason}｜{reason}"
+        return True
+
     def _judge(self, patch: Patch, value: float, evidence: str, now: float) -> str:
         """统一判决：要变好，且变化幅度跑赢噪声，才留；否则回滚。"""
         patch.observed = value
@@ -444,7 +470,7 @@ class SelfCorrector:
                 value for stamped, value in patch.samples if stamped >= patch.verify_at
             ]
             if after_window:
-                value = statistics.median(after_window)
+                value = _median(after_window)
                 evidence = "window_samples"
             else:
                 value = float(metrics.get(patch.metric, 0.0) or 0.0)

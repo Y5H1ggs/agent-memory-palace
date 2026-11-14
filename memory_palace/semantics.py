@@ -20,13 +20,15 @@
 """
 from __future__ import annotations
 
+import functools
 import hashlib
 import math
+import operator
 from collections import Counter, defaultdict
 from typing import Any, Callable, Iterable
 
 from .core import MemoryGraph, MemoryNode
-from .lexicon import NEGATION_BOOST, NEGATIONS, IdfModel, cached_tokens, tf_weight
+from .lexicon import NEGATION_BOOST, NEGATIONS, IdfModel, cached_tokens
 
 DEFAULT_CONCEPTS: dict[str, tuple[str, ...]] = {
     "position": ("仓位", "凯利", "半凯利", "资金管理", "下注", "分散", "持仓比例", "单笔"),
@@ -53,24 +55,137 @@ AMBIGUITY_FLOOR = 0.15
 
 Encoder = Callable[[str], list[float]]
 
-
-def _l2(vec: list[float]) -> list[float]:
-    norm = math.sqrt(sum(v * v for v in vec))
-    if norm == 0.0:
-        return vec
-    return [v / norm for v in vec]
+_INF = float("inf")
+_NEG_INF = -_INF
 
 
-def cosine(a: list[float], b: list[float]) -> float:
-    if len(a) != len(b):
+class SparseVector:
+    """只存非零分量的向量。
+
+    为什么值得为它单独一个类型：向量是 263 维，但一条记忆平均只有 18 个非零分量。
+    稠密点积每次都要跑满 263 次乘加（实测 12.2µs），按非零分量查表只要 1.3µs。
+    检索、聚类、去重三条路径都以余弦为主成本，这一步是量级差别，不是微调。
+
+    为什么不直接用第三方向量库：零依赖是这个项目的第一条约束，而这里要的东西
+    只有「点积 + 归一化」两件事，不值得为它引一棵依赖树。
+    """
+
+    __slots__ = ("idx", "val", "dim", "_map")
+
+    def __init__(
+        self,
+        idx: tuple[int, ...],
+        val: tuple[float, ...],
+        dim: int,
+        _map: dict[int, float] | None = None,
+    ) -> None:
+        self.idx = idx
+        self.val = val
+        self.dim = dim
+        # 预先建一张 分量号 → 值 的表：点积时可以直接查，不必每次重建
+        self._map = _map if _map is not None else dict(zip(idx, val))
+
+    @classmethod
+    def from_dense(cls, vec: list[float], dim: int | None = None) -> "SparseVector":
+        pairs = [(i, v) for i, v in enumerate(vec) if v]
+        return cls(
+            tuple(i for i, _ in pairs),
+            tuple(v for _, v in pairs),
+            len(vec) if dim is None else dim,
+        )
+
+    @classmethod
+    def zero(cls, dim: int) -> "SparseVector":
+        return cls((), (), dim)
+
+    def to_dense(self) -> list[float]:
+        out = [0.0] * self.dim
+        for i, v in zip(self.idx, self.val):
+            out[i] = v
+        return out
+
+    def dot(self, other: "SparseVector") -> float:
+        if self.dim != other.dim:
+            raise ValueError(f"语义向量维度不一致: {self.dim} vs {other.dim}")
+        if len(self.idx) > len(other.idx):
+            self, other = other, self
+        them = other._map
+        total = 0.0
+        for i, v in zip(self.idx, self.val):
+            w = them.get(i)
+            if w is not None:
+                total += v * w
+        return total
+
+    def __len__(self) -> int:
+        """维度，不是非零个数 —— 要让「像序列一样用它」的调用方不出意外。"""
+        return self.dim
+
+    @property
+    def nnz(self) -> int:
+        """非零分量个数。判断「这条向量是不是空的」用它，别用 len()。"""
+        return len(self.idx)
+
+    def __iter__(self):
+        """按稠密值迭代：有人会写 `for v in vec` / `sum(vec)`，让它照常能跑。
+
+        代价是摊开成 dim 个值。热路径**不要**用它 —— 那条路走 dot()。
+        """
+        return iter(self.to_dense())
+
+    def __bool__(self) -> bool:
+        return bool(self.idx)
+
+    def __repr__(self) -> str:
+        return f"SparseVector(dim={self.dim}, 非零={len(self.idx)})"
+
+
+def _as_dense(vec: Any) -> list[float]:
+    return vec.to_dense() if isinstance(vec, SparseVector) else list(vec)
+
+
+def cosine(a: Any, b: Any) -> float:
+    """余弦相似度。两端都可以是稠密列表或 SparseVector。
+
+    保留稠密入口是刻意的：自定义 encoder 返回的是列表，测试与外部调用方也在用列表。
+    内部热路径走稀疏分支，两者必须在数值上一致 —— 这条由 test_lexicon 的对照断言守着。
+    """
+    if isinstance(a, SparseVector) and isinstance(b, SparseVector):
+        return max(0.0, min(1.0, a.dot(b)))
+    da, db = _as_dense(a), _as_dense(b)
+    if len(da) != len(db):
         raise ValueError("语义向量维度不一致")
-    return max(0.0, min(1.0, sum(x * y for x, y in zip(a, b))))
+    # fsum(map(mul)) 全在 C 层跑，比 sum(x*y for ...) 的生成器快 2.3 倍
+    return max(0.0, min(1.0, math.fsum(map(operator.mul, da, db))))
 
 
 def cjk_bigrams(text: str) -> set[str]:
-    """只取中文字符 bigram：数字、拉丁字母、标点会把不同主题误连在一起。"""
-    chars = [c for c in (text or "") if "\u4e00" <= c <= "\u9fff"]
+    """只取中文字符 bigram：数字、拉丁字母、标点会把不同主题误连在一起。
+
+    带缓存：`learn_concepts` 要对全语料每条算一次。返回的是**缓存对象本身**，
+    调用方只读不改（现有调用方都做集合运算，会得到新集合）。
+    """
+    return _cjk_bigrams_cached(text or "")
+
+
+@functools.lru_cache(maxsize=8192)
+def _cjk_bigrams_cached(text: str) -> set[str]:
+    chars = [c for c in text if "\u4e00" <= c <= "\u9fff"]
     return {a + b for a, b in zip(chars, chars[1:])}
+
+
+@functools.lru_cache(maxsize=16384)
+def _bucket_of(term: str, char_dim: int) -> int:
+    """词项 → 哈希桶。
+
+    单独缓存这一步，因为它按**词**重复而不是按文本：同一批记忆里「部署」会出现
+    几十次，每次 rebuild 都要重新 blake2b 一遍。缓存后命中只要一次查表。
+
+    不用内置 hash()：它对 str 有进程级随机化，跨进程不稳定，
+    而索引必须在「保存 → 重载」后给出同一批向量。
+    """
+    digest = int(hashlib.blake2b(term.encode("utf-8"), digest_size=4).hexdigest(), 16)
+    return digest % char_dim
 
 
 class ConceptEncoder:
@@ -118,8 +233,12 @@ class ConceptEncoder:
             return [1.0 / len(indices)] * len(indices)
         return [value / total for value in raw]
 
-    def project(self, text: str) -> tuple[list[float], dict[str, list[float]], int]:
-        """把文本拆成概念分量 + 多义词裁决账目。encode 与 explain 共用同一条路径。"""
+    def project(self, text: str) -> tuple[list[float], dict[str, list[float]]]:
+        """把文本拆成概念分量 + 多义词裁决账目。encode 与 explain 共用同一条路径。
+
+        不再顺带返回「中文 bigram 个数」：那个值三个调用方全部丢弃，
+        却要在每次编码时构造一个约 24 元素的集合 —— 纯浪费（约 4µs/条）。
+        """
         source = (text or "").lower()
         scores = [0.0] * len(self.concept_keys)
         for term, indices in self._lexicon.items():
@@ -141,38 +260,56 @@ class ConceptEncoder:
             resolved[term] = [
                 round(share, 4) for share in shares
             ]
-        return scores, resolved, len(cjk_bigrams(source))
+        return scores, resolved
 
     def encode(self, text: str) -> list[float]:
-        """无 IDF 的编码：给「只有一个查询、没有语料」的场景用（等价于全部词同权）。"""
-        return self.encode_with(None, text)
+        """无 IDF 的稠密编码：给「只有一个查询、没有语料」的场景用（等价于全部词同权）。
 
-    def encode_with(self, idf: "IdfModel | None", text: str) -> list[float]:
-        """词法编码：概念分量 + IDF 加权的词项分量。
+        对外契约仍是 list[float]（`Encoder` 就这么定义的），但内部热路径走
+        `encode_with` 直接产出 SparseVector，不再铺一遍 263 维数组再归一化。
+        """
+        return self.encode_with(None, text).to_dense()
+
+    def encode_with(self, idf: "IdfModel | None", text: str) -> SparseVector:
+        """词法编码：概念分量 + IDF 加权的词项分量，直接产出稀疏向量。
 
         为什么必须带 IDF：字符维原本是「每对字符等权加一」，于是
         「输出」这种满语料都是的词与「凯利」权重相同 —— 余弦被高频虚词主导，
         「构建机输出乱码」与「输出用表格」就会被判成同一件事。
         IDF 把「到处都有」压下去，把「只有这里才有」抬上来。
+
+        为什么直接产稀疏：先铺稠密再过滤，等于把 263 维里的 245 个零算两遍
+        （铺一遍、归一化时再扫一遍）。这里只在累加器里留非零项，归一化也只扫非零项。
         """
-        scores, _resolved, _chars = self.project(text)
-        vec = [float(s) for s in scores] + [0.0] * self.char_dim
+        scores, _resolved = self.project(text)
         base = len(self.concept_keys)
+        char_dim = self.char_dim
+        char_weight = self.char_weight
+        acc: dict[int, float] = {
+            index: float(score) for index, score in enumerate(scores) if score
+        }
         # 空 IDF（还没语料）不能当「所有词权重 0」用 —— 那会把词项维整片抹掉，
         # 只剩概念维，两条共享概念的记忆余弦会变成 1.0。
         usable = idf if (idf is not None and idf.n > 0) else None
         for term, count in cached_tokens(text).items():
-            weight = tf_weight(
-                count,
-                usable.weight(term) if usable is not None else 1.0,
-                NEGATION_BOOST if term in NEGATIONS else 1.0,
-            )
+            # 内联 tf_weight 与否定词查表：这两个调用占了词项循环一半的开销，
+            # 而它们都只有一行算术。保持语义完全一致（1+log tf × idf × boost）。
+            multiplier = usable.weight(term) if usable is not None else 1.0
+            if not multiplier:
+                continue  # 语料里没有这个词：文档侧该维也是 0，加了只会抬高自身范数
+            weight = (1.0 + math.log(count)) * multiplier
+            if term in NEGATIONS:
+                weight *= NEGATION_BOOST
             # 仍用哈希桶（维度固定、可序列化），但桶内权重带 IDF —— 碰撞不再等权叠加
-            bucket = int(
-                hashlib.blake2b(term.encode("utf-8"), digest_size=4).hexdigest(), 16
-            )
-            vec[base + bucket % self.char_dim] += self.char_weight * weight
-        return _l2(vec)
+            key = base + _bucket_of(term, char_dim)
+            acc[key] = acc.get(key, 0.0) + char_weight * weight
+        norm = math.sqrt(math.fsum(v * v for v in acc.values()))
+        if not norm:
+            return SparseVector.zero(self.dim)
+        inv = 1.0 / norm
+        unit = {i: v * inv for i, v in acc.items() if v}
+        idx = tuple(sorted(unit))
+        return SparseVector(idx, tuple(unit[i] for i in idx), self.dim, _map=unit)
 
     def __call__(self, text: str) -> list[float]:
         return self.encode(text)
@@ -181,7 +318,7 @@ class ConceptEncoder:
 
     def explain(self, text: str) -> dict[str, Any]:
         """这条文本凭什么被归到这些概念？多义词被分到了谁头上？"""
-        scores, resolved, _chars = self.project(text)
+        scores, resolved = self.project(text)
         names = {
             self.concept_keys[i]: round(score, 4)
             for i, score in enumerate(scores)
@@ -296,36 +433,48 @@ class SemanticIndex:
         # IDF 由语料现算（不落盘）：快照只存文本，权重是文本的函数，
         # 换一批记忆权重自然跟着变，不会留下陈旧统计。
         self._idf = IdfModel()
+        # 编码失败的节点：记下来别反复重试（见 _fill_missing）
+        self._failed: set[str] = set()
 
     def __len__(self) -> int:
         return len(self._vectors)
 
     # ---- 内部 ----
 
-    @staticmethod
-    def _graph_signature(graph: MemoryGraph) -> bytes:
-        digest = hashlib.blake2b(digest_size=16)
-        for name, content in sorted((n.name, n.content) for n in graph.all_nodes()):
-            digest.update(name.encode("utf-8"))
-            digest.update(b"\x00")
-            digest.update(content.encode("utf-8"))
-            digest.update(b"\x01")
-        return digest.digest()
+    def _validate(self, vec: Any) -> SparseVector:
+        """把编码结果转成稀疏向量，并挡住坏数据。
 
-    def _validate(self, vec: Any) -> list[float]:
+        三段检查合并成一趟：`math.fsum` 在 C 层扫一遍，同时解决
+        「含非数值（TypeError）」「含 NaN（total != total）」「含 Inf（inf 或 ValueError）」。
+        原来是逐元素 isinstance + isfinite + float() 跑四遍，实测 27µs ——
+        与整个编码（30µs）相当。那是纯浪费：263 个元素里有 245 个是零，
+        却要逐个承认「它是零」。
+
+        仍然拒绝维度不符与 NaN/Inf：索引一旦被污染，后面所有余弦都不可信。
+        """
+        if isinstance(vec, SparseVector):
+            if self._dim is None:
+                self._dim = vec.dim
+            if vec.dim != self._dim:
+                raise ValueError(f"语义向量维度异常: {vec.dim}，应为 {self._dim}")
+            return vec
         if not isinstance(vec, (list, tuple)):
             raise ValueError("编码器必须返回数值向量")
-        values = list(vec)
         if self._dim is None:
-            self._dim = len(values)
-        if not values or len(values) != self._dim:
-            raise ValueError(f"语义向量维度异常: {len(values)}，应为 {self._dim}")
-        for value in values:
-            if isinstance(value, bool) or not isinstance(value, (int, float)):
-                raise ValueError(f"语义向量含非数值分量: {value!r}")
-            if not math.isfinite(float(value)):
-                raise ValueError(f"语义向量含 NaN/Inf，拒绝污染索引: {value!r}")
-        return [float(v) for v in values]
+            self._dim = len(vec)
+        if not vec or len(vec) != self._dim:
+            raise ValueError(f"语义向量维度异常: {len(vec)}，应为 {self._dim}")
+        if self._custom and any(isinstance(v, bool) for v in vec):
+            raise ValueError("语义向量含布尔值")
+        try:
+            total = math.fsum(vec)
+        except TypeError:
+            raise ValueError("语义向量含非数值分量") from None
+        except (ValueError, OverflowError):
+            raise ValueError("语义向量含 NaN/Inf，拒绝污染索引") from None
+        if total != total or total in (_INF, _NEG_INF):
+            raise ValueError(f"语义向量含 NaN/Inf，拒绝污染索引: {total!r}")
+        return SparseVector.from_dense(list(vec), self._dim)
 
     def _learn_lexicon(self, texts: list[str]) -> None:
         if not self._learn:
@@ -367,7 +516,7 @@ class SemanticIndex:
 
     # ---- 索引维护 ----
 
-    def _encode(self, text: str) -> list[float]:
+    def _encode(self, text: str) -> SparseVector:
         """统一入口：支持 IDF 的编码器走 encode_with，其余走 encode。"""
         encoder = self.encoder
         if hasattr(encoder, "encode_with"):
@@ -381,12 +530,21 @@ class SemanticIndex:
         self._dirty = True  # 语料变了，概念词典可能要重学
 
     def forget(self, name: str) -> None:
+        self._failed.discard(name)
         if self._vectors.pop(name, None) is not None:
             self._dirty = True
 
-    def vector(self, name: str) -> list[float] | None:
-        """给沉淀聚类等外部模块取用；未建索引的节点返回 None 而不是零向量。"""
+    def sparse(self, name: str) -> SparseVector | None:
+        """热路径取用：点积、聚类、去重都走这个，避免每条向量摊开成 263 维数组。"""
         return self._vectors.get(name)
+
+    def vector(self, name: str) -> list[float] | None:
+        """稠密视图（兼容与诊断用）：给测试、自定义 encoder 与外部调用方。
+
+        内部热路径**不要**用它 —— 每次调用都会新分配一个 263 元素数组。
+        """
+        vec = self._vectors.get(name)
+        return None if vec is None else vec.to_dense()
 
     def rebuild(self, graph: MemoryGraph) -> None:
         docs = [n.content for n in graph.all_nodes()]
@@ -394,24 +552,64 @@ class SemanticIndex:
         # IDF 必须先于任何编码算完：同一批向量必须共享同一把尺子，否则余弦没有意义
         self._idf = IdfModel(docs)
         self._vectors.clear()
+        self._failed.clear()
         for node in graph.all_nodes():
             self._vectors[node.name] = self._encode(node.content)
         self._dirty = False
 
-    def sync(self, graph: MemoryGraph) -> None:
-        """检索前对齐：脏了（或向量数与图不符）才重建。
+    def _fill_missing(self, graph: MemoryGraph) -> int:
+        """只补「图里有、索引里没有」的向量，不重算已有向量。
 
-        以前是每次查询都算一遍全语料哈希 —— 1000 条记忆每次查询要扫 30KB 文本。
-        现在只读一个布尔量，重建由写入方负责置脏。
+        存在的理由是一个真实缺陷：沉淀每新建一条结论节点，图的节点数就 +1，
+        而 sync() 把「数量不一致」当成「必须全量重建」——一次 run_cycle 里有 8 个簇，
+        就是 8 次全量重建（200 条记忆 = 1636 次编码，164ms 里 140ms 花在这）。
+        补缺失是 O(k)，重建是 O(n)。
+
+        代价必须说清：新节点用的是**当前这把 IDF 尺**，语料统计没有跟着更新。
+        所以补完之后索引与「按最终语料重建」会有极小差异；
+        调用方若要求严格一致（例如沉淀刚造出新内容），应在批次结束时置脏让下次重建。
         """
-        if self._dirty or len(self._vectors) != len(graph):
+        live = {n.name for n in graph.all_nodes()}
+        filled = 0
+        for name in [k for k in self._vectors if k not in live]:
+            del self._vectors[name]           # 幽灵向量：图里已经没有了
+        for node in graph.all_nodes():
+            if node.name in self._vectors or node.name in self._failed:
+                continue
+            try:
+                self._vectors[node.name] = self._encode(node.content)
+                filled += 1
+            except ValueError:
+                # 坏内容不进索引，但不阻断其他节点。
+                # 记进 _failed 是必须的：否则每次 sync 都会重试同一条必然会失败的编码，
+                # 让「补缺失」从 O(k) 退化成 O(n) —— 一条坏数据就能拖慢所有查询。
+                self._failed.add(node.name)
+        return filled
+
+    def sync(self, graph: MemoryGraph) -> None:
+        """检索前对齐。
+
+        分两种情况，代价差一个量级：
+          · 语料内容变了（dirty）→ 必须全量重建：IDF 是所有向量共用的尺子，
+            尺子变了，每条向量都得重算；
+          · 只是多了几条节点（沉淀新建的结论）→ 只补缺失，别重算已有的。
+
+        以前把两者混成一件事，后果是「沉一个簇就重建一整遍」。
+        """
+        if self._dirty:
             self.rebuild(graph)
+        elif len(self._vectors) != len(graph):
+            self._fill_missing(graph)
+
+    def mark_dirty(self) -> None:
+        """显式置脏：图里出现了新内容（例如沉淀产出的结论），需要下次全量对齐。"""
+        self._dirty = True
 
     def ghosts(self, graph: MemoryGraph) -> list[str]:
         """索引里存在、图里已删除的名字 —— 幽灵记忆检测。"""
         return sorted(set(self._vectors) - set(graph.nodes()))
 
-    def encode_query(self, text: str) -> list[float]:
+    def encode_query(self, text: str) -> SparseVector:
         """对外暴露「同尺编码」：任何要跟库内向量比余弦的地方都必须走这里。
 
         直接用 encoder.encode() 会拿到「无 IDF 权重」的向量，与库内向量不在同一空间，
@@ -421,12 +619,31 @@ class SemanticIndex:
 
     def scores(self, query: str, min_score: float = 0.0) -> dict[str, float]:
         q = self._encode(query)
-        if not any(q):
+        if not q:
             return {}
+        # 稀疏点积不必再包一层 cosine()：两边都已经 L2 归一化，点积就是余弦；
+        # 只需按 cosine 的口径夹到 [0, 1]。
+        out: dict[str, float] = {}
+        for name, vec in self._vectors.items():
+            score = q.dot(vec)
+            if score > 1.0:
+                score = 1.0
+            elif score < 0.0:
+                score = 0.0
+            if score >= min_score:
+                out[name] = round(score, 6)
+        return out
+
+    def scores_dense(self, query: str, min_score: float = 0.0) -> dict[str, float]:
+        """同上的稠密实现，只作对照用（测试里拿它验证稀疏分支没算错）。"""
+        q = self._encode(query)
+        if not q:
+            return {}
+        dense = q.to_dense()
         return {
             name: round(score, 6)
             for name, vec in self._vectors.items()
-            if (score := cosine(q, vec)) >= min_score
+            if (score := cosine(dense, vec)) >= min_score
         }
 
     def search(

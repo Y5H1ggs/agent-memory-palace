@@ -43,6 +43,8 @@ jobs:
         run: python tests/test_lexicon.py
       - name: 语用层自测（撤回≠同意 / 模糊降级）
         run: python tests/test_pragmatics.py
+      - name: 代码审计（优化保序 / 边界校验 / 增量补建）
+        run: python tests/test_audit.py
       - name: 绿灯体检（变异测试，必须 0 漏洞）
         run: python tools/greenlight_audit.py
       - name: 编码器示例可跑

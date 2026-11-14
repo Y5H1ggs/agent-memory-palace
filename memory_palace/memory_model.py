@@ -20,7 +20,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from .core import DAY, MemoryGraph, MemoryNode, PalaceConfig
+from .core import MemoryGraph, MemoryNode, PalaceConfig
 
 
 @dataclass(frozen=True)

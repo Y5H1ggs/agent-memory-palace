@@ -124,7 +124,9 @@ class IdfModel:
         n = 0
         for doc in docs:
             n += 1
-            df.update(tokens(doc).keys())  # 用 keys()：一篇文档里重复出现只算一次 df
+            # 用带缓存的分词：一次 rebuild 里同一批文本会被问两遍（学词典 + 算 IDF），
+            # 第二次全命中；keys() 保证一篇文档里重复出现只算一次 df
+            df.update(cached_tokens(doc).keys())
         self.n = n
         self.df = df
         self._cache: dict[str, float] = {}
