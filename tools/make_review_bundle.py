@@ -149,11 +149,12 @@ def main(argv: list[str]) -> int:
             print("llms-full.txt 已过期：代码/文档变了但没重新生成。")
             print("修法：python tools/make_review_bundle.py")
             return 1
-        print(f"llms-full.txt 是最新的（{len(content) / 1024:.0f} KB）")
+        print(f"llms-full.txt 是最新的（{len(content.encode('utf-8')) / 1024:.0f} KB）")
         return 0
     with open(OUT, "w", encoding="utf-8", newline="\n") as f:
         f.write(content)
-    print(f"✓ llms-full.txt  {len(content) / 1024:.0f} KB")
+    # 报字节，不报字符：中文一个字符三字节，按字符说 KB 会少报一半
+    print(f"✓ llms-full.txt  {len(content.encode('utf-8')) / 1024:.0f} KB / {len(content) / 1024:.1f}K 字符")
     return 0
 
 

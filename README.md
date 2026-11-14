@@ -14,7 +14,7 @@
 
 > 给读这个仓库的模型：机器可读的当前状态在 **[llms.txt](llms.txt)**。
 > 要整份交给评审模型（它会说"没看到某个文件"的时候），用 **[llms-full.txt](llms-full.txt)** ——
-> 32 KB，含文件清单（行数 + 哈希）与全部测试用例名。
+> 约 50 KB（32K 字符），含文件清单（行数 + 哈希）与全部测试用例名。
 > `docs/` 里那两篇批评与调研是历史文档，描述的是 0.5.x / 0.9 时代，不要当成现状。
 
 **TL;DR (English)** — A dependency-free Python implementation of a *memory lifecycle*: idempotent decay, affect that both hardens and distorts recall, consolidation with a one-way door, value-based forgetting with a fixed attention budget, self-narrative as a projection, tree-shaped injection to save tokens, and self-correction bounded by whitelist + multi-objective guardrails.

@@ -36,11 +36,12 @@ SemVer 里 `1.0.0` 的含义是「公开 API 已稳定，可以放心依赖」�
 
 ### 做法
 
-- 新增 `tools/make_review_bundle.py`：生成 **`llms-full.txt`**（约 32 KB），内容为
+- 新增 `tools/make_review_bundle.py`：生成 **`llms-full.txt`**（约 50 KB / 32K 字符），内容为
   `llms.txt` + `README.md` + 文件清单（路径 / 行数 / sha256 前 8 位 / 模块首行说明）+
   全部测试用例名 + 最新 CHANGELOG。
   不塞完整源码（几十万行，模型反而看不进去），但**把存在性与规模摆明白**：
   「有没有 sqlite_store.py」在这份文件里是一行表格，不是需要猜的事。
+  生成器的体积报**字节**而不是字符 —— 中文一个字符三字节，按字符说 KB 会少报一半。
 - `--check` 模式：文件过期就返回非零。接进 `tests/test_docs.py` 与 CI ——
   **代码改了、包没重生成，构建就红**。
 - 评审的正确用法写进 README 与 llms.txt：把 `llms-full.txt` 整份粘贴，
