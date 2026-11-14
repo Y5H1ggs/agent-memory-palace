@@ -36,6 +36,10 @@ SKIP_DIRS = {
     # 一旦把它写进清单，`--check` 会在 CI 上永远报「已过期」—— 而且看不出为什么。
     ".pytest_cache", ".mypy_cache", ".ruff_cache", "build", "dist", ".idea",
 }
+
+# `pip install -e .` 会在仓库根生成 egg-info：CI 上**有**，本地未必有。
+# 按后缀匹配而不是加整目录名 —— 包名一改，目录名就跟着变。
+SKIP_SUFFIX_DIR = (".egg-info",)
 SKIP_SUFFIX = (".pyc", ".png", ".jpg", ".sqlite", ".db", ".pyo")
 
 
@@ -73,7 +77,10 @@ def _first_docline(path: str) -> str:
 def _inventory() -> list[str]:
     rows: list[str] = ["## 文件清单（代码与文档）", "", "| 路径 | 行数 | sha256 | 说明 |", "|---|---|---|---|"]
     for dirpath, dirs, files in os.walk(ROOT):
-        dirs[:] = sorted(d for d in dirs if d not in SKIP_DIRS)
+        dirs[:] = sorted(
+            d for d in dirs
+            if d not in SKIP_DIRS and not d.endswith(SKIP_SUFFIX_DIR)
+        )
         for name in sorted(files):
             if name.endswith(SKIP_SUFFIX):
                 continue
