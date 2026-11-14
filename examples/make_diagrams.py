@@ -35,14 +35,16 @@ NUMBERS = {
     "sqlite_load": 45.7,
     "json_size": 2.0,
     "sqlite_size": 4.5,
-    "lex_finance_exact": 0.889,
-    "lex_finance_para": 0.591,
-    "hyb_finance_exact": 0.889,
-    "hyb_finance_para": 0.727,
-    "lex_tech_exact": 1.000,
-    "lex_tech_para": 0.923,
-    "hyb_tech_exact": 1.000,
-    "hyb_tech_para": 0.923,
+    "dom_finance": 0.800,
+    "dom_tech": 0.944,
+    "dom_medical": 1.000,
+    "dom_legal": 1.000,
+    "dom_support": 0.778,
+    "dom_personal": 1.000,
+    "mean_recall": 0.920,
+    "mean_mrr": 0.815,
+    "abstain_f1": 0.976,
+    "dedupe_f1": 0.944,
 }
 
 INK = "#1f2328"
@@ -388,37 +390,43 @@ def bench() -> str:
 def eval_chart() -> str:
     n = NUMBERS
     body = [defs()]
-    body.append(text(40, 44, "组件级评测：两条通道在两类查询上的召回", 20, INK, 700))
+    body.append(text(40, 44, "组件级评测：六个领域的检索召回", 20, INK, 700))
     body.append(
-        text(40, 70, "80 条记忆 / 42 条查询，两个领域。exact = 字面重叠；paraphrase = 换了个说法。k=5。", 13, MUTED)
+        text(40, 70, "135 条记忆 / 90 条查询，词法通道，k=5。领域多了才有资格说「阈值不是过拟合」。", 13, MUTED)
     )
 
-    groups = [
-        ("zh-finance · exact（字面重叠）", n["lex_finance_exact"], n["hyb_finance_exact"]),
-        ("zh-finance · paraphrase（换说法）", n["lex_finance_para"], n["hyb_finance_para"]),
-        ("zh-tech · exact（字面重叠）", n["lex_tech_exact"], n["hyb_tech_exact"]),
-        ("zh-tech · paraphrase（换说法）", n["lex_tech_para"], n["hyb_tech_para"]),
+    domains = [
+        ("zh-finance · A 股复盘", n["dom_finance"], "39 条 / 24 问"),
+        ("zh-tech · 工程运维", n["dom_tech"], "40 条 / 22 问"),
+        ("zh-medical · 用药与就医", n["dom_medical"], "15 条 / 11 问"),
+        ("zh-legal · 合同与合规", n["dom_legal"], "14 条 / 11 问"),
+        ("zh-support · 客服工单", n["dom_support"], "13 条 / 11 问"),
+        ("zh-personal · 个人助理", n["dom_personal"], "14 条 / 11 问"),
     ]
-    base_y = 108
-    bar_x, bar_w = 330, 660
-    for index, (label, lex, hyb) in enumerate(groups):
-        top = base_y + index * 82
-        body.append(text(bar_x, top + 4, label, 12.3, INK, 700))
-        for offset, (value, color, tag) in enumerate(((lex, AMBER, "词法"), (hyb, GREEN, "混合"))):
-            y = top + 12 + offset * 30
-            width = int(bar_w * value)
-            body.append(card(bar_x, y, bar_w, 22, fill="#eef1f4", stroke="none", r=5))
-            body.append(card(bar_x, y, max(3, width), 22, fill=color, stroke="none", r=5))
-            body.append(text(bar_x + width + 10, y + 16, f"{value:.3f}", 11.8, color, 700))
-            body.append(text(bar_x - 10, y + 16, tag, 11, MUTED, anchor="end"))
+    bar_x, bar_w = 360, 512  # 给右侧汇总卡留出位置，否则数值标签会被卡片压住
+    for index, (label, value, size) in enumerate(domains):
+        y = 106 + index * 54
+        body.append(text(bar_x - 12, y + 14, label, 12.5, INK, 700, anchor="end"))
+        body.append(text(bar_x - 12, y + 30, size, 10.5, MUTED, anchor="end"))
+        body.append(card(bar_x, y, bar_w, 24, fill="#eef1f4", stroke="none", r=6))
+        body.append(card(bar_x, y, max(3, int(bar_w * value)), 24, fill=GREEN if value >= 0.9 else AMBER, stroke="none", r=6))
+        body.append(text(bar_x + bar_w + 10, y + 17, f"{value:.3f}", 12, INK, 700))
 
-    body.append(card(40, 448, 1120, 96, fill=BLUE_BG, stroke="#9ec5f7"))
-    body.append(text(60, 474, "读法：稠密通道的收益全部来自「换说法」（0.591 → 0.727），exact 上没有增益。", 13, INK, 700))
-    body.append(
-        text(60, 498, "这恰好说明它替代不了真模型：内置哈希只补字面变形。接真模型后，用同一条命令重测就知道值不值。", 12.5, MUTED)
-    )
-    body.append(text(60, 526, "弃答 F1 0.86 / 1.00（阈值 0.20，由 calibrate 扫出来，不是拍出来的）。", 12.5, MUTED))
-    return svg(1200, 566, "\n".join(body), "组件级评测")
+    # 右侧：汇总 + 三个被扩领域抓出来的问题
+    body.append(card(960, 96, 200, 150, fill=PAPER, stroke=LINE))
+    body.append(text(978, 122, "六领域平均", 12.5, MUTED, 700))
+    rows = (("recall@5", n["mean_recall"]), ("MRR", n["mean_mrr"]),
+            ("弃答 F1", n["abstain_f1"]), ("去重 F1", n["dedupe_f1"]))
+    for i, (key, value) in enumerate(rows):
+        body.append(text(978, 148 + i * 24, key, 11.5, MUTED))
+        body.append(text(1120, 148 + i * 24, f"{value:.3f}", 12, INK, 700, anchor="end"))
+
+    body.append(card(40, 448, 1120, 118, fill=BLUE_BG, stroke="#9ec5f7"))
+    body.append(text(60, 474, "扩到六个领域，立刻抓出三个真问题（都已修，都有测试守着）", 13, INK, 700))
+    body.append(text(60, 500, "· 标签没进索引：「我有什么忌口」得分 0.000 —— 正文写「不吃香菜」，标签才是「忌口」", 12.3, MUTED))
+    body.append(text(60, 522, "· 哈希桶碰撞：无关查询能拿 0.455（零共享词项），桶数 256 → 1024 后只剩真实的 0.219", 12.3, MUTED))
+    body.append(text(60, 544, "· 弃答线过拟合：0.20 在两领域好看，六领域里误弃 4 条 → 默认值降到 0.14", 12.3, MUTED))
+    return svg(1200, 586, "\n".join(body), "组件级评测")
 
 
 def write(name: str, content: str) -> None:

@@ -106,12 +106,15 @@ class PalaceConfig:
     # 但后者补了新约束，合并就把约束吃掉了。长度差超过 15% 一律不合并。
     dedupe_length_ratio: float = 0.85
     # —— 弃答线：低于它就不硬凑，宁可说「没有相关记忆」——
-    # 这个数以前是「实测底噪 0.13、真匹配 0.5，取中间 0.30」。标注集一测就露馅：
-    # 0.30 在短查询上误弃 5 条（zh-finance），F1 只有 0.5；0.18~0.21 是平台区，F1 0.93。
-    # 原因是「真匹配」在短句上根本到不了 0.5 —— 那句话是拿长记忆当查询测出来的。
-    # 现值 0.20 取自标定平台中段，仍然随语料漂移，所以它还是**配置**，
-    # 换语料请用 `memory-palace calibrate --apply` 重扫，别信默认值。
-    abstain_semantic_floor: float = 0.20
+    # 这个数改过三次，每次都是被标注集推翻的：
+    #   0.30 → 两领域上误弃 5 条（F1 0.5），降到 0.20；
+    #   0.20 → 扩到六领域后仍误弃 4 条、只多抓到 0 条；
+    #   0.15 → 标定扫描下界原本贴着它，推荐值必然是边界，属于假最优点；
+    #          放宽到 0.04 起扫后，平台是 0.04~0.14，取**上界** 0.14：
+    #          它是「在 90 条查询上误弃仍为 0」的最大值，再高就开始弃掉已有记忆。
+    # 要说清的是：词法编码器只能判「有没有共同词」，判不了「换了说法是不是同一件事」。
+    # 所以这条线只在「几乎零重叠」时触发；接真模型之后分布会变，必须重扫。
+    abstain_semantic_floor: float = 0.14
 
     # —— 情感权重：潮水（唤醒）、河床（刻痕）、失真代价 ——
     affect_arousal_half_life_days: float = 3.0
@@ -190,6 +193,10 @@ class PalaceConfig:
     snapshot_every: int = 50
     # 读库时校验 sha256（JSON 后端）。关掉能省几毫秒，代价是「坏数据被当成好数据」。
     verify_checksum: bool = True
+    # 建索引时把标签也算进文档。标签是人手挑的词，往往比正文更接近提问方式
+    # （正文写「不吃香菜与内脏」，标签写「忌口」）—— 不索引它们时，
+    # 「我有什么忌口」在标注集上的得分是 0.000：不是排得靠后，是根本没进候选集。
+    index_tags: bool = True
 
     # —— 嵌入通道：真正的固定维度稠密向量，可换成本地模型或远程 API ——
     # "" = 只用词法通道（零依赖默认）；hashing = 内置哈希嵌入；http = OpenAI 兼容 /embeddings
@@ -256,6 +263,7 @@ class PalaceConfig:
     BOOL_FIELDS: ClassVar[tuple[str, ...]] = (
         "journal_enabled",
         "verify_checksum",
+        "index_tags",
     )
 
     def to_dict(self) -> dict[str, Any]:
@@ -447,15 +455,24 @@ class PalaceConfig:
         if self.snapshot_every < 0:
             raise ValueError("config.snapshot_every 不能为负（0 = 不留快照）")
         # —— 嵌入 ——
-        if self.embedding_provider not in ("", "hashing", "http"):
+        if self.embedding_provider not in (
+            "",
+            "hashing",
+            "http",
+            "openai",
+            "ollama",
+            "st",
+            "sentence-transformers",
+        ):
             raise ValueError(
-                f"config.embedding_provider 只能是 ''/hashing/http，实际 {self.embedding_provider!r}"
+                "config.embedding_provider 只能是 "
+                f"'/hashing/http/openai/ollama/st，实际 {self.embedding_provider!r}"
             )
         if not 32 <= self.embedding_dim <= 8192:
             raise ValueError("config.embedding_dim 必须落在 [32, 8192]")
         if not 0 <= self.hybrid_weight <= 1:
             raise ValueError("config.hybrid_weight 必须落在 [0, 1]")
-        if self.embedding_provider == "http" and not self.embedding_endpoint:
+        if self.embedding_provider in ("http", "openai") and not self.embedding_endpoint:
             raise ValueError("embedding_provider=http 时必须提供 embedding_endpoint")
         # —— LLM 反思 ——
         if self.llm_provider not in ("", "http"):

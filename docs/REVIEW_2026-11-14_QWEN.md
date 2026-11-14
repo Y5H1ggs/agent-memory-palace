@@ -170,5 +170,5 @@ if not self._maybe_save():
 python -m pytest tests/test_store.py -q            # 含竞态与落盘回滚
 python -m pytest tests -q                          # 99 项
 python -m memory_palace.bench 1000                 # 写入 p50/p95
-python tools/greenlight_audit.py                   # 28 个变异，0 漏洞
+python tools/greenlight_audit.py                   # 30 个变异，0 漏洞
 ```

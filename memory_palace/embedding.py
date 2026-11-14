@@ -211,6 +211,144 @@ class HttpEmbedder:
         return len(self._cache)
 
 
+class OllamaEmbedder(HttpEmbedder):
+    """本机 Ollama（`ollama serve`）。零依赖，只用标准库。
+
+    端点分两代，都必须支持：
+      · `/api/embed`（新）：入参 `{"model", "input": [..]}`，出参 `{"embeddings": [[..], ..]}`
+      · `/api/embeddings`（旧）：一次一条，入参 `{"model", "prompt"}`，出参 `{"embedding": [..]}`
+    只支持新的会让一堆人的旧版本直接不可用；只支持旧的则拿不到批量的好处。
+    先打新的，404/405 或返回体没有 embeddings 时退回旧的，并把结果记住，后续不再试探。
+
+    与 `HttpEmbedder` 的唯一区别是端点与返回体结构，所以缓存、超时、维度校验、
+    失败计数全部继承 —— 那部分逻辑已经写过一遍，不重复。
+    """
+
+    def __init__(
+        self,
+        host: str = "http://127.0.0.1:11434",
+        model: str = "bge-m3",
+        *,
+        timeout: float = 60.0,
+        cache_path: str = "",
+        batch: int = 16,
+        dim: int = 0,
+    ) -> None:
+        host = (host or "http://127.0.0.1:11434").rstrip("/")
+        super().__init__(
+            f"{host}/api/embed",
+            model,
+            "",
+            dim=dim,
+            timeout=timeout,
+            cache_path=cache_path,
+            batch=batch,
+        )
+        self.host = host
+        self.name = f"ollama:{model}"
+        self.legacy = False  # 首次成功后记住走哪一代端点
+
+    def _post(self, url: str, payload: dict) -> dict:
+        req = urllib.request.Request(
+            url,
+            data=json.dumps(payload).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=self.timeout) as resp:
+                return json.loads(resp.read().decode("utf-8"))
+        except urllib.error.HTTPError as exc:
+            if exc.code in (404, 405):
+                raise FileNotFoundError(url) from None
+            self.failures += 1
+            raise EmbeddingError(f"Ollama 返回 {exc.code}: {url}") from None
+        except (urllib.error.URLError, OSError, ValueError) as exc:
+            self.failures += 1
+            raise EmbeddingError(f"Ollama 请求失败: {exc}") from None
+
+    def _store(self, text: str, vec: list[float]) -> None:
+        if not vec:
+            raise EmbeddingError("Ollama 返回空向量")
+        if not self.dim:
+            self.dim = len(vec)
+        if len(vec) != self.dim:
+            raise EmbeddingError(f"维度不一致: {len(vec)} != {self.dim}（换模型了？）")
+        self._cache[self._key(text)] = _l2(vec) if self.normalize else vec
+        self._dirty = True
+
+    def _request(self, chunk: list[str]) -> None:
+        if not chunk:
+            return
+        if not self.legacy:
+            try:
+                body = self._post(
+                    f"{self.host}/api/embed", {"model": self.model, "input": chunk}
+                )
+                vectors = body.get("embeddings") or []
+                if vectors and len(vectors) == len(chunk):
+                    for text, vec in zip(chunk, vectors):
+                        self._store(text, [float(v) for v in vec])
+                    return
+            except FileNotFoundError:
+                self.legacy = True
+        # 旧端点：一次一条
+        for text in chunk:
+            body = self._post(
+                f"{self.host}/api/embeddings", {"model": self.model, "prompt": text}
+            )
+            self._store(text, [float(v) for v in body.get("embedding") or []])
+
+
+class SentenceTransformerEmbedder:
+    """本地 sentence-transformers 模型（BGE / m3e / gte / Qwen3-Embedding 等）。
+
+    这是唯一「真·神经语言模型」路径，也是唯一带第三方依赖的路径 ——
+    所以它在**用到时**才 import。没装就报一句能直接照做的话，
+    而不是在模块导入时把整个包拖下水。
+
+    缓存只放内存：本地推理没有网络成本，落盘反而会跟模型版本脱节
+    （换 checkpoint 而缓存没换，向量会静默错配）。
+    """
+
+    def __init__(
+        self,
+        model: str = "BAAI/bge-small-zh-v1.5",
+        *,
+        device: str = "",
+        batch: int = 32,
+        trust_remote_code: bool = False,
+    ) -> None:
+        try:
+            from sentence_transformers import SentenceTransformer  # noqa: PLC0415
+        except ImportError as exc:  # pragma: no cover - 取决于环境
+            raise EmbeddingError(
+                "provider=st 需要 sentence-transformers：pip install sentence-transformers\n"
+                "（不想装依赖就用 provider=http 接任意 OpenAI 兼容端点，或 provider=ollama）"
+            ) from exc
+        self.name = f"st:{model}"
+        self.model_name = model
+        self._model = SentenceTransformer(model, device=device or None, trust_remote_code=trust_remote_code)
+        self._batch = max(1, int(batch))
+        self.dim = int(self._model.get_sentence_embedding_dimension() or 0)
+        self._cache: dict[str, list[float]] = {}
+
+    def embed(self, text: str) -> list[float]:
+        return self.embed_many([text])[0]
+
+    def embed_many(self, texts: Iterable[str]) -> list[list[float]]:
+        items = list(texts)
+        missing = [t for t in items if t not in self._cache]
+        for start in range(0, len(missing), self._batch):
+            chunk = missing[start : start + self._batch]
+            vectors = self._model.encode(
+                chunk, normalize_embeddings=True, convert_to_numpy=True
+            )
+            for text, vec in zip(chunk, vectors):
+                self._cache[text] = [float(v) for v in vec]
+        return [self._cache[t] for t in items]
+
+
 class CallableEmbedder:
     """把一个普通的 `text -> list[float]` 函数包成 Embedder。
 
@@ -229,6 +367,37 @@ class CallableEmbedder:
         return list(vec)
 
 
+def self_check(embedder: Embedder) -> dict[str, Any]:
+    """用三句话验证「这个模型到底能不能用」。
+
+    只看维度是不够的：一个把什么都编码成同方向的模型也有 1024 维。
+    这里比的是**同义句余弦应当明显高于无关句**，顺带给一条人类可读的判决。
+    故意不用「专业术语对」（止盈 / 落袋为安），因为那是最理想的样例，
+    理想样例通过不代表日常查询能用；用一句大白话的改写更有代表性。
+    """
+    related_a = "单笔仓位按半凯利给，最多不超过总资金三分之一"
+    related_b = "每次买入不要超过总资金的三分之一"
+    unrelated = "红烧肉要炖多久才软烂"
+    texts = [related_a, related_b, unrelated]
+    batch = getattr(embedder, "embed_many", None)
+    vectors = batch(texts) if callable(batch) else [embedder.embed(t) for t in texts]
+    def cos(x: list[float], y: list[float]) -> float:
+        return round(sum(a * b for a, b in zip(x, y)), 4)
+    same, diff = cos(vectors[0], vectors[1]), cos(vectors[0], vectors[2])
+    name = getattr(embedder, "name", type(embedder).__name__)
+    return {
+        "name": name,
+        "dim": len(vectors[0]),
+        "related": same,
+        "unrelated": diff,
+        "margin": round(same - diff, 4),
+        # 判决看**差距**而不是绝对余弦：同样一对句子，512 维和 2048 维的
+        # 绝对余弦本来就不一样（维度越大、能量摊得越开）。用绝对值当门槛，
+        # 换个维度就会误判 —— 这也是「只看维度」不靠谱的同一类错误。
+        "ok": (same - diff) >= 0.2 and same >= 0.3,
+    }
+
+
 def make_embedder(config: Any) -> Embedder | None:
     """按配置造嵌入器。造不出来就返回 None（并让上层如实报告，而不是假装有语义）。"""
     provider = getattr(config, "embedding_provider", "") or ""
@@ -236,7 +405,7 @@ def make_embedder(config: Any) -> Embedder | None:
         return None
     if provider == "hashing":
         return HashingEmbedder(dim=getattr(config, "embedding_dim", 512))
-    if provider == "http":
+    if provider in ("http", "openai"):
         key = os.environ.get(getattr(config, "embedding_key_env", ""), "") or ""
         cache = getattr(config, "embedding_cache", "") or ""
         return HttpEmbedder(
@@ -245,6 +414,17 @@ def make_embedder(config: Any) -> Embedder | None:
             key,
             dim=getattr(config, "embedding_dim", 0) if getattr(config, "embedding_dim", 512) else 0,
             cache_path=cache,
+        )
+    if provider == "ollama":
+        cache = getattr(config, "embedding_cache", "") or ""
+        return OllamaEmbedder(
+            getattr(config, "embedding_endpoint", "") or "http://127.0.0.1:11434",
+            getattr(config, "embedding_model", "") or "bge-m3",
+            cache_path=cache,
+        )
+    if provider in ("st", "sentence-transformers"):
+        return SentenceTransformerEmbedder(
+            getattr(config, "embedding_model", "") or "BAAI/bge-small-zh-v1.5"
         )
     return None
 

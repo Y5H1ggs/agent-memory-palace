@@ -74,7 +74,10 @@ from .embedding import (
     EmbeddingError,
     HashingEmbedder,
     HttpEmbedder,
+    OllamaEmbedder,
+    SentenceTransformerEmbedder,
     make_embedder,
+    self_check,
 )
 from .store import (
     JsonStore,
@@ -93,7 +96,7 @@ from .llm import CallableProvider, HttpChatProvider, LLMReflector, LLMError, mak
 from .style import Adjudication, StyleEngine, StyleRule
 from .value import ValueModel
 
-__version__ = "0.10.2"
+__version__ = "0.11.0"
 
 __all__ = [
     "__version__",
@@ -111,6 +114,9 @@ __all__ = [
     "LockBusy",
     "Embedder",
     "HashingEmbedder",
+    "OllamaEmbedder",
+    "SentenceTransformerEmbedder",
+    "self_check",
     "HttpEmbedder",
     "DenseIndex",
     "EmbeddingError",

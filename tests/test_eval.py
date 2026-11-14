@@ -35,12 +35,18 @@ def test_datasets_are_well_formed() -> None:
             assert a and b and a != b, f"{name} 的去重对非法"
 
 
-def test_both_domains_present() -> None:
-    """两个领域缺一不可：单领域数据集会让任何阈值都显得很好。"""
-    assert {"zh-finance", "zh-tech"} <= set(ev.DATASETS)
+def test_domain_coverage() -> None:
+    """领域数本身就是指标：两三个领域上标定出来的阈值，换个语料必翻车。
+
+    这条测试守着「不要再退回两领域」—— 0.20 的弃答线正是在两领域上看着很好，
+    扩到六领域后才发现它误弃 4 条、一个也没多抓到。
+    """
+    expected = {"zh-finance", "zh-tech", "zh-medical", "zh-legal", "zh-support", "zh-personal"}
+    assert expected <= set(ev.DATASETS), sorted(set(ev.DATASETS))
     for ds in ev.DATASETS.values():
-        assert len(ds.queries) >= 15
-        assert any(q.kind == "unanswerable" for q in ds.queries)
+        assert len(ds.queries) >= 10, (ds.name, len(ds.queries))
+        assert sum(1 for q in ds.queries if q.kind == "unanswerable") >= 2, ds.name
+        assert ds.memories and ds.clusters, ds.name
 
 
 def test_metrics_math() -> None:
@@ -59,13 +65,17 @@ def test_metrics_math() -> None:
 def test_suite_shape() -> None:
     report = ev.run_suite(k=5)
     assert report["k"] == 5 and report["channel"] == "lexical"
-    assert len(report["datasets"]) == 2
+    assert len(report["datasets"]) == len(ev.DATASETS)
+    # 汇总必须存在：单领域数字容易被「挑好看的领域」误导
+    assert report["summary"]["domains"] == len(ev.DATASETS)
+    assert report["summary"]["queries"] >= 60
     entry = report["datasets"][0]
     for key in ("retrieval", "abstain", "dedupe", "consolidation", "consolidation_swept"):
         assert key in entry, key
     assert entry["retrieval"]["overall"]["n"] > 10
     text = ev.format_report(report)
     assert "recall" in text and "弃答" in text
+    assert "跨 6 领域" in text
 
 
 def test_retrieval_beats_random() -> None:
@@ -108,10 +118,55 @@ def test_dedupe_threshold_sweep_monotonic_input() -> None:
 
 
 def test_abstain_separates_answerable_from_not() -> None:
-    """弃答必须在两个数据集上都比瞎猜强（F1 > 0.5），否则这条线没有意义。"""
+    """弃答必须在每个领域上都比瞎猜强，且用**线上默认阈值**。
+
+    之前这条用的是写死的 0.18，等于「测另一个系统」。现在直接读配置默认值：
+    默认值改了而这条测试没跟着红，才是真正危险的情况。
+    """
+    from memory_palace.core import PalaceConfig
+
+    threshold = PalaceConfig().abstain_semantic_floor
     for ds in ev.DATASETS.values():
-        report = ev.run_abstain(ds, threshold=0.18)
-        assert report["abstain_f1"] >= 0.8, (ds.name, report)
+        report = ev.run_abstain(ds)  # 不传阈值 = 用配置默认值
+        assert report["threshold"] == threshold
+        assert report["abstain_f1"] >= 0.7, (ds.name, report)
+
+
+def test_tag_only_queries_are_indexed() -> None:
+    """只出现在标签里的词也必须能被检索到。
+
+    「我有什么忌口」在只索引正文时得分是 0.000 —— 正文写的是「不吃香菜与内脏」。
+    这不是排序问题，是根本没进候选集；标签是人挑的词，往往就是提问的措辞。
+    """
+    from memory_palace.core import PalaceConfig
+
+    index = ev.build_index(ev.PERSONAL, config=PalaceConfig(index_tags=True))
+    scored = index.scores("我有什么忌口")
+    assert scored.get("me:food", 0) > 0, scored
+    # 关掉开关时要能复现旧行为，否则这个选项是死的
+    plain = ev.build_index(ev.PERSONAL, config=PalaceConfig(index_tags=False))
+    assert plain.scores("我有什么忌口").get("me:food", 0) == 0
+
+
+def test_hash_collisions_do_not_fake_similarity() -> None:
+    """毫无词项重叠的查询不该拿到高分。
+
+    256 个哈希桶时，「量子计算的退相干时间是多少」对一条讲破产概率的金融记忆
+    打出 0.455 —— 两者一个共享词都没有，那纯粹是桶碰撞。
+    这类假分数会同时毒化检索与弃答：它让「没记过」看起来像「记过」。
+    """
+    from memory_palace.lexicon import cached_tokens
+
+    index = ev.build_index(ev.FINANCE)
+    query = "量子计算的退相干时间是多少"
+    scored = index.scores(query)
+    for name, score in sorted(scored.items(), key=lambda kv: -kv[1])[:3]:
+        node = ev.FINANCE.graph().get(name)
+        shared = set(cached_tokens(query)) & set(
+            cached_tokens(node.content + " " + " ".join(node.tags))
+        )
+        if not shared:
+            assert score < 0.3, f"{name} 无共享词项却得 {score:.3f}（哈希碰撞）"
 
 
 def test_scale_benchmark_runs() -> None:

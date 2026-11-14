@@ -10,8 +10,9 @@ agent 需要的是三件事，而不是一堆类：
 其余命令（recall / status / explain / outcome / pin / forget / style）都是围绕这三件事的可解释补丁：
 为什么命中、为什么忘了、以及把用户的纠正变成情绪与风格证据。
 
-存储：默认 `~/.memory-palace/store.json`，可用 `--store` 或环境变量 `MEMORY_PALACE_STORE` 覆盖。
-所有写操作都是原子的（tempfile + fsync + replace），读操作不落盘。
+存储：默认 `~/.memory-palace/store.sqlite`（SQLite / WAL，行级增量写），
+可用 `--store` 或环境变量 `MEMORY_PALACE_STORE` 覆盖；`--backend json` 切回单文件快照。
+写操作走跨进程写事务（BEGIN IMMEDIATE + 变更前重载），读操作不落盘。
 """
 from __future__ import annotations
 
@@ -25,6 +26,7 @@ from datetime import datetime
 from typing import Any
 
 from ._console import ensure_utf8_console
+from .evaluation import DATASETS as EVAL_DATASETS
 from .palace import MemoryPalace
 from .scope import GLOBAL, SCOPE_MODES, label as scope_label, scopes_for
 from .tree import build_tree, render_tree, tree_stats
@@ -905,10 +907,49 @@ def cmd_embed(args) -> int:
     print(f"  稠密向量数 {channels.get('dense_vectors', 0)} · 失败 {channels.get('dense_failures', 0)}")
     print(f"  混合权重 {channels.get('hybrid_weight')}")
     print(f"配置: provider={cfg.embedding_provider or '(空)'} dim={cfg.embedding_dim}")
+    if getattr(args, "check", False):
+        return _embed_check(cfg)
     if not channels.get("dense"):
         print("\n启用方式：memory-palace config --set embedding_provider=hashing（零依赖）")
-        print("        或 embedding_provider=http + embedding_endpoint=...（接 BGE/vLLM/云端）")
+        print("        ollama   → embedding_model=bge-m3（本机 ollama serve）")
+        print("        st       → embedding_model=BAAI/bge-small-zh-v1.5（需 sentence-transformers）")
+        print("        http     → embedding_endpoint=https://.../v1/embeddings（任何 OpenAI 兼容）")
+        print("\n配好之后跑 `memory-palace embed --check` 验一次：同义句余弦必须高于无关句。")
     return 0
+
+
+def _embed_check(cfg) -> int:
+    """把「模型到底能不能用」变成一条命令。
+
+    只看维度没有意义：把什么都编码成同方向的模型也有 1024 维。
+    这里比对同义改写与无关句的余弦差，并给出阈值建议。
+    """
+    from .embedding import EmbeddingError, make_embedder, self_check
+
+    try:
+        embedder = make_embedder(cfg)
+    except EmbeddingError as exc:
+        print(f"造不出嵌入器：{exc}")
+        return 1
+    if embedder is None:
+        print("当前没有启用稠密通道（provider 为空），没有可自检的模型。")
+        return 1
+    try:
+        result = self_check(embedder)
+    except EmbeddingError as exc:
+        print(f"自检失败：{exc}")
+        return 1
+    print("\n自检（同义改写 vs 无关句）")
+    print(f"  模型      {result['name']}")
+    print(f"  维度      {result['dim']}")
+    print(f"  同义余弦  {result['related']}")
+    print(f"  无关余弦  {result['unrelated']}")
+    print(f"  差距      {result['margin']}")
+    print(f"  判决      {'可用' if result['ok'] else '不可用：同义与无关分不开'}")
+    if result["ok"]:
+        print("\n接着跑 `memory-palace cache-warm`（或直接 recall）让全库重建一次向量；")
+        print("换编码器后请重扫阈值：`memory-palace calibrate`。")
+    return 0 if result["ok"] else 1
 
 
 def cmd_eval(args) -> int:
@@ -1198,10 +1239,11 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("embed", parents=[common], help="嵌入通道状态（词法 / 稠密 / 混合权重）")
     p.add_argument("--query", help="用这条查询看通道解释")
     p.add_argument("--reindex", action="store_true", help="强制重建语义索引")
+    p.add_argument("--check", action="store_true", help="自检当前模型：同义句余弦是否高于无关句")
     p.set_defaults(func=cmd_embed)
 
     p = sub.add_parser("eval", parents=[common], help="组件级评测：检索 / 弃答 / 去重 / 沉淀")
-    p.add_argument("--dataset", choices=["zh-finance", "zh-tech"], help="只跑一个数据集")
+    p.add_argument("--dataset", choices=sorted(EVAL_DATASETS), help="只跑一个领域")
     p.add_argument("--channel", default="lexical", choices=["lexical", "hybrid", "dense"])
     p.add_argument("-k", type=int, default=5)
     p.add_argument("--json", action="store_true")
@@ -1210,7 +1252,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.set_defaults(func=cmd_eval)
 
     p = sub.add_parser("calibrate", parents=[common], help="在标注集上扫阈值，给推荐值与平台区间")
-    p.add_argument("--dataset", choices=["zh-finance", "zh-tech"])
+    p.add_argument("--dataset", choices=sorted(EVAL_DATASETS))
     p.add_argument("--apply", action="store_true", help="把推荐值写成 calibration.json")
     p.set_defaults(func=cmd_calibrate)
 

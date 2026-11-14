@@ -81,6 +81,22 @@ MUTANTS: tuple[Mutant, ...] = (
         ("tests/test_store.py",),
     ),
     Mutant(
+        "tags-not-indexed",
+        "memory_palace/semantics.py",
+        "        if not tags or not getattr(self.config, \"index_tags\", True):",
+        "        if True:",
+        "建索引时忽略标签（正文与标签不同词时，相关记忆直接进不了候选集）",
+        ("tests/test_eval.py",),
+    ),
+    Mutant(
+        "ollama-no-new-api",
+        "memory_palace/embedding.py",
+        "        if not self.legacy:",
+        "        if False:",
+        "Ollama 只用旧版单条端点（新版批量路径形同虚设）",
+        ("tests/test_embedding.py",),
+    ),
+    Mutant(
         "guard-off",
         "memory_palace/selfcorrect.py",
         "            if not hits:",

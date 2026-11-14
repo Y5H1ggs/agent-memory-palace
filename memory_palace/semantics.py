@@ -47,7 +47,11 @@ AMBIGUOUS_TERMS: dict[str, tuple[str, ...]] = {
     "止损": ("risk", "position"),
 }
 
-CHAR_DIM = 256
+# 字符项用哈希桶落位，桶太少就会「撞车」：两个毫不相干的词落到同一维，
+# 余弦凭空变高。256 个桶时，「量子计算的退相干时间是多少」对一条金融记忆
+# 能打出 0.455 —— 两者一个共享词项都没有，那是纯碰撞。1024 个桶下同一查询
+# 只剩真正的「时间」匹配（0.219）。稀疏向量不因维度变大而变重，这里没有理由省。
+CHAR_DIM = 1024
 CONCEPT_W = 1.0
 CHAR_W = 0.22
 # 多义词的权重低于无歧义词：它本来就不该单独决定一条记忆属于什么主题。
@@ -528,6 +532,18 @@ class SemanticIndex:
 
     # ---- 索引维护 ----
 
+    def _doc(self, node: MemoryNode) -> str:
+        """索引用的文本：正文 + 标签。
+
+        标签是人挑的词，通常就是用户提问时会用的词（正文「不吃香菜与内脏」，
+        标签「忌口」）。只索引正文时，「我有什么忌口」的得分是 **0.000** ——
+        不是排得靠后，而是根本没进候选集。这条是在六领域标注集上量出来的。
+        """
+        tags = getattr(node, "tags", ()) or ()
+        if not tags or not getattr(self.config, "index_tags", True):
+            return node.content
+        return node.content + " " + " ".join(str(t) for t in tags)
+
     def _encode(self, text: str) -> SparseVector:
         """统一入口：支持 IDF 的编码器走 encode_with，其余走 encode。"""
         encoder = self.encoder
@@ -570,7 +586,7 @@ class SemanticIndex:
     def upsert(self, node: MemoryNode) -> None:
         # 这里用的是「上一次重建时的 IDF」；随后置脏，下次检索会用全语料重算，
         # 所以短暂的不一致不会留在最终索引里。
-        self._vectors[node.name] = self._encode(node.content)
+        self._vectors[node.name] = self._encode(self._doc(node))
         self._index_dense(node.name, node.content)
         self._dirty = True  # 语料变了，概念词典可能要重学
 
@@ -594,7 +610,7 @@ class SemanticIndex:
         return None if vec is None else vec.to_dense()
 
     def rebuild(self, graph: MemoryGraph) -> None:
-        docs = [n.content for n in graph.all_nodes()]
+        docs = [self._doc(n) for n in graph.all_nodes()]
         self._learn_lexicon(docs)
         # IDF 必须先于任何编码算完：同一批向量必须共享同一把尺子，否则余弦没有意义
         self._idf = IdfModel(docs)
@@ -603,8 +619,9 @@ class SemanticIndex:
         if self._dense is not None:
             self._dense.clear()
         for node in graph.all_nodes():
-            self._vectors[node.name] = self._encode(node.content)
-            self._index_dense(node.name, node.content)
+            text = self._doc(node)
+            self._vectors[node.name] = self._encode(text)
+            self._index_dense(node.name, text)
         self._dirty = False
 
     def _fill_missing(self, graph: MemoryGraph) -> int:

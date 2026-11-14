@@ -251,7 +251,201 @@ TECH = Dataset(
 )
 
 
-DATASETS: dict[str, Dataset] = {FINANCE.name: FINANCE, TECH.name: TECH}
+# ---------------------------------------------------------------- 数据集：用药与就医
+
+
+MEDICAL = Dataset(
+    name="zh-medical",
+    memories=[
+        ("med:allergy", "青霉素过敏史，每次就诊与取药都要主动说，病历首页要标明", ("用药", "过敏")),
+        ("med:kidney", "肾功能不全，用药剂量要医生按肌酐清除率调整，不能照说明书成人量", ("用药", "肾功能")),
+        ("med:interact", "就诊时带上正在服用的药清单，重复成分容易叠加过量", ("用药", "相互作用")),
+        ("med:abx", "抗生素必须按疗程吃完，症状好转就停容易复发并产生耐药", ("用药", "抗生素")),
+        ("med:pain", "止痛药不要空腹吃，有胃溃疡史的人用前先问医生", ("用药", "止痛")),
+        ("med:herb", "中药与西药间隔两小时以上，含麻黄的中成药会影响血压", ("用药", "中药")),
+        ("med:preg", "备孕与哺乳期任何药都先问医生，包括外用药与保健品", ("用药", "特殊人群")),
+        ("med:bp", "家里量血压固定在早晚各一次，坐着休息五分钟再测，记录两周给医生看", ("监测", "血压")),
+        ("med:fever", "发烧三天不退或出现意识改变要立刻就医，不要继续在家观察", ("就医", "发烧")),
+        ("med:child", "儿童退烧按体重算剂量，不用成人药掰半片", ("用药", "儿童")),
+        ("med:storage", "药箱每半年清一次，过期药送回收点，不冲马桶也不随手丢", ("用药", "储存")),
+        ("med:record", "每次就诊后记下诊断、用药与复诊时间，换医院时直接给医生看", ("记录", "就诊")),
+        ("med:fast", "抽血查血脂血糖要空腹八小时，前一天不吃油腻不喝酒", ("检查", "空腹")),
+        ("med:sport", "腰椎间盘突出急性期不做弯腰负重，先做核心稳定训练", ("康复", "腰椎")),
+        ("med:sleep", "长期失眠先查作息与咖啡因摄入，不要自己长期吃安眠药", ("睡眠", "失眠")),
+    ],
+    queries=[
+        Query("我对什么药过敏", ("med:allergy",), "exact"),
+        Query("抗生素要吃几天才能停", ("med:abx",), "paraphrase"),
+        Query("中药和西药能一起吃吗", ("med:herb",), "exact"),
+        Query("在家量血压怎么才能准", ("med:bp",), "paraphrase"),
+        Query("小孩发烧吃多少药", ("med:child",), "paraphrase"),
+        Query("发烧多久必须去医院", ("med:fever",), "paraphrase"),
+        Query("抽血前能不能吃早饭", ("med:fast",), "paraphrase"),
+        Query("过期药怎么处理", ("med:storage",), "exact"),
+        Query("肾功能不好用药要注意什么", ("med:kidney",), "paraphrase"),
+        Query("怎么更换汽车轮胎", (), "unanswerable"),
+        Query("去年世界杯冠军是哪个队", (), "unanswerable"),
+    ],
+    dedupe_pairs=[
+        ("抗生素必须按疗程吃完，症状好转就停容易复发", "抗生素必须按疗程吃完，症状好转就停容易复发。", True),
+        ("止痛药不要空腹吃", "止痛药不要空腹吃，有胃溃疡史的人用前先问医生", False),
+        ("儿童退烧按体重算剂量", "儿童退烧药不要和成人药混用", False),
+        ("过期药送回收点", "过期药送回收点，不冲马桶", False),
+    ],
+    clusters=[
+        ["med:allergy", "med:kidney", "med:interact"],
+        ["med:bp", "med:fever", "med:record"],
+        ["med:abx", "med:herb", "med:storage"],
+    ],
+)
+
+
+# ---------------------------------------------------------------- 数据集：合同与合规
+
+
+LEGAL = Dataset(
+    name="zh-legal",
+    memories=[
+        ("law:ip", "对外合同必须写明知识产权归属，没写不等于归客户", ("合同", "知识产权")),
+        ("law:liab", "违约责任要写赔偿上限，通常不超过合同总额，无限责任条款单独评审", ("合同", "违约")),
+        ("law:term", "自动续约要提前三十天书面通知才能终止，口头通知无效", ("合同", "续约")),
+        ("law:data", "收集个人信息要明示目的与范围，最小必要，不得默认勾选同意", ("合规", "个人信息")),
+        ("law:cross", "跨境传输数据要先做安全评估或签标准合同，不能直接传到境外服务器", ("合规", "跨境")),
+        ("law:invoice", "发票内容必须与合同一致，服务费不能开成货物，否则无法抵扣", ("财税", "发票")),
+        ("law:seal", "用章走审批并登记，空白合同绝不盖章", ("合同", "用章")),
+        ("law:nda", "保密期限一般两到五年，超期要重新签，离职后仍需履行", ("合同", "保密")),
+        ("law:labor", "试用期最长六个月且只能约定一次，试用期工资不低于转正的八成", ("劳动", "试用期")),
+        ("law:overtime", "加班要有审批记录，调休与加班费二选一，不能既不给钱也不给休", ("劳动", "加班")),
+        ("law:audit", "合同原件与审批流保存至少五年，电子合同要留签署日志", ("合规", "归档")),
+        ("law:vendor", "供应商准入要查营业执照与资质，付款前核对账户名与合同主体一致", ("采购", "供应商")),
+        ("law:ad", "宣传文案禁用最、第一、国家级等绝对化用语，引用数据要标来源", ("合规", "广告")),
+        ("law:minor", "不满十四周岁用户的数据按敏感个人信息处理，需要监护人同意", ("合规", "未成年人")),
+    ],
+    queries=[
+        Query("合同里的知识产权归谁", ("law:ip",), "exact"),
+        Query("违约金有没有上限", ("law:liab",), "paraphrase"),
+        Query("自动续约怎么取消", ("law:term",), "exact"),
+        Query("能不能把用户数据传到国外", ("law:cross",), "paraphrase"),
+        Query("发票内容和合同不一致会怎样", ("law:invoice",), "paraphrase"),
+        Query("试用期最长多久", ("law:labor",), "exact"),
+        Query("加班只给调休不给钱行不行", ("law:overtime",), "paraphrase"),
+        Query("宣传语能不能写行业第一", ("law:ad",), "paraphrase"),
+        Query("离职后还要保密吗", ("law:nda",), "paraphrase"),
+        Query("怎么写一份遗嘱", (), "unanswerable"),
+        Query("机票改签要手续费吗", (), "unanswerable"),
+    ],
+    dedupe_pairs=[
+        ("用章走审批并登记，空白合同绝不盖章", "用章走审批并登记，空白合同绝不盖章。", True),
+        ("保密期限一般两到五年", "保密期限两到五年，到期要重签", False),
+        ("违约金要写赔偿上限", "违约金要写赔偿上限，通常不超过合同总额", False),
+        ("发票内容必须与合同一致", "发票内容必须和合同对得上，否则不能抵扣", False),
+    ],
+    clusters=[
+        ["law:ip", "law:liab", "law:term"],
+        ["law:data", "law:cross", "law:minor"],
+        ["law:labor", "law:overtime", "law:audit"],
+    ],
+)
+
+
+# ---------------------------------------------------------------- 数据集：客服工单
+
+
+SUPPORT = Dataset(
+    name="zh-support",
+    memories=[
+        ("cs:sla", "一线响应十五分钟内，超时自动升级到二线并通知值班", ("工单", "时限")),
+        ("cs:tone", "先说能做什么，再解释限制，不要一上来讲流程", ("话术", "共情")),
+        ("cs:refund", "七天无理由退货需商品完好，定制类与生鲜除外，退款三个工作日到账", ("售后", "退款")),
+        ("cs:escalate", "同一用户两次未解决就必须升级，不要让客户重复描述问题", ("工单", "升级")),
+        ("cs:record", "工单要写清现象、已尝试、客户环境三要素，禁止只写已处理", ("工单", "记录")),
+        ("cs:promise", "不承诺具体到小时的时间点，只给区间，避免二次投诉", ("话术", "承诺")),
+        ("cs:privacy", "核身只问订单后四位与收货人姓氏，绝不索要完整身份证号", ("安全", "核身")),
+        ("cs:vip", "年消费超过五万的客户由专属客服跟进，转接不排队", ("分层", "大客户")),
+        ("cs:comp", "补偿优先给权益券而不是现金，超出权限要主管审批", ("售后", "补偿")),
+        ("cs:repeat", "同类问题一周出现三次以上要提单给产品，不能只安抚", ("改进", "提单")),
+        ("cs:close", "关单前确认客户认可，未回复二十四小时视为默认但要留痕", ("工单", "关单")),
+        ("cs:lang", "对外回复不用内部黑话与缩写，用客户能懂的说法", ("话术", "可读性")),
+        ("cs:night", "夜间只有紧急故障走电话，其余次日九点前回复", ("值班", "夜间")),
+    ],
+    queries=[
+        Query("客户催得很急怎么回", ("cs:promise", "cs:tone"), "paraphrase"),
+        Query("退款多久能到账", ("cs:refund",), "exact"),
+        Query("客户反复投诉同一个问题", ("cs:escalate", "cs:repeat"), "paraphrase"),
+        Query("工单里要写哪些信息", ("cs:record",), "paraphrase"),
+        Query("能不能问客户要身份证号", ("cs:privacy",), "exact"),
+        Query("大客户怎么接待", ("cs:vip",), "paraphrase"),
+        Query("能直接赔现金吗", ("cs:comp",), "exact"),
+        Query("同一个问题老出现怎么办", ("cs:repeat",), "paraphrase"),
+        Query("晚上客户来消息要不要回", ("cs:night",), "paraphrase"),
+        Query("怎么申请专利", (), "unanswerable"),
+        Query("推荐一款游戏显卡", (), "unanswerable"),
+    ],
+    dedupe_pairs=[
+        ("关单前确认客户认可，未回复二十四小时视为默认", "关单前确认客户认可，未回复二十四小时视为默认。", True),
+        ("工单要写清现象与已尝试", "工单要写清现象、已尝试、客户环境三要素", False),
+        ("补偿优先给权益券", "补偿优先给权益券而不是现金", False),
+        ("对外回复不用内部黑话", "对外回复要用客户能懂的说法", False),
+    ],
+    clusters=[
+        ["cs:sla", "cs:escalate", "cs:close"],
+        ["cs:tone", "cs:promise", "cs:lang"],
+        ["cs:refund", "cs:comp", "cs:vip"],
+    ],
+)
+
+
+# ---------------------------------------------------------------- 数据集：个人助理
+
+
+PERSONAL = Dataset(
+    name="zh-personal",
+    memories=[
+        ("me:coffee", "下午三点后不喝咖啡，会影响入睡，改喝无咖啡因的", ("作息", "咖啡因")),
+        ("me:meeting", "上午十点前不排会，那段时间留给深度工作", ("日程", "专注")),
+        ("me:travel", "出差订靠过道座位，落地先回酒店放行李再见人", ("出差", "偏好")),
+        ("me:food", "不吃香菜与动物内脏，点菜时提前说", ("饮食", "忌口")),
+        ("me:family", "每周日晚上给父母打电话，超过两周没打要提醒", ("家庭", "提醒")),
+        ("me:budget", "每月固定转出三成收入做长期储蓄，剩下的才是可花的", ("财务", "储蓄")),
+        ("me:exercise", "每周三次力量训练加两次有氧，出差用弹力带替代", ("运动", "习惯")),
+        ("me:read", "读书笔记只记三件事：反直觉的点、能立刻用的、想反驳的", ("学习", "笔记")),
+        ("me:gift", "送礼预算两百到五百，偏好实用而不是装饰", ("社交", "送礼")),
+        ("me:inbox", "邮件每天固定两次处理，上午十一点与下午五点，其余时间关通知", ("效率", "邮件")),
+        ("me:backup", "手机照片每月导出一次到硬盘，云盘只做第二份", ("数据", "备份")),
+        ("me:health", "每年体检安排在生日那个月，顺便复查牙齿", ("健康", "体检")),
+        ("me:sleep", "睡前一小时不看工作消息，手机放客厅充电", ("作息", "睡眠")),
+        ("me:lang", "写作偏好短句与主动语态，避免进行、相关这类虚词", ("写作", "偏好")),
+    ],
+    queries=[
+        Query("我几点之后不喝咖啡", ("me:coffee",), "exact"),
+        Query("上午能不能安排会议", ("me:meeting",), "paraphrase"),
+        Query("出差订什么座位", ("me:travel",), "exact"),
+        Query("我有什么忌口", ("me:food",), "paraphrase"),
+        Query("多久给家里打一次电话", ("me:family",), "paraphrase"),
+        Query("每个月存多少钱", ("me:budget",), "paraphrase"),
+        Query("邮件什么时候处理", ("me:inbox",), "paraphrase"),
+        Query("送礼预算多少", ("me:gift",), "exact"),
+        Query("写东西有什么风格要求", ("me:lang",), "paraphrase"),
+        Query("怎么办理房产过户", (), "unanswerable"),
+        Query("推荐一只指数基金", (), "unanswerable"),
+    ],
+    dedupe_pairs=[
+        ("手机照片每月导出一次到硬盘", "手机照片每月导出一次到硬盘，云盘只做第二份", False),
+        ("睡前一小时不看工作消息", "睡前一小时不看工作消息，手机放客厅充电", False),
+        ("每周三次力量训练加两次有氧", "每周三次力量训练加两次有氧。", True),
+        ("送礼预算两百到五百", "送礼预算两百到五百，偏好实用", False),
+    ],
+    clusters=[
+        ["me:coffee", "me:sleep", "me:meeting"],
+        ["me:food", "me:gift", "me:family"],
+        ["me:budget", "me:exercise", "me:health"],
+    ],
+)
+
+
+DATASETS: dict[str, Dataset] = {
+    ds.name: ds for ds in (FINANCE, TECH, MEDICAL, LEGAL, SUPPORT, PERSONAL)
+}
 
 
 # ---------------------------------------------------------------- 指标
@@ -561,7 +755,35 @@ def run_suite(
         }
         report["datasets"].append(entry)
     report["elapsed_ms"] = round((time.perf_counter() - started) * 1000, 1)
+    report["summary"] = summarize(report["datasets"])
     return report
+
+
+def summarize(entries: Sequence[dict[str, Any]]) -> dict[str, Any]:
+    """跨领域平均。单看一个领域容易被「这个领域好调」骗过去。
+
+    平均的是**每领域指标的算术平均**，不是「把查询堆在一起算」——
+    后者会让记忆条数多的领域主导结果（金融 39 条、法务 14 条，权重差三倍）。
+    """
+    if not entries:
+        return {}
+    def mean_of(path: tuple[str, ...]) -> float:
+        values = []
+        for entry in entries:
+            node: Any = entry
+            for key in path:
+                node = (node or {}).get(key) if isinstance(node, dict) else None
+            if isinstance(node, (int, float)) and not isinstance(node, bool):
+                values.append(float(node))
+        return round(_mean(values), 4) if values else 0.0
+    return {
+        "domains": len(entries),
+        "recall@k": mean_of(("retrieval", "overall", "recall@k")),
+        "mrr": mean_of(("retrieval", "overall", "mrr")),
+        "abstain_f1": mean_of(("abstain", "abstain_f1")),
+        "dedupe_f1": mean_of(("dedupe", "f1")),
+        "queries": sum(int((e.get("retrieval") or {}).get("overall", {}).get("n", 0)) for e in entries),
+    }
 
 
 def format_report(report: dict[str, Any]) -> str:
@@ -570,6 +792,14 @@ def format_report(report: dict[str, Any]) -> str:
         f"通道 {report['channel']} · k={report['k']} · 用时 {report['elapsed_ms']}ms",
         "",
     ]
+    summary = report.get("summary") or {}
+    if summary and summary.get("domains", 0) > 1:
+        lines.append(
+            f"跨 {summary['domains']} 领域（{summary['queries']} 条可答查询）平均："
+            f" recall@k={summary['recall@k']} mrr={summary['mrr']}"
+            f" 弃答F1={summary['abstain_f1']} 去重F1={summary['dedupe_f1']}"
+        )
+        lines.append("")
     for entry in report["datasets"]:
         ret = entry["retrieval"]
         lines.append(f"[{entry['dataset']}] 检索")
@@ -621,7 +851,9 @@ def calibrate(
     for t in [i / 100 for i in range(70, 100)]:
         f1s = [run_dedupe(ds, threshold=t, config=config)["f1"] for ds in chosen]
         dedupe_curve.append({"threshold": t, "f1": round(_mean(f1s), 4)})
-    for t in [i / 100 for i in range(15, 56)]:
+    # 下界不能压着「当前的默认值」：扫描区间贴边时，推荐值一定落在边界上，
+    # 那是个假的最优点（第一版从 0.15 起扫，于是「推荐 0.15」其实只是边界）。
+    for t in [i / 100 for i in range(4, 56)]:
         f1s = [run_abstain(ds, threshold=t, config=config)["abstain_f1"] for ds in chosen]
         abstain_curve.append({"threshold": t, "f1": round(_mean(f1s), 4)})
 

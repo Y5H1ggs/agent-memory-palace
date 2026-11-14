@@ -12,6 +12,9 @@
 
 <sub>图由 `examples/make_diagrams.py` 生成；图上的数字来自 `bench` 与 `eval`，都能用一条命令复现。</sub>
 
+> 给读这个仓库的模型：机器可读的当前状态在 **[llms.txt](llms.txt)**。
+> `docs/` 里那两篇批评与调研是历史文档，描述的是 0.5.x / 0.9 时代，不要当成现状。
+
 **TL;DR (English)** — A dependency-free Python implementation of a *memory lifecycle*: idempotent decay, affect that both hardens and distorts recall, consolidation with a one-way door, value-based forgetting with a fixed attention budget, self-narrative as a projection, tree-shaped injection to save tokens, and self-correction bounded by whitelist + multi-objective guardrails.
 
 0.10 adds what a real deployment needs: a **SQLite/WAL backend** (row-level writes, multi-process safety, commit ledger, crash recovery — a single `remember` went from 28 ms to 1.2 ms at 1k memories), a **pluggable embedding channel** (built-in hashing embedder or any OpenAI-compatible `/v1/embeddings`), a **labelled component benchmark** with published numbers including the bad ones, and **optional LLM reflection** whose output can never change configuration directly.
@@ -152,47 +155,82 @@ JSON 后端保留（`--backend json`）：一个文件就是一份完整快照�
 **边界**：SQLite 是「单写多读」，写热点会排队。吞吐上限就是一个写者 —— 这是 SQLite 的设计。
 要更高写吞吐请换服务端数据库；本项目不在这上面加锁。
 
-### 三、向量通道与组件级评测
+### 三、嵌入模型：可以换成真的神经语言模型
 
-<img src="docs/images/eval.svg" alt="两条通道在两类查询上的召回" width="100%">
+<img src="docs/images/eval.svg" alt="六个领域的检索召回" width="100%">
 
-内置的 `HashingEmbedder` **不是神经语言模型**：它是有符号特征哈希 + 字符 n-gram +
-子线性 TF 得到的 512 维向量，零依赖、跨进程确定、对未登录词有平滑作用；但它仍然读字面。
-真正的语义跳转要接真模型，所以这一层是可替换的：
+内置的 `HashingEmbedder` **不是神经语言模型**：有符号特征哈希 + 字符 n-gram + 子线性 TF，
+零依赖、跨进程确定、能补字面变形；但它仍然读字面，「止盈」和「落袋为安」照样连不起来。
+
+要语义跳转就换真模型，五种 provider 走同一个 `SemanticIndex` —— **检索、聚类、去重、弃答一起换**：
+
+| provider | 接什么 | 依赖 |
+|---|---|---|
+| `hashing` | 内置哈希，512 维，零依赖 | 无 |
+| `ollama` | 本机 Ollama（`/api/embed` 与旧版 `/api/embeddings` 都支持） | 无 |
+| `http` / `openai` | 任何 OpenAI 兼容 `/v1/embeddings`（vLLM / TEI / Xinference / LM Studio / 云） | 无 |
+| `st` | 本地 sentence-transformers 加载 HF 模型 | `pip install sentence-transformers` |
 
 ```bash
-memory-palace config --set embedding_provider=hashing        # 零依赖，立刻可用
-memory-palace config --set hybrid_weight=0.45
-
-memory-palace config --set embedding_provider=http           # 本地 BGE / vLLM / 云端都算
-memory-palace config --set embedding_endpoint=http://127.0.0.1:8000/v1/embeddings
+# 本机 Ollama，零依赖
+ollama pull bge-m3
+memory-palace config --set embedding_provider=ollama
 memory-palace config --set embedding_model=bge-m3
-memory-palace embed                                          # 看两条通道的状态与失败计数
+
+# 或本地 HF 模型
+pip install sentence-transformers
+memory-palace config --set embedding_provider=st
+memory-palace config --set embedding_model=BAAI/bge-small-zh-v1.5
+
+# 配完必须自检：同义改写余弦要明显高于无关句
+memory-palace embed --check
 ```
 
-换成真模型时，检索、聚类、去重、弃答**一起**换 —— 它们读的是同一个 `SemanticIndex`。
+推荐模型（维度以 `embed --check` 实测为准）：`bge-small-zh-v1.5`(512) 最快、
+`bge-base-zh-v1.5`(768) 平衡、`bge-large-zh-v1.5`(1024) 质量优先、`bge-m3`(1024, 8192 上下文)、
+`m3e-base`(768)、`Qwen3-Embedding-0.6B`(1024, 32k 上下文, 可自定义维度)、`jina-embeddings-v3`(1024)。
 
-评测集（`memory_palace/evaluation.py`）：两个领域（A 股复盘 / 工程运维）、80 条记忆、
-42 条查询、四类标注（检索 gold / 弃答 / 去重对 / 沉淀簇）。
+**为什么必须有 `--check`**：只看维度没有意义 —— 一个把什么都编码成同方向的模型也有 1024 维。
+它比的是「同义改写 vs 无关句」的余弦差，分不开就直接判不可用。
+换模型后余弦分布会变，阈值要重扫：`memory-palace calibrate`。
 
-| 数据集 | 通道 | recall@5 | 精确匹配 | 换说法 |
-|---|---|---|---|---|
-| zh-finance | 词法 | 0.725 | 0.889 | 0.591 |
-| zh-finance | 混合 | **0.800** | 0.889 | **0.727** |
-| zh-tech | 词法 | 0.944 | 1.000 | 0.923 |
-| zh-tech | 混合 | 0.944 | 1.000 | 0.923 |
+### 四、组件级评测：六个领域，坏数字原样留着
 
-**坏数字也贴出来**，这才是评测集的意义：
+评测集曾经只有两个领域（A 股复盘 / 工程运维）。两个领域足够调参数，不够**推翻参数** ——
+0.20 的弃答线在上面看着很好，扩到六个领域才发现它误弃 4 条、一条也没多抓到。
+
+| 领域 | 记忆 / 查询 | recall@5（词法） |
+|---|---|---|
+| `zh-finance` A 股复盘 | 39 / 24 | 0.800 |
+| `zh-tech` 工程运维 | 40 / 22 | 0.944 |
+| `zh-medical` 用药与就医 | 15 / 11 | 1.000 |
+| `zh-legal` 合同与合规 | 14 / 11 | 1.000 |
+| `zh-support` 客服工单 | 13 / 11 | 0.778 |
+| `zh-personal` 个人助理 | 14 / 11 | 1.000 |
+
+合计 **135 条记忆、90 条查询**（74 可答 + 16 不可答），四类标注（检索 gold / 弃答 / 去重对 / 沉淀簇）。
+六领域平均：recall@5 **0.9204**、MRR **0.8149**、弃答 F1 **0.9762**、去重 F1 **0.9444**。
+
+**扩领域立刻抓出三个真问题**（都已修，都有测试守着）：
+
+| 问题 | 现象 | 修法 |
+|---|---|---|
+| 标签没进索引 | 「我有什么忌口」得分 **0.000** —— 正文写「不吃香菜与内脏」，标签才是「忌口」 | `index_tags`（默认开），平均 recall 0.889 → 0.908 |
+| 哈希桶碰撞 | 「量子计算的退相干时间是多少」对讲破产概率的金融记忆打出 **0.455**，零共享词项 | `CHAR_DIM` 256 → 1024；同一查询只剩真正的「时间」匹配 0.219 |
+| 弃答线过拟合 | 0.20 在两领域好看，六领域上误弃 4 条 | 默认值 0.30 → 0.20 → **0.14**（误弃 0、漏弃 1） |
+
+坏数字照旧贴出来，这才是评测集的意义：
 
 | 指标 | 默认阈值 | 数字 | 说明 |
 |---|---|---|---|
-| 弃答 F1 | 0.20 | 0.857 / 1.000 | 原先的 0.30 是错的：短查询上误弃 5 条，F1 只有 0.5。**评测把默认值改了** |
-| 去重 F1 | 0.92 | 0.667 / 1.000 | 「百分之五」vs「5%」长度差超 15%，被长度保护挡掉 —— 保守是刻意的 |
-| 沉淀 F1 | 0.50 | 0.000 / 0.000 | 这两套数据标签各不相同，0.5 一条簇都出不来；扫描显示 0.25~0.30 才合适 |
+| 沉淀 F1 | 0.50 | **0.000** | 六套数据的标签各不相同，0.5 一条簇都出不来；扫描显示 0.25~0.30 才合适 |
+| 去重 F1 | 0.92 | 0.667（金融）/ 1.000（其余） | 「百分之五」vs「5%」长度差超 15%，被长度保护挡掉 —— 保守是刻意的 |
+| 金融换说法 | — | 0.727 | 词法通道在高频虚词上打转，这是哈希嵌入补不了的部分 |
 
 ```bash
-memory-palace eval --channel hybrid     # 换通道重测
-memory-palace calibrate                 # 扫阈值，给推荐值与平台区间（不是尖峰）
+memory-palace eval                      # 六领域全跑（带跨领域汇总）
+memory-palace eval --dataset zh-legal   # 单领域
+memory-palace calibrate                 # 扫阈值，给平台区间（不是尖峰）
 memory-palace calibrate --apply         # 写到 calibration.json
 ```
 
@@ -366,19 +404,27 @@ memory-palace promote lesson:ci                             # 把项目教训升
 ## 证据
 
 ```bash
-python -m pytest tests -q         # 100 项：契约 / 并发 / 崩溃 / 评测 / 护栏
+python -m pytest tests -q         # 113 项：契约 / 并发 / 崩溃 / 评测 / 护栏 / 文档
 python -m memory_palace.demo      # 全剧本（21 幕）+ 故障注入
-python tools/greenlight_audit.py  # 绿灯审计：28 个变异，故意弄坏实现看断言会不会红
+python tools/greenlight_audit.py  # 绿灯审计：30 个变异，故意弄坏实现看断言会不会红
 python -m memory_palace.cli eval  # 召回 / 弃答 / 去重 / 沉淀
 ```
 
-自测里最有价值的不是「全绿」，是那 **28 条突变审计**：衰减带副作用、去掉风格裁决、
+自测里最有价值的不是「全绿」，是那 **30 条突变审计**：衰减带副作用、去掉风格裁决、
 假语义全零向量、白名单失效、忽略护栏、跳过校验和、锁不生效……断言必须变红。
+新加的两条正好守着这轮的两个修复：忽略标签索引、Ollama 只走旧端点。
 其中一条自己写错过 —— 用 `lr=1.0` 制造「无惯性」，结果一步撞天花板，饱和伪装成惯性；
 已改成常数学习率的反事实并写进注释。
 
 外部评审核对（2026-11-14，Qwen）：两条属实、一条部分成立、两条引用了旧代码。
 逐条证据与因此修掉的问题在 [docs/REVIEW_2026-11-14_QWEN.md](docs/REVIEW_2026-11-14_QWEN.md)。
+
+**为什么评审总读到旧结论？** 不是读者不认真，是仓库自己没把话说清。当时仓库里同时存在：
+`docs/INTEGRATIONS.md` 六处写着旧的默认存储、`docs/COMPETITIVE_ANALYSIS.md` 的能力表标着「0.5.x」、
+`docs/CRITIQUE_RESPONSE.md` 大段引用 0.5/0.9 时代的自评（单写者、1300 行）。
+任何按目录顺序读文档的人都会得出「这是单写者玩具」的结论 —— 而这恰好是最像真的错答案。
+现在的处理：历史文档加时效声明、新增 [llms.txt](llms.txt) 作为唯一权威摘要、
+并用 `tests/test_docs.py` 钉住版本号与默认存储路径。**文档再漂，CI 会红。**
 
 ## 仍然不适用
 
@@ -390,7 +436,7 @@ python -m memory_palace.cli eval  # 召回 / 弃答 / 去重 / 沉淀
 
 ## 版本与结构
 
-当前 `0.10.2`。`0.x` 期间 API 可能变。升到 `1.0.0` 的条件见 [CHANGELOG](CHANGELOG.md)：
+当前 `0.11.0`。`0.x` 期间 API 可能变。升到 `1.0.0` 的条件见 [CHANGELOG](CHANGELOG.md)：
 外部使用者 ≥ 1（未达）· CI 三平台 ✅ · 公开评测集与基线数字 ✅ · 跨进程写锁 ✅。
 
 ```
@@ -402,11 +448,13 @@ memory_palace/
   palace / cli / mcp_server / http_api / render / bench
   evaluation                                      ← 组件级评测与阈值标定
 examples/  quickstart · showcase · make_images · make_diagrams · custom_encoder
+llms.txt   机器可读的当前状态（版本 / 能力 / 模型清单 / 六领域数字 / 边界）
 docs/      ARCHITECTURE · STORAGE · INTEGRATIONS · AGENT_INTEGRATION
            LEXICON · PRAGMATICS · COMPETITIVE_ANALYSIS · CRITIQUE_RESPONSE
            REVIEW_2026-11-14_QWEN
 tests/     temporal · scope · extensions · lexicon · pragmatics · audit
            store · locking · embedding · eval · llm · guardrails · cli · integrations
+           docs（版本一致 / 不许再把 JSON 当默认 / 历史文档必须有时效声明）
 tools/     greenlight_audit.py（变异测试）
 dsh/       DeepSeek Harness 插件（host 半 + cordis 挂载 + 面板）
 ```

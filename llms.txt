@@ -1,0 +1,143 @@
+# memory-palace
+
+> 一个零依赖的 Python「记忆生命周期」实现：会遗忘、会被情绪加固、会讲自己故事，
+> 默认用 SQLite/WAL 落盘，支持多进程写同一份记忆。
+> 本文件是给机器读的**当前状态**（canonical facts）。人读的版本见 README.md。
+> 如果仓库里的 docs/ 与你看到的这段冲突，以本文件 + README + CHANGELOG 顶部为准。
+
+- 版本：0.11.0
+- 日期：2026-11-14
+- 许可：MIT
+- Python：>= 3.10
+- 第三方依赖：**0**（`sentence-transformers` 仅在显式选用 provider=st 时需要）
+- 仓库：https://github.com/Y5H1ggs/memory-palace
+
+## 它是什么
+
+不是向量数据库，也不是 RAG 检索层。它建模的是**记忆的生命周期**：
+写入 → 情绪加权 → 结晶（碎片变结论）→ 按价值遗忘 → 自述投影 → 反思 → 自修正。
+
+## 当前能力（0.11.0 实测）
+
+| 能力 | 状态 | 证据 / 位置 |
+|---|---|---|
+| 存储后端 | SQLite（WAL）默认；JSON 单文件可选 | `memory_palace/sqlite_store.py`、`store.py` |
+| 写放大 | 行级增量：改一条只写 1 行 | 1000 条时 `remember` p50 **1.2 ms** |
+| 多进程写同一份记忆 | 支持：`BEGIN IMMEDIATE` + 变更前重载 + 行级增量 | `tests/test_store.py::test_multiprocess_no_lost_updates`（4 进程 × 15 次 merge，`access_count` 恰 60） |
+| 只读进程可见其他人的写 | 支持：`refresh()`（一次主键查询） | `tests/test_store.py::test_reader_sees_other_writers` |
+| 崩溃恢复 | WAL 自前滚 + `commits` 提交账本（只增不改）+ 快照 sha256 | `memory-palace fsck` / `journal` |
+| 可迁移 | `export` / `import`（带 sha256） | `memory-palace export out.mpal` |
+| 检索 | 词法通道（概念 + 字符 bigram + IDF）+ 可选稠密通道 + 混合打分 | `semantics.py`、`embedding.py` |
+| 弃答 | 有（阈值是配置，默认 0.14） | `abstain_semantic_floor`，`calibrate` 可重扫 |
+| 去重 | 余弦 + 长度比双门 | `dedupe_similarity=0.92`、`dedupe_length_ratio=0.85` |
+| 评测 | 6 领域、135 条记忆、90 条查询、四类标注 | `memory_palace/evaluation.py`、`memory-palace eval` |
+| 反思 | 规则引擎默认；可选 LLM（结构化输出 + 白名单，**模型不改配置**） | `reflection.py`、`llm.py` |
+| 接入 | MCP（stdio，3/8 工具档）、HTTP + OpenAPI、CLI、DSH 插件 | `mcp_server.py`、`http_api.py`、`cli.py`、`dsh/` |
+
+## 嵌入模型：可以换成真的神经语言模型
+
+`embedding_provider` 支持四种取值，全部走同一个 `SemanticIndex` ——
+换模型时，检索、聚类、去重、弃答**一起**换。
+
+| provider | 说明 | 需要的依赖 |
+|---|---|---|
+| `""` | 只用词法通道（零依赖默认） | 无 |
+| `hashing` | 内置有符号特征哈希，512 维，**不是神经模型**，只补字面变形 | 无 |
+| `ollama` | 本机 Ollama，`/api/embed`（新）与 `/api/embeddings`（旧）都支持 | 无（urllib） |
+| `http` / `openai` | 任何 OpenAI 兼容 `/v1/embeddings`（vLLM / TEI / Xinference / LM Studio / 云厂商） | 无（urllib） |
+| `st` | 本地 sentence-transformers 加载 HF 模型 | `pip install sentence-transformers` |
+
+### 推荐的模型（维度以 `embed --check` 实测为准）
+
+| 模型 | 维度 | 适用 |
+|---|---|---|
+| `BAAI/bge-small-zh-v1.5` | 512 | 中文短文本，CPU 也快，默认首选 |
+| `BAAI/bge-base-zh-v1.5` | 768 | 中文，质量/速度平衡 |
+| `BAAI/bge-large-zh-v1.5` | 1024 | 中文，质量优先 |
+| `BAAI/bge-m3` | 1024 | 多语 + 长上下文（8192），Ollama 里也有同名模型 |
+| `moka-ai/m3e-base` | 768 | 中文老牌小模型，资源占用低 |
+| `Qwen/Qwen3-Embedding-0.6B` | 1024 | 100+ 语言、32k 上下文，支持自定义输出维度（32–1024） |
+| `Qwen/Qwen3-Embedding-4B` | 2560 | 更强，需要 GPU 更宽裕 |
+| `jinaai/jina-embeddings-v3` | 1024 | 多语，长文本 |
+| `nomic-ai/nomic-embed-text-v1.5` | 768 | 英文为主，轻量 |
+
+三种接法（任选其一）：
+
+```bash
+# 1) 本机 Ollama（零依赖）
+ollama pull bge-m3
+memory-palace config --set embedding_provider=ollama
+memory-palace config --set embedding_model=bge-m3
+
+# 2) OpenAI 兼容端点（vLLM / TEI / 云端）
+memory-palace config --set embedding_provider=http
+memory-palace config --set embedding_endpoint=http://127.0.0.1:8000/v1/embeddings
+memory-palace config --set embedding_model=bge-m3
+
+# 3) 本地 sentence-transformers
+pip install sentence-transformers
+memory-palace config --set embedding_provider=st
+memory-palace config --set embedding_model=BAAI/bge-small-zh-v1.5
+
+# 无论哪种，配完先自检：同义改写余弦必须明显高于无关句
+memory-palace embed --check
+```
+
+换模型之后**必须重扫阈值**（余弦分布随模型变化）：`memory-palace calibrate`。
+
+## 评测集：六个领域
+
+| 领域 | 名称 | 记忆 / 查询 |
+|---|---|---|
+| A 股复盘 | `zh-finance` | 39 / 24 |
+| 工程运维 | `zh-tech` | 40 / 22 |
+| 用药与就医 | `zh-medical` | 15 / 11 |
+| 合同与合规 | `zh-legal` | 14 / 11 |
+| 客服工单 | `zh-support` | 13 / 11 |
+| 个人助理 | `zh-personal` | 14 / 11 |
+
+四类标注：检索 gold、可答/不可答、去重对、沉淀簇。
+指标：recall@k、MRR、nDCG@k、P@1、弃答 F1、去重 F1、沉淀成对 F1。
+
+```bash
+memory-palace eval                    # 六领域全跑
+memory-palace eval --dataset zh-legal # 单领域
+memory-palace calibrate               # 扫阈值，给平台区间
+```
+
+### 当前数字（词法通道，k=5，本机）
+
+| 指标 | 六领域平均 |
+|---|---|
+| recall@5 | 0.9204 |
+| MRR | 0.8149 |
+| 弃答 F1 | 0.9762 |
+| 去重 F1 | 0.9444 |
+
+**坏数字也在这里**：沉淀 F1 在默认阈值 0.5 下是 0.000（这批数据标签各不相同），
+扫描显示 0.25–0.30 才合适；金融领域换说法召回 0.727；法务/客服部分查询靠字面重合命中。
+
+## 明确的边界（不要用于）
+
+- 不是专用向量数据库的替代品：没有 ANN、没有分片，1e4 条以内够用。
+- 不承诺多写者高吞吐：SQLite 单写者，写热点会排队。
+- 不是分布式记忆：单机文件，WAL 需要本地盘。
+- 标注集为单人标注，能验证流程与量级，替代不了你自己的语料评测（用 `calibrate` 换语料）。
+- 内置 `hashing` 嵌入不是神经模型；要语义跳转请接上表的真模型。
+
+## 复现
+
+```bash
+python -m pytest tests -q                 # 全部测试
+python -m memory_palace.demo              # 剧本级断言 + 故障注入
+python -m memory_palace.cli eval          # 六领域评测
+python -m memory_palace.bench 1000        # 性能（含单次写入 p50/p95）
+python tools/greenlight_audit.py          # 绿灯审计：故意改坏实现，看断言会不会红
+```
+
+## 如果你是在读这个仓库的模型
+
+- `docs/COMPETITIVE_ANALYSIS.md`、`docs/CRITIQUE_RESPONSE.md` 是**历史文档**，
+  它们描述的是 0.5.x / 0.9 时代的能力。不要把它们当成当前状态。
+- 旧版本能力（单写者、只支持 store.json、无嵌入通道、两个评测领域）已经不存在。
+- 判断当前状态请只看：本文件、`README.md`、`CHANGELOG.md` 最上面一节、`pyproject.toml` 的 version。

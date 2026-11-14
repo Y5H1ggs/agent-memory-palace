@@ -20,9 +20,12 @@ from memory_palace.core import PalaceConfig  # noqa: E402
 from memory_palace.embedding import (  # noqa: E402
     CallableEmbedder,
     DenseIndex,
+    EmbeddingError,
     HashingEmbedder,
     HttpEmbedder,
+    OllamaEmbedder,
     make_embedder,
+    self_check,
 )
 from memory_palace.semantics import SemanticIndex  # noqa: E402
 
@@ -209,6 +212,144 @@ def test_callable_embedder_dim_guard() -> None:
         assert "维度" in str(exc)
     else:
         raise AssertionError("维度不符必须报错")
+
+
+def _fake_ollama(handler_cls) -> tuple[ThreadingHTTPServer, str]:
+    server = ThreadingHTTPServer(("127.0.0.1", 0), handler_cls)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    return server, f"http://127.0.0.1:{server.server_address[1]}"
+
+
+def test_ollama_new_api_batches_and_caches() -> None:
+    """新版 `/api/embed` 一次发多条，且同样文本不重复请求。"""
+    hits: list[list[str]] = []
+
+    class Handler(BaseHTTPRequestHandler):
+        def do_POST(self) -> None:  # noqa: N802
+            length = int(self.headers.get("Content-Length") or 0)
+            body = json.loads(self.rfile.read(length).decode("utf-8"))
+            hits.append(list(body.get("input") or []))
+            vectors = []
+            for text in body["input"]:
+                # 可分辨的假向量：含「仓位」的偏第一维
+                first = 1.0 if "仓位" in text else 0.2
+                vectors.append([first, 0.5, 0.1])
+            payload = json.dumps({"embeddings": vectors}).encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(payload)))
+            self.end_headers()
+            self.wfile.write(payload)
+
+        def log_message(self, *args) -> None:
+            pass
+
+    server, host = _fake_ollama(Handler)
+    try:
+        emb = OllamaEmbedder(host=host, model="bge-m3")
+        vecs = emb.embed_many(["仓位怎么分", "仓位不要满仓", "今天吃什么"])
+        assert len(vecs) == 3 and emb.dim == 3
+        # 归一化后模长必须为 1
+        assert abs(math.sqrt(sum(v * v for v in vecs[0])) - 1.0) < 1e-6
+        assert len(hits) == 1 and len(hits[0]) == 3, hits
+        emb.embed_many(["仓位怎么分"])  # 命中缓存
+        assert len(hits) == 1, f"缓存没生效：{hits}"
+    finally:
+        server.shutdown()
+
+
+def test_ollama_falls_back_to_legacy_endpoint() -> None:
+    """旧版 Ollama 只有 `/api/embeddings`（一次一条），必须能用。"""
+    calls: list[str] = []
+
+    class Handler(BaseHTTPRequestHandler):
+        def do_POST(self) -> None:  # noqa: N802
+            length = int(self.headers.get("Content-Length") or 0)
+            body = json.loads(self.rfile.read(length).decode("utf-8"))
+            calls.append(self.path)
+            if self.path == "/api/embed":
+                self.send_response(404)
+                self.end_headers()
+                return
+            payload = json.dumps({"embedding": [0.6, 0.8]}).encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Length", str(len(payload)))
+            self.end_headers()
+            self.wfile.write(payload)
+
+        def log_message(self, *args) -> None:
+            pass
+
+    server, host = _fake_ollama(Handler)
+    try:
+        emb = OllamaEmbedder(host=host, model="old-model")
+        vecs = emb.embed_many(["甲", "乙"])
+        assert len(vecs) == 2 and emb.dim == 2
+        assert calls[0] == "/api/embed"
+        assert calls.count("/api/embeddings") == 2
+        # 退回旧端点之后不再试探新端点
+        emb.embed_many(["丙"])
+        assert calls.count("/api/embed") == 1, calls
+    finally:
+        server.shutdown()
+
+
+def test_ollama_failure_is_loud() -> None:
+    class Handler(BaseHTTPRequestHandler):
+        def do_POST(self) -> None:  # noqa: N802
+            self.send_response(500)
+            self.end_headers()
+
+        def log_message(self, *args) -> None:
+            pass
+
+    server, host = _fake_ollama(Handler)
+    try:
+        emb = OllamaEmbedder(host=host, model="broken")
+        try:
+            emb.embed("x")
+        except EmbeddingError as exc:
+            assert "Ollama" in str(exc)
+        else:
+            raise AssertionError("服务端 500 必须抛 EmbeddingError")
+        assert emb.failures >= 1
+    finally:
+        server.shutdown()
+
+
+def test_self_check_separates_paraphrase_from_unrelated() -> None:
+    """自检必须能区分「同义改写」与「无关句」，而不是只看维度。
+
+    这里给一个假的「什么都同向」编码器：维度正常、但同义与无关一样近，
+    自检必须判它不可用 —— 否则这个命令只是安慰剂。
+    """
+    good = CallableEmbedder(
+        lambda text: [1.0, 0.0] if "仓位" in text or "资金" in text else [0.0, 1.0], dim=2
+    )
+    assert self_check(good)["ok"] is True
+
+    flat = CallableEmbedder(lambda text: [0.7, 0.7], dim=2)
+    result = self_check(flat)
+    assert result["ok"] is False
+    assert result["margin"] == 0.0
+
+
+def test_config_accepts_neural_providers() -> None:
+    for provider in ("ollama", "st", "http"):
+        cfg = PalaceConfig(
+            embedding_provider=provider,
+            embedding_endpoint="http://127.0.0.1:1/v1/embeddings" if provider == "http" else "",
+        )
+        cfg.validate()
+    try:
+        PalaceConfig(embedding_provider="gpt5-vibes").validate()
+    except ValueError as exc:
+        assert "embedding_provider" in str(exc)
+    else:
+        raise AssertionError("未知 provider 必须被拒")
+    # ollama 不需要 endpoint：默认本机
+    emb = make_embedder(PalaceConfig(embedding_provider="ollama", embedding_model="bge-m3"))
+    assert isinstance(emb, OllamaEmbedder) and emb.dim == 0  # 维度等第一次响应再定
 
 
 if __name__ == "__main__":

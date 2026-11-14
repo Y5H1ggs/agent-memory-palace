@@ -24,7 +24,8 @@ python -m memory_palace.mcp_server
 ```
 
 通用启动参数永远是这三样：`command` / `args` / `env`。唯一的硬要求是
-**`MEMORY_PALACE_STORE` 指向一个可写路径**（默认 `~/.memory-palace/store.json`）。
+**`MEMORY_PALACE_STORE` 指向一个可写路径**（默认 `~/.memory-palace/store.sqlite`，
+SQLite / WAL；要用单文件快照就 `--backend json` 并把后缀改成 `.json`）。
 
 > 注意：MCP 的 stdio 传输是**换行分隔的 JSON-Messages**，不是 LSP 的 `Content-Length` 头。
 > 服务端也不会往 stdout 打任何日志（日志一律走 stderr），否则会让客户端解析失败。
@@ -38,7 +39,7 @@ python -m memory_palace.mcp_server
   "mcpServers": {
     "memory-palace": {
       "command": "memory-palace-mcp",
-      "env": { "MEMORY_PALACE_STORE": "/Users/you/.memory-palace/store.json" }
+      "env": { "MEMORY_PALACE_STORE": "/Users/you/.memory-palace/store.sqlite" }
     }
   }
 }
@@ -57,7 +58,7 @@ claude mcp add memory-palace --scope user -- memory-palace-mcp
 ```toml
 [mcp_servers.memory-palace]
 command = "memory-palace-mcp"
-env = { MEMORY_PALACE_STORE = "/Users/you/.memory-palace/store.json" }
+env = { MEMORY_PALACE_STORE = "/Users/you/.memory-palace/store.sqlite" }
 ```
 
 Codex 还会读仓库根目录的 `AGENTS.md` —— 本仓库自带一份，写清了「什么时候该调记忆」，
@@ -118,7 +119,7 @@ DSH 不直接读 `mcp.json`，而是通过官方桥接插件 `@deepseek-ai/dsh-m
         args: ['-u', '-m', 'memory_palace.mcp_server', '--profile', 'slim']
         cwd: /path/to/memory-palace
         env:
-          MEMORY_PALACE_STORE: /Users/you/.memory-palace/store.json
+          MEMORY_PALACE_STORE: /Users/you/.memory-palace/store.sqlite
           PYTHONPATH: /path/to/memory-palace
         toolCallTimeoutMs: 30000
 ```
@@ -185,7 +186,7 @@ MCP 和 HTTP 都是管道，真正的逻辑在库里。自己写循环时直接�
 ```python
 from memory_palace import MemoryPalace
 
-palace = MemoryPalace(path="~/.memory-palace/store.json")
+palace = MemoryPalace(path="~/.memory-palace/store.sqlite")
 
 block = palace.context_for("仓位怎么分配", budget=800)   # 见下方说明
 palace.remember("追高后逆板块阴跌 -2.9%，教训：先看资金接力", tags=("复盘", "教训"))
@@ -220,7 +221,7 @@ OpenAI function calling：把 `memory_palace.mcp_server.TOOLS` 里的 `inputSche
 最土也最稳的一种。在 system prompt 里加五行：
 
 ```
-你有长期记忆，用 `memory-palace` 命令访问（存储 ~/.memory-palace/store.json）。
+你有长期记忆，用 `memory-palace` 命令访问（存储 ~/.memory-palace/store.sqlite）。
 - 任务开始前：memory-palace context --query "<任务>" --budget 800，把输出原样放在最前面。
 - 用户说「记住」时：memory-palace remember "<一句话结论>" --tags … --tier fact（硬规则加 --pin）。
 - 用户纠正你时：memory-palace outcome <名字> contradicted。
