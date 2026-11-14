@@ -157,6 +157,8 @@ class SqliteStore:
             "nodes_upserted": 0,
             "edges_upserted": 0,
             "conflicts": 0,
+            "reconnects": 0,
+            "saves_attempted": 0,
         }
         self._conn: sqlite3.Connection | None = None
         self._in_txn = False
@@ -169,32 +171,86 @@ class SqliteStore:
 
     @property
     def conn(self) -> sqlite3.Connection:
+        """连上库。建连期间的可恢复错误要**重连**，不是重试同一条连接。
+
+        Windows + WAL 上有一个真实的瞬态：A 进程刚建库、正在写 WAL 头，
+        B 进程此刻连上来，pager 会进入 read-only 状态（SQLITE_READONLY_RECOVERY），
+        之后这条连接**一直**是 read-only —— 在它上面重试 `executescript` 永远失败。
+        正确做法是关掉重连：新连接的 pager 重新 open，那时 WAL 已经就绪。
+
+        这是「偶发写入失败」的真实成因；如果不在这里处理，用户看到的就是
+        「有时候 remember 会报 attempt to write a readonly database」。
+        """
         if self._conn is None:
-            parent = os.path.dirname(self.path)
-            if parent:
-                os.makedirs(parent, exist_ok=True)
-            conn = sqlite3.connect(
-                self.path, timeout=self.timeout, isolation_level=None, check_same_thread=False
-            )
-            conn.execute(f"PRAGMA busy_timeout={int(self.timeout * 1000)}")
-            conn.execute("PRAGMA synchronous=" + self.synchronous)
-            mode = conn.execute("PRAGMA journal_mode").fetchone()[0]
-            if str(mode).lower() != "wal":
-                # WAL 是这个后端存在的理由：没有它就是「一个进程写、其他人干等」。
-                conn.execute("PRAGMA journal_mode=WAL")
-            for attempt in range(20):
+            deadline = time.monotonic() + max(3.0, self.timeout)
+            last: Exception | None = None
+            while True:
                 try:
-                    conn.executescript(_DDL)
+                    self._conn = self._open()
                     break
                 except sqlite3.OperationalError as exc:
+                    last = exc
                     text = str(exc).lower()
-                    if ("locked" in text or "readonly" in text or "busy" in text) and attempt < 19:
-                        time.sleep(0.02 * (attempt + 1))
-                        continue
-                    raise
-            self._conn = conn
+                    transient = (
+                        "readonly" in text
+                        or "locked" in text
+                        or "busy" in text
+                        or "unable to open" in text
+                    )
+                    if not transient or time.monotonic() >= deadline:
+                        raise
+                    time.sleep(0.02 + (0.01 * (len(str(last)) % 3)))
             self._load_meta()
         return self._conn
+
+    def _open(self) -> sqlite3.Connection:
+        parent = os.path.dirname(self.path)
+        if parent:
+            os.makedirs(parent, exist_ok=True)
+        conn = sqlite3.connect(
+            self.path, timeout=self.timeout, isolation_level=None, check_same_thread=False
+        )
+        try:
+            conn.execute(f"PRAGMA busy_timeout={int(self.timeout * 1000)}")
+            conn.execute("PRAGMA synchronous=" + self.synchronous)
+            self._ensure_wal(conn)
+            conn.executescript(_DDL)
+        except BaseException:
+            try:
+                conn.close()
+            finally:
+                pass
+            raise
+        return conn
+
+    def _ensure_wal(self, conn: sqlite3.Connection) -> None:
+        """确保这条连接**真的**在 WAL 模式下，而不是「我以为切了」。
+
+        并发首次建库时踩过：A 进程正在把库切到 WAL，B 进程此时读到的还是
+        `delete`，执行 `PRAGMA journal_mode=WAL` 却拿不到写锁 —— SQLite 不报错、
+        只把当前模式返回。B 于是以 delete 模式连着一个已被 A 切到 WAL 的库，
+        第一次写入就得到 `attempt to write a readonly database`。
+        这个异常出现在 INSERT 上，离真正的原因（建连时的模式竞争）很远。
+
+        所以这里反复确认：读到的模式必须是 wal 才放行；切不动就等，等到超时为止。
+        """
+        deadline = time.monotonic() + max(2.0, self.timeout)
+        last = ""
+        while True:
+            try:
+                mode = str(conn.execute("PRAGMA journal_mode").fetchone()[0]).lower()
+                if mode == "wal":
+                    return
+                last = mode
+                conn.execute("PRAGMA journal_mode=WAL").fetchone()
+            except sqlite3.OperationalError as exc:
+                last = str(exc)
+            if time.monotonic() >= deadline:
+                raise sqlite3.OperationalError(
+                    f"无法把 {self.path} 切到 WAL 模式（当前 {last!r}）："
+                    "多个进程同时首次建库时会竞争这个 PRAGMA，请重试"
+                )
+            time.sleep(0.02)
 
     def _load_meta(self) -> None:
         try:
@@ -346,6 +402,37 @@ class SqliteStore:
     # ---- 写 ----
 
     def save(
+        self,
+        payload: dict[str, Any],
+        reason: str = "save",
+        *,
+        delta: bool = False,
+        base_revision: int | None = None,
+    ) -> SaveResult:
+        """写入一层薄薄的重连重试。
+
+        `readonly` / `disk I/O error` 在 Windows + WAL 上偶发（杀毒软件、
+        另一个进程刚好在 checkpoint）。这类错误重连一次就好了，
+        让它冒到用户面前只会得到一个「偶发写入失败」的传说。
+        只重试一次：第二次还坏，说明不是瞬态，该让它响。
+        """
+        self.stats["saves_attempted"] += 1
+        try:
+            return self._save_impl(
+                payload, reason, delta=delta, base_revision=base_revision
+            )
+        except sqlite3.OperationalError as exc:
+            text = str(exc).lower()
+            transient = "readonly" in text or "disk i/o" in text or "unable to open" in text
+            if not transient:
+                raise
+            self.stats["reconnects"] += 1
+            self.close()
+            return self._save_impl(
+                payload, reason, delta=delta, base_revision=base_revision
+            )
+
+    def _save_impl(
         self,
         payload: dict[str, Any],
         reason: str = "save",

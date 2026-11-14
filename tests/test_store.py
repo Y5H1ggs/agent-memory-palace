@@ -14,6 +14,7 @@ import sqlite3
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -170,6 +171,121 @@ def test_reader_sees_other_writers() -> None:
         assert set(reader.graph.nodes()) == {"a", "b"}
         writer.close()
         reader.close()
+
+
+def test_gc_and_recall_race_on_ephemeral_nodes() -> None:
+    """一边 gc 删、一边 recall 命中同一批**会被真删**的节点。
+
+    之前的并发演出只挑 pinned / core 节点，而 gc 对它们直接返回「不删」——
+    等于在软柿子上证明并发安全。这里分三组，把三种结局都覆盖到：
+
+      doomed     早已过期 → 必须被删（证明 gc 真的在删）
+      contested  卡在遗忘线附近 → 可能被删也可能被 recall 救活（真正的竞态）
+      fresh      还年轻 → recall 必须能命中（证明读改写路径真的在跑）
+
+    断言的是这套系统**真正**提供的保证：
+      · 不崩：任何线程都不抛异常
+      · 不腐：删完没有悬空边，`fsck` 通过
+      · 不产生幽灵：recall 返回过的名字，事后必须「还活着」或「确实被删了」
+    它**不**承诺「刚被 recall 的节点就不会被删」—— 那是产品决定，不是并发正确性。
+    """
+    from memory_palace.core import MutableClock, PalaceConfig
+
+    with tempfile.TemporaryDirectory(prefix="mp-race-") as tmp:
+        path = os.path.join(tmp, "store.sqlite")
+        clock = MutableClock(1_800_000_000.0)
+        palace = MemoryPalace(path=path, clock=clock, config=PalaceConfig(), autosave=True)
+        palace.remember("rule", "禁止绝对化措辞", tags=("硬规则",), tier="core", pinned=True)
+
+        doomed = [f"d{i}" for i in range(60)]
+        contested = [f"c{i}" for i in range(30)]
+        fresh = [f"f{i}" for i in range(20)]
+        for name in doomed:
+            palace.remember(name, f"陈旧观察 {name}：缩量反弹不追高", tags=("临时",), tier="ephemeral")
+        for name in contested:
+            palace.remember(name, f"临界观察 {name}：缩量反弹不追高", tags=("临时",), tier="event")
+        for name in fresh:
+            palace.remember(name, f"新鲜观察 {name}：缩量反弹不追高", tags=("临时",), tier="event")
+        for name in doomed:
+            palace.age(name, 30)
+        for name in contested:
+            palace.age(name, 6)
+        for name in fresh:
+            palace.age(name, 1)
+
+        errors: list[str] = []
+        deleted: list[str] = []
+        returned: list[str] = []
+        witnesses = contested + fresh
+
+        def gc_worker() -> None:
+            try:
+                for _ in range(5):
+                    deleted.extend(palace.gc())
+            except Exception as exc:  # noqa: BLE001
+                errors.append(f"gc: {exc!r}")
+
+        def recall_worker() -> None:
+            try:
+                for _ in range(15):
+                    returned.extend(n.name for n in palace.recall(names=witnesses))
+            except Exception as exc:  # noqa: BLE001
+                errors.append(f"recall: {exc!r}")
+
+        threads = [threading.Thread(target=gc_worker) for _ in range(2)]
+        threads += [threading.Thread(target=recall_worker) for _ in range(2)]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join(timeout=60)
+
+        assert not errors, errors
+        hit = len(set(deleted) & set(doomed))
+        assert hit >= 30, f"这个测试没测到真删除：doomed 只删了 {hit}/60"
+        assert set(returned) & set(fresh), "recall 一次也没命中，读路径没跑起来"
+        alive = set(palace.graph.nodes())
+        ghosts = set(returned) - alive - set(deleted)
+        assert not ghosts, f"召回返回了既不在图里也没被删的节点: {sorted(ghosts)[:5]}"
+        for a, b, _edge in palace.graph.edges():
+            assert a in alive and b in alive, f"删完之后留下悬空边 {a}~{b}"
+        assert palace._store is not None and palace._store.fsck()["ok"]
+        palace.close()
+
+
+def test_apply_suggestion_rolls_back_when_save_fails() -> None:
+    """手动采纳参数时，落盘失败必须把参数退回去。
+
+    v0.9 只在自修正路径上做了这件事，手动这条路把 `_maybe_save()` 的返回值丢了：
+    磁盘满 → 内存用新阈值跑 → 重启静默回滚 → 没人收到报错。
+    """
+    from memory_palace.store import StoreError
+
+    with tempfile.TemporaryDirectory(prefix="mp-apply-") as tmp:
+        path = os.path.join(tmp, "store.sqlite")
+        palace = MemoryPalace(path=path, autosave=True)
+        palace.remember("a", "仓位按半凯利", tags=("仓位",))
+        before = palace._config.semantic_min_score
+        original = palace._store.save
+
+        def boom(*args, **kwargs):
+            raise OSError("磁盘满")
+
+        palace._store.save = boom  # type: ignore[method-assign]
+        try:
+            palace.apply_suggestion("semantic_min_score", 0.33)
+        except StoreError as exc:
+            assert "回滚" in str(exc)
+        else:
+            raise AssertionError("落盘失败时不该报告成功")
+        finally:
+            palace._store.save = original  # type: ignore[method-assign]
+        assert palace._config.semantic_min_score == before, "参数没退回"
+        # 退回去之后还能正常改，并且真的落盘
+        palace.apply_suggestion("semantic_min_score", 0.21)
+        palace.close()
+        reloaded = MemoryPalace(path=path)
+        assert reloaded._config.semantic_min_score == 0.21
+        reloaded.close()
 
 
 def test_sqlite_fsck_and_repair() -> None:

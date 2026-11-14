@@ -142,19 +142,36 @@ class ConsolidationEngine:
             keys = set(node.tags) or {f"tier:{node.tier}"}
             for key in keys:
                 buckets.setdefault(key, []).append(node)
-        pairs: list[tuple[MemoryNode, MemoryNode]] = []
         seen: set[tuple[str, str]] = set()
-        budget = cfg.consolidate_max_pairs
-        for members in buckets.values():
+
+        def bucket_pairs(members: list[MemoryNode]):
             for i, a in enumerate(members):
                 for b in members[i + 1 :]:
                     key = (a.name, b.name) if a.name < b.name else (b.name, a.name)
                     if key in seen:
                         continue
                     seen.add(key)
-                    pairs.append((a, b))
-                    if len(pairs) >= budget:
-                        return pairs
+                    yield (a, b)
+
+        # 轮流从每个桶里取，而不是「按桶顺序装满预算就停」。
+        # 后者有个隐蔽后果：预算 60000 在 8 个标签桶里只够装满前半个桶，
+        # 后面的标签**一对都不比较** —— 大库里沉淀会系统性地漏掉后一半主题，
+        # 而且没有任何报错。轮流取的覆盖率与「主题在桶里的顺序」无关。
+        budget = cfg.consolidate_max_pairs
+        gens = [bucket_pairs(members) for members in buckets.values()]
+        pairs: list[tuple[MemoryNode, MemoryNode]] = []
+        while gens and len(pairs) < budget:
+            alive = []
+            for gen in gens:
+                if len(pairs) >= budget:
+                    alive.append(gen)
+                    continue
+                try:
+                    pairs.append(next(gen))
+                except StopIteration:
+                    continue
+                alive.append(gen)
+            gens = alive
         return pairs
 
     def _clusters(

@@ -1670,8 +1670,15 @@ class MemoryPalace:
             return node
 
     @_mutating("apply_suggestion")
+    @_mutating("apply_suggestion")
     def apply_suggestion(self, param: str, value: Any) -> Any:
-        """显式采纳反思建议。三个引擎共享同一 config 对象，改一处即全局生效。"""
+        """显式采纳反思建议。三个引擎共享同一 config 对象，改一处即全局生效。
+
+        「存不下就不算改过」在这里也必须成立：v0.9 只处理了自修正路径上的
+        落盘失败回滚，手动采纳这条路上 `_maybe_save()` 的返回值是被丢掉的 ——
+        磁盘满/权限问题会让内存用新阈值跑、重启后静默回滚，且没有任何日志。
+        现在落盘失败就把参数退回去并抛错，让调用方知道这次没成。
+        """
         with self._lock:
             fields = dataclass_field_names(PalaceConfig)
             if param not in fields:
@@ -1684,7 +1691,15 @@ class MemoryPalace:
                 setattr(self._config, param, old)  # 拒绝非法值并回滚，不留半坏配置
                 raise
             self._log("config_change", {"param": param, "from": old, "to": value})
-            self._maybe_save()
+            if not self._maybe_save():
+                setattr(self._config, param, old)
+                self._log(
+                    "config_reverted",
+                    {"param": param, "to": old, "reason": "save_failed"},
+                )
+                raise StoreError(
+                    f"参数 {param} 未能落盘，已回滚为 {old!r}（存不下就不算改过）"
+                )
             return old
 
     # ---------- 快照与持久化 ----------

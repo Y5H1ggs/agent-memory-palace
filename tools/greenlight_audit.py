@@ -73,6 +73,14 @@ MUTANTS: tuple[Mutant, ...] = (
         ("tests/test_llm.py",),
     ),
     Mutant(
+        "config-save-ignored",
+        "memory_palace/palace.py",
+        "            if not self._maybe_save():",
+        "            if False:",
+        "手动采纳参数时忽略落盘结果（内存改了、磁盘没改）",
+        ("tests/test_store.py",),
+    ),
+    Mutant(
         "guard-off",
         "memory_palace/selfcorrect.py",
         "            if not hits:",
