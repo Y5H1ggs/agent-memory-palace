@@ -44,25 +44,10 @@ def _median(values: list[float]) -> float:
         return ordered[middle]
     return (ordered[middle - 1] + ordered[middle]) / 2.0
 
-# 白名单：这些是「表现层旋钮」，调错了也只是行为偏差，不会伤到身份与基座。
-ALLOWED_PARAMS: frozenset[str] = frozenset(
-    {
-        "importance_forget",
-        "semantic_min_score",
-        "semantic_relative_floor",
-        "style_min_span_days",
-        "consolidate_similarity",
-        "consolidate_min_shared_tags",
-        "narrative_max_chapters",
-        "narrative_select_importance",
-        "narrative_relative_floor",
-        "grasp_budget",
-        "logic_spread_threshold",
-        "affect_distortion",
-    }
-)
-
-# 每个可调参数自己的值域：全局 [1e-4, 1] 太粗，「章节数上限」和「百分比门槛」不是一回事。
+# 每个可调参数自己的值域。
+# **单一真相源**：白名单直接由这张表派生 —— 两处各写一份，迟早会出现
+# 「白名单里有、值域里没有」的幽灵参数，然后 `PARAM_BOUNDS.get(p, (1e-4,1))`
+# 用一个通用区间悄悄放行，那不是调参，是漏闸。
 PARAM_BOUNDS: dict[str, tuple[float, float]] = {
     "importance_forget": (0.005, 0.5),
     "semantic_min_score": (0.02, 0.6),
@@ -77,6 +62,9 @@ PARAM_BOUNDS: dict[str, tuple[float, float]] = {
     "logic_spread_threshold": (0.02, 0.9),
     "affect_distortion": (0.0, 0.9),
 }
+
+# 白名单：这些是「表现层旋钮」，调错了也只是行为偏差，不会伤到身份与基座。
+ALLOWED_PARAMS: frozenset[str] = frozenset(PARAM_BOUNDS)
 
 # 明令禁止：写在这里不是为了执行，是为了**能被测试读到**。
 # 这些参数一动，改的就不是「表现」而是「身份 / 记忆的物理常数」。

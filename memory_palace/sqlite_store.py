@@ -31,6 +31,7 @@ from __future__ import annotations
 
 import json
 import os
+import random
 import sqlite3
 import time
 import uuid
@@ -414,23 +415,34 @@ class SqliteStore:
         `readonly` / `disk I/O error` 在 Windows + WAL 上偶发（杀毒软件、
         另一个进程刚好在 checkpoint）。这类错误重连一次就好了，
         让它冒到用户面前只会得到一个「偶发写入失败」的传说。
-        只重试一次：第二次还坏，说明不是瞬态，该让它响。
+
+        但「一次」不够：16 个进程同时建库/写库时（tools/concurrency_bench.py
+        实测过），重连后新连接仍可能落在同一个正在切换 WAL 的窗口里。
+        所以给三次、带退避 —— 每次都是**换一条新连接**，而不是在同一条坏连接上
+        重试（那条连接的 pager 已经 read-only，重试永远不会好）。
+
+        只重试「连接坏了」这一类；`locked` / `busy` 属于排队，交给上层
+        `_retry_locked`，在事务中途重做写操作会让 revision 跳号。
         """
-        self.stats["saves_attempted"] += 1
-        try:
-            return self._save_impl(
-                payload, reason, delta=delta, base_revision=base_revision
-            )
-        except sqlite3.OperationalError as exc:
-            text = str(exc).lower()
-            transient = "readonly" in text or "disk i/o" in text or "unable to open" in text
-            if not transient:
-                raise
-            self.stats["reconnects"] += 1
-            self.close()
-            return self._save_impl(
-                payload, reason, delta=delta, base_revision=base_revision
-            )
+        last: sqlite3.OperationalError | None = None
+        for attempt in range(3):
+            self.stats["saves_attempted"] += 1
+            try:
+                return self._save_impl(
+                    payload, reason, delta=delta, base_revision=base_revision
+                )
+            except sqlite3.OperationalError as exc:
+                text = str(exc).lower()
+                transient = (
+                    "readonly" in text or "disk i/o" in text or "unable to open" in text
+                )
+                if not transient or attempt == 2:
+                    raise
+                last = exc
+                self.stats["reconnects"] += 1
+                self.close()
+                time.sleep(0.03 * (2**attempt) + random.uniform(0.0, 0.02))
+        raise last if last else sqlite3.OperationalError("写入失败")  # pragma: no cover
 
     def _save_impl(
         self,

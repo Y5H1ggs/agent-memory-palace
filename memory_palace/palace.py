@@ -146,6 +146,7 @@ class MemoryPalace:
                 journal_keep=self._config.journal_keep,
                 verify=self._config.verify_checksum,
                 snapshot_every=self._config.snapshot_every,
+                synchronous=self._config.store_synchronous,
                 validate=lambda s: self._validate_state(s, self._path or ""),
             )
         if self._store is not None:
@@ -805,14 +806,26 @@ class MemoryPalace:
         query_tags: tuple[str, ...],
         now: float,
         scopes: set[str] | None = None,
+        only_hits: bool = False,
     ) -> list[dict[str, Any]]:
-        """三路打分的拆解：语义 / 标签 / 时近。公开给 score_breakdown，保证可解释。"""
+        """三路打分的拆解：语义 / 标签 / 时近。公开给 score_breakdown，保证可解释。
+
+        `only_hits` 是给 recall 热路径用的剪枝：召回的门槛里有一条铁律 ——
+        `semantic > 0 或 tag > 0`，光靠新鲜不算相关（见 recall 里的 above 过滤）。
+        所以语义与标签都为 0 的节点**不可能**被返回，它们唯一的作用是让
+        recency 项算出来给人看。10k 条时这类节点占七成，每条都要跑一次
+        `effective_weight`（含 exp / log1p），纯属白烧 CPU。
+
+        默认 False：`score_breakdown` 要的是**全量解释**，不是只有命中的那几条。
+        跳过与否都不改变结果 —— 跳过的那些本来就进不了 above。
+        """
         cfg = self._config
         wanted = set(query_tags)
         text = (query or "").strip()
         if text:
             self.semantics.sync(self.graph)  # 语料变了先重学词典，再检索
         sem_scores = self.semantics.scores(text) if text else {}
+        wanted_len = max(1, len(wanted))
         rows: list[dict[str, Any]] = []
         for node in self.graph.all_nodes():
             if not node.is_valid_at(now):
@@ -820,7 +833,9 @@ class MemoryPalace:
             if scopes is not None and node.scope not in scopes:
                 continue  # 别的项目的记忆不该出现在这个项目的候选里
             sem = sem_scores.get(node.name, 0.0)
-            tag = len(wanted & set(node.tags)) / max(1, len(wanted)) if wanted else 0.0
+            tag = len(wanted & set(node.tags)) / wanted_len if wanted else 0.0
+            if only_hits and sem <= 0.0 and tag <= 0.0:
+                continue  # 必定过不了「语义或标签非零」这道门，算 recency 是白算
             rec = min(1.0, max(0.0, node.effective_weight(now)))
             total = (
                 cfg.semantic_alpha * sem
@@ -906,7 +921,7 @@ class MemoryPalace:
                     )
                 else:
                     retrieval = "semantic" if text else "tags"
-                    rows = self._score_components(text, query_tags, moment, scopes)
+                    rows = self._score_components(text, query_tags, moment, scopes, only_hits=True)
                     # 「过了门槛」还不够：必须真的有时近之外的理由。
                     # 总分里含 recency，刚写进来的任何东西都能靠它过线 ——
                     # 那不是相关，是新鲜。语义全零、标签全空时应当召回不到。

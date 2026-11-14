@@ -137,6 +137,12 @@ class LLMReflection:
     error: str = ""
     prompt_chars: int = 0
     rejected_params: list[str] = field(default_factory=list)
+    # 白名单外的提案不该被静默吞掉。
+    # 「不许改」和「不许说」是两件事：拒绝它生效，但要把原话和理由留下来，
+    # 交给人裁决。评审说的「被直接丢弃并记录 rejected_params」正是指这一段 ——
+    # 记了但没人看见，等于没记。
+    insights: list[str] = field(default_factory=list)
+    repair_rounds: int = 0
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -150,6 +156,8 @@ class LLMReflection:
             "error": self.error,
             "prompt_chars": self.prompt_chars,
             "rejected_params": self.rejected_params,
+            "insights": self.insights,
+            "repair_rounds": self.repair_rounds,
         }
 
 
@@ -170,6 +178,7 @@ class LLMReflector:
         max_chars: int = 6000,
         node_chars: int = 120,
         max_tokens: int = 700,
+        max_rounds: int = 2,
     ) -> None:
         self.provider = provider
         self.max_evidence_nodes = max(1, int(max_evidence_nodes))
@@ -177,6 +186,9 @@ class LLMReflector:
         self.max_chars = max(800, int(max_chars))
         self.node_chars = max(40, int(node_chars))
         self.max_tokens = max(128, int(max_tokens))
+        # 默认两轮：第一轮自由提，越界就带着拒绝原因再提一次。
+        # 设 1 就是原来的「一次性格式化」，成本更低但不给模型纠错机会。
+        self.max_rounds = max(1, int(max_rounds))
         self.last: LLMReflection | None = None
 
     # ---- 证据 ----
@@ -271,15 +283,24 @@ class LLMReflector:
                 continue
             param = str(item.get("param") or "")
             direction = str(item.get("direction") or "")
+            why = _clip(item.get("why", ""), 120)
             if param not in ALLOWED_PARAMS:
-                # 白名单外的一律丢弃并记录：模型无权提出改白名单之外的参数
+                # 白名单外的一律丢弃：模型无权提出改白名单之外的参数。
+                # 但**不能只记一个名字就完事** —— 那等于把模型的观察扔进日志黑洞。
+                # 原话留下，标成「需人工裁决」，人能看到它到底想改什么。
                 result.rejected_params.append(param or "<empty>")
+                result.insights.append(
+                    f"越界提案 {param or '<empty>'}（{direction or '?'}）：{why or '未给理由'}"
+                )
                 continue
             if direction not in ("up", "down"):
                 result.rejected_params.append(f"{param}:{direction}")
+                result.insights.append(
+                    f"方向非法 {param}={direction!r}：{why or '未给理由'}"
+                )
                 continue
             result.suggested_params.append(
-                {"param": param, "direction": direction, "why": _clip(item.get("why", ""), 120)}
+                {"param": param, "direction": direction, "why": why}
             )
         result.suggested_params = result.suggested_params[:2]
         if not (result.findings or result.hypotheses):
@@ -288,6 +309,25 @@ class LLMReflector:
         return result
 
     # ---- 入口 ----
+
+    def _repair_prompt(self, base: str, rejected: list[str]) -> str:
+        """第二轮：把「被拒」这件事告诉模型，而不是让它猜。
+
+        评审说这是「带温度参数的规则引擎前端」—— 单轮白名单确实如此：
+        模型提了一次，被拒，流程结束，模型永远不知道发生了什么。
+        加一轮的成本只在「第一轮真的越界」时发生，换来的是模型能自己收敛。
+        """
+        lines = [
+            "",
+            "【上一轮被拒的提案】",
+            *[f"- {item}（不在可调清单内，或方向非法）" for item in rejected[:6]],
+            "",
+            "请重新输出完整的 JSON（结构同前）：",
+            "- findings / hypotheses 保持或修正；",
+            "- suggested_params 只能从上面的清单里选，最多 2 条；",
+            "- 如果确实不需要改参数，就给空数组。空数组是合法答案，不要为了凑而硬提。",
+        ]
+        return f"{base}\n" + "\n".join(lines)
 
     def reflect(self, payload: dict[str, Any]) -> LLMReflection:
         prompt = self.build_prompt(payload)
@@ -305,6 +345,27 @@ class LLMReflector:
             self.last = result
             return result
         result = self.parse(raw)
+        # 第一轮越界 → 带着拒绝原因再来一轮（只一轮，收敛不了就认了）
+        if self.max_rounds > 1 and result.rejected_params and not result.degraded:
+            try:
+                raw2 = self.provider.complete(
+                    SYSTEM_PROMPT,
+                    self._repair_prompt(prompt, result.rejected_params),
+                    max_tokens=self.max_tokens,
+                )
+            except Exception:  # 第一轮已经有结果，第二轮任何失败都不该推翻它
+                raw2 = ""
+            if raw2:
+                second = self.parse(raw2)
+                if not second.degraded:
+                    result.repair_rounds = 1
+                    result.findings = second.findings or result.findings
+                    result.hypotheses = second.hypotheses or result.hypotheses
+                    result.suggested_params = second.suggested_params
+                    result.confidence = second.confidence or result.confidence
+                    # 两轮的越界提案都留下，别因为「修好了」就把第一轮的洞察抹掉
+                    result.rejected_params += second.rejected_params
+                    result.insights += second.insights
         result.prompt_chars = len(prompt)
         result.elapsed_ms = (time.perf_counter() - started) * 1000
         self.last = result
@@ -326,6 +387,8 @@ class LLMReflector:
                     f"建议参数 {item['param']} 向 {item['direction']}（{item['why']}）"
                     " —— 未生效，需经护栏验证"
                 )
+            for insight in result.insights:
+                lines.append(f"越界建议（未生效，需人工裁决）：{insight}")
             return lines
 
         return hook

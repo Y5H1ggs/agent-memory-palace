@@ -395,7 +395,131 @@ def self_check(embedder: Embedder) -> dict[str, Any]:
         # 绝对余弦本来就不一样（维度越大、能量摊得越开）。用绝对值当门槛，
         # 换个维度就会误判 —— 这也是「只看维度」不靠谱的同一类错误。
         "ok": (same - diff) >= 0.2 and same >= 0.3,
+        "advice": (
+            "可用。接着跑 `memory-palace embed --reindex` 重建全库向量，"
+            "再跑 `memory-palace calibrate` 重扫弃答线。"
+            if (same - diff) >= 0.2 and same >= 0.3
+            else "不可用：同义与无关分不开。换中文/多语模型（bge-m3、bge-small-zh、gte-large-zh），"
+            "或把 hybrid_weight 降到 0.2 以内让词法通道主导。"
+        ),
     }
+
+
+# ------------------------------------------------------------------ auto 探测
+
+
+def _st_installed() -> bool:
+    """sentence-transformers 装没装。
+
+    `find_spec` 只查元数据、不 import —— 对「启动时探测一次」这个场景，
+    把 torch 拖进内存（几秒 + 几百 MB）是不可接受的代价。
+    """
+    try:
+        import importlib.util
+
+        return importlib.util.find_spec("sentence_transformers") is not None
+    except (ImportError, ValueError):  # 嵌入式解释器可能没有 find_spec
+        return False
+
+
+def _ollama_alive(host: str, timeout: float = 0.35) -> bool:
+    """本机 ollama 在不在听。
+
+    连接被拒是**立刻**返回的（毫秒级），timeout 只对「端口开着但不答」生效，
+    所以这个探测不会拖慢启动。不下载模型、不跑推理 —— 只看 `/api/tags`。
+    """
+    try:
+        with urllib.request.urlopen(f"{host.rstrip('/')}/api/tags", timeout=timeout) as resp:
+            return int(getattr(resp, "status", 200)) == 200
+    except (urllib.error.URLError, OSError, ValueError):
+        return False
+
+
+# 进程内缓存：同一个 CLI 进程里 make_embedder 可能被调用多次
+# （palace 构造 + embed 命令 + 自检），不该每次都探一遍。
+_AUTO_PROBE: dict[str, dict[str, Any]] = {}
+
+
+def probe_auto(host: str = "", prefer: str = "") -> dict[str, Any]:
+    """`embedding_provider=auto` 到底选了什么、为什么没选另一个。
+
+    设计原则：**只在「有真模型」时才启用稠密通道**。
+    不把 hashing 当 auto 的兜底 —— 它读字面不读意思，悄悄开起来只会让人以为
+    「语义检索已经生效」，那比明确说「没有」更糟。评审说「默认是玩具级」，
+    根子不在 hashing 存在，而在它被当成了默认答案；这里把它从默认路径上摘掉。
+    """
+    key = f"{host}|{prefer}"
+    if key in _AUTO_PROBE:
+        return _AUTO_PROBE[key]
+    host = host or "http://127.0.0.1:11434"
+    checked: list[dict[str, Any]] = []
+    chosen = ""
+    if prefer in ("st", "sentence-transformers"):
+        order = ["st"]
+    elif prefer == "ollama":
+        order = ["ollama"]
+    else:
+        order = ["st", "ollama"]
+    for candidate in order:
+        if candidate == "st":
+            alive = _st_installed()
+            checked.append(
+                {
+                    "candidate": "st",
+                    "alive": alive,
+                    "why": "已安装 sentence-transformers" if alive else "未安装 sentence-transformers",
+                }
+            )
+        else:
+            alive = _ollama_alive(host)
+            checked.append(
+                {
+                    "candidate": "ollama",
+                    "alive": alive,
+                    "why": f"{host} 有响应" if alive else f"{host} 无响应",
+                }
+            )
+        if alive:
+            chosen = candidate
+            break
+    verdict = {
+        "chosen": chosen,
+        "checked": checked,
+        "host": host,
+        "summary": (
+            f"自动选中 {chosen}（本机有真模型，稠密通道启用）"
+            if chosen
+            else "没找到本机真模型：当前走词法通道（不做语义假装）。"
+            "想要语义召回：pip install sentence-transformers，或 ollama serve 后 ollama pull bge-m3。"
+        ),
+    }
+    _AUTO_PROBE[key] = verdict
+    return verdict
+
+
+def _make_auto(config: Any) -> Embedder | None:
+    """auto 的落地：探测 → 构造 → 构造失败再降级。
+
+    最后一层 try 是必需的：装了 sentence-transformers 但没下过模型、又正好断网，
+    是最常见的现场。此时抛异常等于让用户「装了个包反而用不了」，
+    而降级到词法 + 一句明确的话，是能接受的失败姿态。
+    """
+    host = getattr(config, "embedding_endpoint", "") or ""
+    model = getattr(config, "embedding_model", "") or ""
+    cache = getattr(config, "embedding_cache", "") or ""
+    verdict = probe_auto(host, prefer="st" if model and _st_installed() else "")
+    if verdict["chosen"] == "st":
+        try:
+            return SentenceTransformerEmbedder(model or "BAAI/bge-small-zh-v1.5")
+        except EmbeddingError:
+            if model:  # 用户点名了模型，失败就是失败，不要偷偷换一个
+                return None
+            if _ollama_alive(verdict["host"]):
+                return OllamaEmbedder(verdict["host"], "bge-m3", cache_path=cache)
+            return None
+    if verdict["chosen"] == "ollama":
+        return OllamaEmbedder(verdict["host"], model or "bge-m3", cache_path=cache)
+    return None
 
 
 def make_embedder(config: Any) -> Embedder | None:
@@ -403,6 +527,8 @@ def make_embedder(config: Any) -> Embedder | None:
     provider = getattr(config, "embedding_provider", "") or ""
     if not provider:
         return None
+    if provider == "auto":
+        return _make_auto(config)
     if provider == "hashing":
         return HashingEmbedder(dim=getattr(config, "embedding_dim", 512))
     if provider in ("http", "openai"):

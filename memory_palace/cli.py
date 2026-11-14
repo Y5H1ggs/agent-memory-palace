@@ -906,6 +906,13 @@ def cmd_embed(args) -> int:
     print(f"  稠密向量数 {channels.get('dense_vectors', 0)} · 失败 {channels.get('dense_failures', 0)}")
     print(f"  混合权重 {channels.get('hybrid_weight')}")
     print(f"配置: provider={cfg.embedding_provider or '(空)'} dim={cfg.embedding_dim}")
+    if cfg.embedding_provider == "auto":
+        from .embedding import probe_auto
+
+        verdict = probe_auto(cfg.embedding_endpoint or "")
+        print(f"auto 探测: {verdict['summary']}")
+        for item in verdict["checked"]:
+            print(f"  · {item['candidate']:<7} {'在' if item['alive'] else '不在'}  {item['why']}")
     if getattr(args, "check", False):
         return _embed_check(cfg)
     if not channels.get("dense"):
@@ -931,7 +938,11 @@ def _embed_check(cfg) -> int:
         print(f"造不出嵌入器：{exc}")
         return 1
     if embedder is None:
-        print("当前没有启用稠密通道（provider 为空），没有可自检的模型。")
+        print("当前没有启用稠密通道，没有可自检的模型。")
+        from .embedding import probe_auto
+
+        if cfg.embedding_provider == "auto":
+            print(probe_auto(cfg.embedding_endpoint or "")["summary"])
         return 1
     try:
         result = self_check(embedder)
@@ -945,6 +956,7 @@ def _embed_check(cfg) -> int:
     print(f"  无关余弦  {result['unrelated']}")
     print(f"  差距      {result['margin']}")
     print(f"  判决      {'可用' if result['ok'] else '不可用：同义与无关分不开'}")
+    print(f"  建议      {result['advice']}")
     if result["ok"]:
         print("\n接着跑 `memory-palace cache-warm`（或直接 recall）让全库重建一次向量；")
         print("换编码器后请重扫阈值：`memory-palace calibrate`。")
@@ -1029,11 +1041,16 @@ def cmd_reflect(args) -> int:
     if palace.reflection.reflector_error:
         print(f"\n外部反思失败（已降级为规则反思）：{palace.reflection.reflector_error}")
     if palace.llm is not None and palace.llm.last is not None:
-        print(f"\nLLM 反思：provider={palace.llm.last.provider} "
-              f"confidence={palace.llm.last.confidence:.2f} "
-              f"耗时={palace.llm.last.elapsed_ms:.0f}ms")
-        for item in palace.llm.last.suggested_params:
+        last = palace.llm.last
+        print(f"\nLLM 反思：provider={last.provider} "
+              f"confidence={last.confidence:.2f} "
+              f"耗时={last.elapsed_ms:.0f}ms")
+        if last.repair_rounds:
+            print(f"  修复轮次 {last.repair_rounds}：第一轮有越界提案，已带拒绝原因重问一次")
+        for item in last.suggested_params:
             print(f"  建议 {item['param']} 向 {item['direction']}（未生效，需过护栏）")
+        for insight in last.insights:
+            print(f"  越界建议（已拒绝，留档待人工裁决）：{insight}")
     return 0
 
 

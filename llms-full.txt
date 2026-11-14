@@ -1,5 +1,5 @@
 # memory-palace — 仓库现状全文（给评审/模型用）
-> 版本 **0.12.0**。本文件由 `tools/make_review_bundle.py` 生成，内容与仓库逐字对应。
+> 版本 **0.13.0**。本文件由 `tools/make_review_bundle.py` 生成，内容与仓库逐字对应。
 > 如果你只收到这一份文件，它已经包含：权威摘要、README、文件清单（含行数与哈希）、
 > 测试清单、最新变更。**不要**据此猜测「某个文件不存在」——先在这份清单里查。
 
@@ -14,7 +14,7 @@
 > 含本文件 + README + 文件清单（行数与哈希）+ 测试清单 + 最新 CHANGELOG）。
 > 如果仓库里的 docs/ 与你看到的这段冲突，以本文件 + README + CHANGELOG 顶部为准。
 
-- 版本：0.12.0
+- 版本：0.13.0
 - 日期：2026-11-14
 - 许可：MIT
 - Python：>= 3.10
@@ -43,14 +43,18 @@
 | 反思 | 规则引擎默认；可选 LLM（结构化输出 + 白名单，**模型不改配置**） | `reflection.py`、`llm.py` |
 | 接入 | MCP（stdio，3/8 工具档）、HTTP + OpenAPI、CLI、DSH 插件 | `mcp_server.py`、`http_api.py`、`cli.py`、`dsh/` |
 
-## 嵌入模型：可以换成真的神经语言模型
+## 嵌入模型：开箱自动找真模型，找不到就明说
 
-`embedding_provider` 支持四种取值，全部走同一个 `SemanticIndex` ——
-换模型时，检索、聚类、去重、弃答**一起**换。
+`embedding_provider` 默认 `auto`：先查本机是否装了 sentence-transformers（`find_spec`，
+不 import torch），再探本机 ollama 的 `/api/tags`（连接被拒是毫秒级）。
+探到就启用稠密通道，探不到就**返回「没有」，不退回 hashing** —— 一个读字面的哈希通道
+悄悄开着会让人以为语义检索已经生效，比明说「现在走词法」糟得多。
+全部 provider 走同一个 `SemanticIndex`：换模型时，检索、聚类、去重、弃答**一起**换。
 
 | provider | 说明 | 需要的依赖 |
 |---|---|---|
-| `""` | 只用词法通道（零依赖默认） | 无 |
+| `auto` | 默认。st → 本机 ollama → 都没有则只用词法 | 无 |
+| `""` | 显式只要词法通道（不触发任何探测） | 无 |
 | `hashing` | 内置有符号特征哈希，512 维，**不是神经模型**，只补字面变形 | 无 |
 | `ollama` | 本机 Ollama，`/api/embed`（新）与 `/api/embeddings`（旧）都支持 | 无（urllib） |
 | `http` / `openai` | 任何 OpenAI 兼容 `/v1/embeddings`（vLLM / TEI / Xinference / LM Studio / 云厂商） | 无（urllib） |
@@ -128,7 +132,7 @@ memory-palace calibrate         # 在全部领域上重扫阈值
 ## 明确的边界（不要用于）
 
 - 不是专用向量数据库的替代品：没有 ANN、没有分片，1e4 条以内够用。
-- 不承诺多写者高吞吐：SQLite 单写者，写热点会排队。
+- 不承诺多写者高吞吐：8 个并发写者是实测拐点（154 条/秒），16 个开始尾部排队（max ~1s）。不做多机复制/共识。
 - 不是分布式记忆：单机文件，WAL 需要本地盘。
 - 标注集为单人标注（106 个领域里只有 6 个标了去重与沉淀），能验证流程与量级，替代不了你自己的语料评测。
 - 内置 `hashing` 嵌入不是神经模型；要语义跳转请接上表的真模型。
@@ -268,32 +272,59 @@ memory-palace cycle                                            # 会话结束：
 读路径也会 `refresh()`，否则长驻的 MCP 进程永远停在「自己上次写完那一刻」。
 
 实测：4 进程 × 6 条独立写入 + 共用一条 merge，一条不少、`access_count` 等于调用次数、`fsck` 通过。
-**边界**：SQLite 单写者，写热点会排队；要更高写吞吐请换服务端数据库，这个项目不在上面加锁。
+
+**多写者能到几个**（`tools/concurrency_bench.py`，12 核 / Windows / 1500 条存量 / 每条都落盘）：
+
+| 写者 | 吞吐 | p50 | p95 | max |
+|---|---|---|---|---|
+| 1 | 33 条/秒 | 1.11 ms | 1.32 ms | 5 ms |
+| 4 | 113 条/秒 | 1.12 ms | 2.68 ms | 110 ms |
+| **8** | **154 条/秒** | 1.12 ms | 4.95 ms | 281 ms |
+| 16 | 135 条/秒 | 1.11 ms | 6.82 ms | 1093 ms |
+
+读数方法：p50 一直不动，说明**写锁不是主要成本** —— 每条事务只有 1ms 级，
+真正吃掉并行度的是 Python 侧的编码、打分与 CPU 争抢。**8 个并发写者是拐点**，
+16 个开始尾部排队。所以它适合「一台机器上多个 agent」，不适合「多租户 SaaS」。
+
+不够快可以换落盘强度：`--set store_synchronous=NORMAL`（WAL 下不每次 fsync，
+崩溃最多丢最近几个事务、不损坏库），实测 p50 从 1.11 降到 0.58 ms。
+默认仍是 `FULL`：这个库存的是不可再生数据，吞吐不够时再换。
+
+**边界**：不做多机复制/分片/共识 —— 那是 PostgreSQL / CockroachDB 的活，
+硬做出来会是一个只有作者会维护的 Raft。单机多进程是它的上限，也是它的定位。
 
 运维命令：`fsck` / `journal` / `lock` / `export` / `import` / `stats`。
 机制与代价详见 [docs/STORAGE.md](docs/STORAGE.md)。
 
 ---
 
-## 嵌入模型：可以换成真的神经语言模型
+## 嵌入模型：开箱自动找真模型，找不到就明说
 
 内置的 `HashingEmbedder` **不是神经模型**：有符号特征哈希 + 字符 n-gram，零依赖、跨进程确定，
-能补字面变形，但读不懂「止盈」和「落袋为安」。
+能补字面变形，但读不懂「止盈」和「落袋为安」。所以它**不做默认答案**。
 
-要语义跳转就换真模型，五种 provider 走同一个 `SemanticIndex` —— 检索、聚类、去重、弃答**一起换**：
+`embedding_provider` 默认是 `auto`：先看本机装没装 sentence-transformers（只查元数据，不 import torch），
+再看本机 ollama 在不在听（`/api/tags`，连接被拒是毫秒级）。
+
+- 探到真模型 → 稠密通道启用，检索/聚类/去重/弃答**一起换**；
+- 探不到 → **返回「没有」，不偷偷退回 hashing**。`embed` 命令会写明「当前走词法通道」。
+
+这个取舍是刻意的：一个读字面的哈希通道悄悄开着，会让 `dense=True`、让人以为语义检索已经生效 ——
+那比明说「没有」糟得多。`hashing` 仍然可以显式打开（`--set embedding_provider=hashing`），
+它适合「要确定性、要零依赖、要跨进程位一致」的场景，不适合当语义。
 
 | provider | 接什么 | 依赖 |
 |---|---|---|
+| `auto`（默认） | 先 st，再本机 ollama，都没有就走词法 | 无 |
 | `hashing` | 内置哈希，512 维 | 无 |
 | `ollama` | 本机 Ollama（新版 `/api/embed`，旧版自动回退） | 无 |
 | `http` / `openai` | 任何 OpenAI 兼容 `/v1/embeddings`（vLLM / TEI / LM Studio / 云） | 无 |
 | `st` | 本地 sentence-transformers 加载 HF 模型 | `pip install sentence-transformers` |
 
 ```bash
-ollama pull bge-m3
-memory-palace config --set embedding_provider=ollama
-memory-palace config --set embedding_model=bge-m3
-memory-palace embed --check      # 同义改写 vs 无关句，分不开就判不可用
+ollama pull bge-m3            # 本机起一个真模型，auto 下次启动就会选中它
+memory-palace embed           # 打印 auto 探测结论：选了谁、另一个为什么没选
+memory-palace embed --check   # 同义改写 vs 无关句，分不开就判不可用
 ```
 
 推荐：`bge-small-zh-v1.5`(512) 最快、`bge-base-zh-v1.5`(768) 平衡、`bge-large-zh-v1.5`(1024)、
@@ -342,6 +373,36 @@ memory-palace calibrate         # 在全部领域上重扫阈值，给平台区�
 
 ---
 
+## 能存多少条
+
+<p align="center"><em>一个记忆库的规模上限，不是看它能装多少行，是看「想起来」要多久。</em></p>
+
+| 条数 | 热查询（p50） | 冷启动建索引 | 单条写入 | 判断 |
+|---|---|---|---|---|
+| 3,000 | 12.7 ms | 130 ms | 1.1 ms | 舒服 |
+| 10,000 | **20 ms**（优化前 50） | 736 ms | 1.1 ms | 可用 |
+| 100,000 | ~200 ms（外推，未实测） | ~7 s | 1.1 ms | 边缘 |
+| 1,000,000 | 秒级 | 分钟级 | 1.1 ms | **不要用** |
+
+写入一直是 1.1ms：它是行级写，跟库里有多少条无关。**涨的是查询** —— 因为召回是
+「给每条记忆打一次分」，天生 O(N)。
+
+这轮把 10k 的查询从 50ms 压到 20ms，靠的不是 ANN，是**剪掉必然落选的那些**：
+
+- 召回有一条铁律：语义与标签都为 0 的节点不算命中（光靠新鲜不算相关）。
+  10k 条里这类占七成，以前每条都要跑一次 `effective_weight`（含 exp/log1p）才被丢掉。
+- 稳定性里不随 `now` 变的那一半按访问历史缓存，`log1p`/`sqrt` 不再每查询重算。
+
+已验证无损：同样 20 个查询下，被跳过的节点里没有一个是非零行；106 领域评测分数
+（recall 0.899 / MRR 0.817 / 弃答 F1 0.757）一位未变。
+
+**再往上怎么办**：100k 以上该把向量层外挂。`Embedder` 已经是接口，
+把 `DenseIndex` 换成一个 Milvus / Qdrant / pgvector 适配器即可 —— 本库继续管
+遗忘、沉淀、时态、弃答这些**策略**，向量检索交给专门的引擎。这也是这个项目
+唯一愿意和「向量数据库」发生关系的方式：做它的上层，不做它的劣质复刻。
+
+---
+
 ## 证据
 
 ```bash
@@ -359,16 +420,16 @@ LLM 白名单失效、忽略护栏、相似度丢掉余弦通道…… 断言必
 
 ## 仍然不适用
 
-- 不是**专用向量数据库**的替代品：没有 ANN、没有分片，1e4 条以内够用。
-- 不承诺**多写者高吞吐**：SQLite 单写者，写热点排队。
-- 不是**分布式**记忆：单机文件，WAL 需要本地盘。
+- 不是**专用向量数据库**的替代品：没有 ANN、没有分片；10k 以内够用，100k 边缘，上百万请外挂。
+- 不承诺**多写者高吞吐**：8 个并发写者是拐点（实测 154 条/秒），再多开始尾部排队。
+- 不是**分布式**记忆：单机文件，WAL 需要本地盘；不做多机复制与共识。
 - 标注是**一个人标的**：能验证流程与量级，替代不了你自己的语料（`calibrate` 就是给你换语料用的）。
 
 ---
 
 ## 版本与结构
 
-当前 `0.12.0`。`0.x` 期间 API 可能变。升到 `1.0.0` 的条件见 [CHANGELOG](CHANGELOG.md)：
+当前 `0.13.0`。`0.x` 期间 API 可能变。升到 `1.0.0` 的条件见 [CHANGELOG](CHANGELOG.md)：
 外部使用者 ≥ 1（未达）· CI 三平台 ✅ · 公开评测集与基线数字 ✅ · 跨进程写锁 ✅。
 
 ```
@@ -398,52 +459,67 @@ MIT © 2026 Howard
 
 ## CHANGELOG（最新一节）
 
-## [0.12.0] - 2026-11-14
+## [0.13.0] - 2026-11-14
 
-三件事：**评测从 6 个领域扩到 106 个**、**demo 重写**、**README 重写**。
-扩领域的过程本身抓出了两个真 bug，也逼着改掉了三处「说得比做得多」的表述。
+针对外部评审的三条批评做的一轮：**开箱体验**、**反思闭环**、**并发与规模边界**。
+三条里两条是真问题，一条（LLM 白名单）是设计意图被误读 —— 但误读的那条也指出了
+一个真实缺陷：拒绝之后没有反馈，模型永远不知道发生了什么。
 
-### 评测：6 → 106 个领域
+### 嵌入：默认 `auto`，但绝不假装有语义
 
-- 新增 `memory_palace/evaluation_domains.py`：**100 个广覆盖领域**，每个 6 条记忆 + 4 条查询，
-  共 600 条记忆 / 400 条查询。领域覆盖做饭、养猫、牙科、签证、数据库、谈判、税务、摄影、
-  剪辑、排版、徒步、露营、天文、语言学习等。
-- 每个领域额外注入一条**跨领域的不可答查询**（从别的领域借一条真实提问）：
-  它测的是「会不会拿 A 领域的记忆硬凑 B 领域的问题」，比手写「今天天气怎么样」有信息量得多。
-  合计 **590 条查询**（474 可答 + 116 不可答）。
-- `DATASETS` 改为**惰性构建**：CLI 启动不该为 100 个数据集付 160ms（首次访问只花 8ms）。
-- 报告改版：默认只印汇总 + **最差 5 个领域**，`--verbose` 逐个看，`--list` 列出全部领域。
-  覆盖数单独报（检索 106 / 弃答 106 / 去重与沉淀 6）—— 把 6 个领域的去重 F1 说成
-  「106 个领域的去重 F1」是另一种撒谎。
-- `calibrate` 修正：去重曲线只在**标了去重对**的领域上算，不再拿「没标注」的领域投 0 分。
-- 当前：recall@5 **0.899**（中位数 1.000）、MRR **0.817**、弃答 F1 **0.757**、去重 F1 **0.944**。
+- `embedding_provider` 默认值从 `""` 改为 **`auto`**：先查本机是否装了
+  sentence-transformers（`find_spec`，不 import torch），再探本机 ollama 的
+  `/api/tags`（连接被拒是毫秒级返回，不拖启动）。
+- **关键取舍：`auto` 探不到真模型时返回 `None`，不退回 `hashing`。**
+  评审说「默认是玩具级」—— 根子不是 hashing 存在（它零依赖、确定性，对未登录词有平滑），
+  而是它被当成了默认答案。悄悄开一个读字面不读意思的通道，会让 `dense=True`、
+  让用户以为语义检索已经生效 —— 比明说「现在走词法」糟得多。
+- 构造失败要降级：装了 st 但没下过模型、又断网，是最常见的现场。用户点名了模型
+  → 失败就是失败；没点名 → 允许退回 ollama。
+- `embed --check` 增加 `advice`：判决之外给一句能照着做的话。
 
-### 扩领域抓出的两个真 bug
+### 反思：把「被拒」告诉模型
 
-1. **`recall(names=[...], as_of=...)` 不筛有效期**：名字入口绕过了时态过滤，被取代的旧事实
-   会和新事实一起返回，而 docstring 写着「默认只返回现在有效的」。已修（`is_valid_at(moment)`）。
-2. **`consolidate()` 的 `created` 是名字列表**，demo 里当计数用，`list > 0` 直接抛 TypeError。
-   这不是库的错，但说明「返回值形状」在文档里没写清 —— demo 改成 `len(created)`。
+- `LLMReflector(max_rounds=2)`：第一轮出现白名单外/方向非法的提案时，
+  带着拒绝原因再问一轮，要求它只从清单里重选。**只在真的越界时才付第二次调用。**
+- 白名单外的东西不再只剩一个参数名：`insights` 保留原话与理由，标成「需人工裁决」，
+  `reflect` 命令会打印出来。白名单是「不许它生效」，不是「不许它说话」。
+- `ALLOWED_PARAMS` 改为由 `PARAM_BOUNDS` 派生（单一真相源）。分开写时存在
+  「白名单有、值域没有」的洞，`PARAM_BOUNDS.get(p, (1e-4,1))` 会用通用区间悄悄放行。
+- 第二轮失败不推翻第一轮 —— 有结论比「全绿但没有」好。
 
-### demo 重写（`python -m memory_palace.demo`，约 1 秒）
+### 并发：实测拐点，而不是形容词
 
-六幕，每幕一句「这一步的重点」：
+- 新增 `tools/concurrency_bench.py`：N 进程 × M 次逐条落盘的吞吐/p50/p95 曲线。
+  本机（12 核 / Windows / WAL / FULL）实测：
+  `1 写者 33 条/秒 → 4 写者 113 → 8 写者 154（拐点）→ 16 写者 135`。
+  **写锁不是主要成本，p50 恒定 1.1ms**；16 写者时的尾延迟（~1s）来自 CPU 争抢与排队叠加。
+- 写入的瞬态重连从 1 次提到 3 次（带退避）。16 进程并发写时实测出现过
+  `attempt to write a readonly database`，一次重连不够 —— 新连接仍可能落在
+  别人切换 WAL 的窗口里。修完后 320/320 全成功（原 300/320）。
+- 新增配置 `store_synchronous`（`FULL`/`NORMAL`，默认 `FULL`）。
+  WAL + NORMAL 下每次 COMMIT 不 fsync，崩溃最多丢最近几个事务、不损坏库；
+  实测 NORMAL 把 p50 从 1.11ms 压到 0.58ms，吞吐基本不变。**默认仍给 FULL** ——
+  这个库存的是不可再生数据，吞吐不够时再换，换法写进了 README。
 
-1. 写入与检索：标签命中、弃答、以及**同义改写会弃答**（词法通道的真实短板）
-2. 存储：改一条只写一行；**截断的库必须被拒绝**（改中间字节可能落在空闲页，测不出来）
-3. 多进程：4 进程 × 6 条，一条不少、`access_count` 等于调用次数
-4. 嵌入：`self_check` 现场跑一遍，并给出换真模型的三行命令
-5. 生命周期：GC 幂等、沉淀、`as_of` 回看、过期回收（钉死的不动）
-6. 评测：106 领域汇总 + 最差 3 个
+### 检索：10k 条时省掉七成无用功
 
-写 demo 时踩到一个坑并写进注释：`MutableClock.advance()` 的单位是**天**，
-`advance(30)` 会把 `tier=event` 的记忆直接衰减到 0，后面的沉淀就无从谈起。
+- `_score_components(only_hits=True)`：召回本来就有「语义或标签必须非零」的门槛，
+  所以两者都为 0 的节点**不可能**被返回，它们唯一作用是让 recency 项算出来给人看。
+  10k 条里这类占七成，每条都要跑一次 `effective_weight`（含 exp/log1p）。
+  recall 现在跳过它们；`score_breakdown` 仍返回全量解释。已验证等价：
+  20 个查询下，被跳过的节点里没有一个是非零行。
+- `MemoryNode._static_stability()`：稳定性里不随 now 变的那一半（层级 × 类型 ×
+  访问历史）按 `(tier, kind, access_count, last_accessed, created_at)` 缓存。
+  缓存写入走 `object.__setattr__`，绕开脏标记 —— 一次查询把全库标脏，
+  下一次保存就会全量重写，那比慢更糟。
+- 实测 10k 条：热查询 **50ms → 20ms**（2.5×），写入 p50 不变。
+- 优化后 100k 条查询约 200ms 量级，仍不适合百万级 —— 见 README 的「规模边界」一节。
 
-### README 重写
+### 文档
 
-「看得似懂非懂」是结构问题，不是措辞问题。这版按「它是什么 → 30 秒怎么用 →
-它解决的一个具体问题 → 三个概念 → 存储与并发 → 嵌入 → 评测 → 证据 → 边界」排，
-每节不超过一屏；把「106 个领域」的**覆盖边界**（去重/沉淀只有 6 个）写在数字旁边。
+- README 增加「这个库适合多大」：给出 3k/10k/100k 的实测数字与「什么时候该换外部向量库」，
+  不再只用一句「适合个人助理」含糊过去。
 
 ---
 
@@ -454,11 +530,11 @@ MIT © 2026 Howard
 | 路径 | 行数 | sha256 | 说明 |
 |---|---|---|---|
 | `AGENTS.md` | 102 | `ce9b7cfa` |  |
-| `CHANGELOG.md` | 925 | `f83b2983` | 版本账本（最新一节在最上面） |
-| `README.md` | 242 | `78c56174` | 人读的现状（能力 / 数字 / 边界） |
+| `CHANGELOG.md` | 989 | `84dfa32d` | 版本账本（最新一节在最上面） |
+| `README.md` | 299 | `913a902f` | 人读的现状（能力 / 数字 / 边界） |
 | `conftest.py` | 6 | `f5b7f82a` | 让未安装的源码目录也能被 pytest 直接导入（CI 里装了包，这行是多余的但无害）。 |
-| `llms.txt` | 145 | `e83aa4e3` | 机器读的现状（权威摘要） |
-| `pyproject.toml` | 58 | `eefcc17b` |  |
+| `llms.txt` | 149 | `c7798fef` | 机器读的现状（权威摘要） |
+| `pyproject.toml` | 58 | `3e06ac50` |  |
 | `docs/AGENT_INTEGRATION.md` | 135 | `67df3036` |  |
 | `docs/ARCHITECTURE.md` | 113 | `cca95cc5` |  |
 | `docs/COMPETITIVE_ANALYSIS.md` | 178 | `9051ef5f` |  |
@@ -477,35 +553,35 @@ MIT © 2026 Howard
 | `examples/make_images.py` | 243 | `57ff7673` | 生成 README 用的图（截图脚本，可复现）。 |
 | `examples/quickstart.py` | 62 | `80fc4b19` | 60 行看完这套记忆系统在做什么。 |
 | `examples/showcase.py` | 206 | `41e16dd2` | 生成一份「真实感」的记忆库，并渲染成可发布的面板。 |
-| `memory_palace/__init__.py` | 190 | `e9f110ec` | memory_palace - 会遗忘、会被情绪加固、会讲自己故事的记忆系统。 |
+| `memory_palace/__init__.py` | 190 | `18c81a8b` | memory_palace - 会遗忘、会被情绪加固、会讲自己故事的记忆系统。 |
 | `memory_palace/_console.py` | 29 | `c79a0833` | 让中文输出在非 UTF-8 控制台上也能打印（不炸 UnicodeEncodeError）。 |
 | `memory_palace/affect.py` | 291 | `7ca5995b` | 情感权重：记忆里那个「疼」或「亮」的分量。 |
 | `memory_palace/bench.py` | 168 | `3dda4aa7` | 基准：写入、检索、注入、代谢各花多少时间与 token。 |
-| `memory_palace/cli.py` | 1302 | `f802adc6` | 把记忆系统做成 agent 能直接调用的命令行工具。 |
+| `memory_palace/cli.py` | 1319 | `1f62eb81` | 把记忆系统做成 agent 能直接调用的命令行工具。 |
 | `memory_palace/consolidation.py` | 346 | `e0a9f14d` | 记忆沉淀：把反复共现的碎片压成稳定的语义节点。 |
-| `memory_palace/core.py` | 1085 | `fda8a7c1` | 记忆节点、共现图、幂等衰减、配置与原子持久化。 |
+| `memory_palace/core.py` | 1120 | `dcb6c161` | 记忆节点、共现图、幂等衰减、配置与原子持久化。 |
 | `memory_palace/demo.py` | 401 | `cc20bcee` | 一次跑完，把「这套东西到底在做什么」演给你看。 |
-| `memory_palace/embedding.py` | 474 | `ac2414de` | 嵌入通道：固定维度稠密向量，可换成本地模型或远程 API。 |
+| `memory_palace/embedding.py` | 600 | `5ac9869f` | 嵌入通道：固定维度稠密向量，可换成本地模型或远程 API。 |
 | `memory_palace/evaluation.py` | 1047 | `27146ec2` | 组件级评测集：把「我觉得它变好了」换成「这些指标说它变好了」。 |
 | `memory_palace/evaluation_domains.py` | 1492 | `396f86f2` | 广覆盖的领域标注集（100 个领域）。 |
 | `memory_palace/http_api.py` | 313 | `cf72419f` | 把记忆系统暴露成本地 HTTP 服务（含 OpenAPI 3.0，零第三方依赖）。 |
 | `memory_palace/journal.py` | 296 | `af08821b` | 追加式日志（WAL）：让「已经写下去的」不会因为一次坏写而消失。 |
 | `memory_palace/lexicon.py` | 175 | `0b3c5634` | 词法层：分词、归一、IDF 权重、否定词。 |
-| `memory_palace/llm.py` | 354 | `f6ba5097` | 把「规则监控」升级成「LLM 反思」：模型提假设，代码管边界。 |
+| `memory_palace/llm.py` | 417 | `56929412` | 把「规则监控」升级成「LLM 反思」：模型提假设，代码管边界。 |
 | `memory_palace/locking.py` | 325 | `e2acfc37` | 跨进程写锁：让「同一份记忆被多个进程写」从不可能变成可证明。 |
 | `memory_palace/logic.py` | 277 | `676b598d` | 逻辑关联：不是「一起被想起过」，而是「从它能推出什么」。 |
 | `memory_palace/mcp_server.py` | 501 | `aa816ba3` | 把记忆系统暴露成 MCP 服务（stdio，零第三方依赖）。 |
 | `memory_palace/memory_model.py` | 175 | `631129cd` | 一套记忆模型：不是一种衰减律，而是五种寿命。 |
 | `memory_palace/narrative.py` | 315 | `a149919e` | 自我叙事：不是把所有记忆倒出来，而是「挑几条、排个序、讲成一个故事」。 |
-| `memory_palace/palace.py` | 2063 | `dd7800ee` | 顶层编排：把情感、沉淀、遗忘、叙事、风格、反思串成一个可运行的生命周期。 |
+| `memory_palace/palace.py` | 2078 | `933c96e5` | 顶层编排：把情感、沉淀、遗忘、叙事、风格、反思串成一个可运行的生命周期。 |
 | `memory_palace/persona.py` | 790 | `a8de1f9c` | 基座 → 人格 → 人设 → 变更：四层**不同的**可变性。 |
 | `memory_palace/pragmatics.py` | 279 | `7bc82708` | 语用层：一句话是**什么行为**，有多强，为什么这么说。 |
 | `memory_palace/reflection.py` | 428 | `32486e47` | 自我反思：回看系统自己的历史，量化「我这套策略还好使吗」。 |
 | `memory_palace/render.py` | 622 | `a086c0f9` | 展现层：把「记忆库现在的样子」变成人能看的东西。 |
 | `memory_palace/scope.py` | 156 | `c216bd16` | 记忆属于谁：全局 / 某个项目 / 本次会话。 |
-| `memory_palace/selfcorrect.py` | 622 | `8aa4ed80` | 自修正：能发现自己错了，并且改得起、退得回。 |
+| `memory_palace/selfcorrect.py` | 610 | `1d682f60` | 自修正：能发现自己错了，并且改得起、退得回。 |
 | `memory_palace/semantics.py` | 798 | `d38728ea` | 可解释的语义检索层（零第三方依赖）。 |
-| `memory_palace/sqlite_store.py` | 898 | `c51ca603` | SQLite（WAL）后端：行级存储、单写多读、崩溃自前滚。 |
+| `memory_palace/sqlite_store.py` | 910 | `fa763329` | SQLite（WAL）后端：行级存储、单写多读、崩溃自前滚。 |
 | `memory_palace/store.py` | 679 | `a3a69cdc` | 持久化门面：SQLite（默认）与 JSON（可移植/旧库）两个后端。 |
 | `memory_palace/style.py` | 327 | `5f5215d6` | 风格固化与冲突裁决。 |
 | `memory_palace/tree.py` | 260 | `6d4e7682` | 树状记忆：根常驻、枝按需展开、其余折叠。 |
@@ -521,11 +597,13 @@ MIT © 2026 Howard
 | `tests/test_lexicon.py` | 215 | `2bfdb776` | 词法层：归一、分词、否定词、IDF。 |
 | `tests/test_llm.py` | 153 | `cae5ac1f` | LLM 反思的边界：结构化、可降级、绝不改配置。 |
 | `tests/test_locking.py` | 148 | `74cbdc36` | 跨进程写锁：真的跨进程，不是「同一个对象加两次」。 |
+| `tests/test_openbox.py` | 210 | `13a1e5e0` | 「开箱能不能用」与「反思能不能纠错」两块契约。 |
 | `tests/test_pragmatics.py` | 249 | `dd7311ea` | 语用层：一句话是什么行为，有多硬，为什么说。 |
 | `tests/test_scope.py` | 264 | `a334372f` | 跨项目记忆的断言：分层、隔离、提升、迁移。 |
 | `tests/test_selfcheck.py` | 15 | `20bc6d87` | pytest 入口：把剧本式自测接进 pytest / CI。 |
 | `tests/test_store.py` | 522 | `6ff328f7` | 持久化后端的契约：并发、增量、崩溃、导出、体检。 |
 | `tests/test_temporal.py` | 268 | `7257fe8f` | 双时态、写入去重、弃答的断言（含反事实验证）。 |
+| `tools/concurrency_bench.py` | 160 | `7b3eb6fd` | 多进程同写一份记忆，到底能扛几个写者。 |
 | `tools/greenlight_audit.py` | 406 | `ec24c8ef` | 绿灯效应体检：把实现故意弄坏，看测试会不会变红。 |
 | `tools/make_review_bundle.py` | 192 | `70932fb8` | 把「仓库现状」压成一份可以直接粘给模型的文件。 |
 
@@ -544,6 +622,7 @@ MIT © 2026 Howard
 - `tests/test_lexicon.py`（6 个用例）：test_normalize、test_tokens、test_negation_weight、test_idf、test_idf_fixes_false_merge、test_retrieval_requires_lexical_evidence
 - `tests/test_llm.py`（10 个用例）：test_parse_valid_json、test_parse_fenced_json、test_parse_garbage_degrades、test_empty_json_degrades、test_provider_failure_degrades_instead_of_raising、test_prompt_respects_budget、test_system_prompt_forbids_extra_params、test_reflection_does_not_touch_config、test_llm_reflector_wired_from_config、test_no_llm_configured_means_no_hook
 - `tests/test_locking.py`（5 个用例）：test_cross_process_exclusion、test_reentrant_same_thread、test_other_thread_blocks_until_release、test_timeout_is_total_not_per_try、test_stale_lock_metadata_reports_missing_pid
+- `tests/test_openbox.py`（11 个用例）：test_auto_does_not_silently_fall_back_to_hashing、test_auto_picks_local_ollama、test_auto_prefers_sentence_transformers、test_explicit_empty_provider_stays_lexical、test_param_whitelist_is_derived_from_bounds、test_out_of_scope_proposal_gets_a_second_round、test_single_round_cost_when_disabled、test_second_round_failure_keeps_first_round、test_clean_first_round_never_pays_twice、test_unknown_synchronous_rejected、test_synchronous_reaches_sqlite
 - `tests/test_pragmatics.py`（8 个用例）：test_classification、test_withdrawal_is_not_consent、test_hint_is_not_rule、test_hedge_downgrades、test_register、test_storage_integration、test_roundtrip_and_merge、test_counterfactual
 - `tests/test_scope.py`（5 个用例）：test_project_id、test_layers、test_context_and_promote、test_consolidation_isolation、test_legacy_snapshot
 - `tests/test_selfcheck.py`（1 个用例）：test_selfcheck_suite

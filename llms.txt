@@ -7,7 +7,7 @@
 > 含本文件 + README + 文件清单（行数与哈希）+ 测试清单 + 最新 CHANGELOG）。
 > 如果仓库里的 docs/ 与你看到的这段冲突，以本文件 + README + CHANGELOG 顶部为准。
 
-- 版本：0.12.0
+- 版本：0.13.0
 - 日期：2026-11-14
 - 许可：MIT
 - Python：>= 3.10
@@ -36,14 +36,18 @@
 | 反思 | 规则引擎默认；可选 LLM（结构化输出 + 白名单，**模型不改配置**） | `reflection.py`、`llm.py` |
 | 接入 | MCP（stdio，3/8 工具档）、HTTP + OpenAPI、CLI、DSH 插件 | `mcp_server.py`、`http_api.py`、`cli.py`、`dsh/` |
 
-## 嵌入模型：可以换成真的神经语言模型
+## 嵌入模型：开箱自动找真模型，找不到就明说
 
-`embedding_provider` 支持四种取值，全部走同一个 `SemanticIndex` ——
-换模型时，检索、聚类、去重、弃答**一起**换。
+`embedding_provider` 默认 `auto`：先查本机是否装了 sentence-transformers（`find_spec`，
+不 import torch），再探本机 ollama 的 `/api/tags`（连接被拒是毫秒级）。
+探到就启用稠密通道，探不到就**返回「没有」，不退回 hashing** —— 一个读字面的哈希通道
+悄悄开着会让人以为语义检索已经生效，比明说「现在走词法」糟得多。
+全部 provider 走同一个 `SemanticIndex`：换模型时，检索、聚类、去重、弃答**一起**换。
 
 | provider | 说明 | 需要的依赖 |
 |---|---|---|
-| `""` | 只用词法通道（零依赖默认） | 无 |
+| `auto` | 默认。st → 本机 ollama → 都没有则只用词法 | 无 |
+| `""` | 显式只要词法通道（不触发任何探测） | 无 |
 | `hashing` | 内置有符号特征哈希，512 维，**不是神经模型**，只补字面变形 | 无 |
 | `ollama` | 本机 Ollama，`/api/embed`（新）与 `/api/embeddings`（旧）都支持 | 无（urllib） |
 | `http` / `openai` | 任何 OpenAI 兼容 `/v1/embeddings`（vLLM / TEI / Xinference / LM Studio / 云厂商） | 无（urllib） |
@@ -121,7 +125,7 @@ memory-palace calibrate         # 在全部领域上重扫阈值
 ## 明确的边界（不要用于）
 
 - 不是专用向量数据库的替代品：没有 ANN、没有分片，1e4 条以内够用。
-- 不承诺多写者高吞吐：SQLite 单写者，写热点会排队。
+- 不承诺多写者高吞吐：8 个并发写者是实测拐点（154 条/秒），16 个开始尾部排队（max ~1s）。不做多机复制/共识。
 - 不是分布式记忆：单机文件，WAL 需要本地盘。
 - 标注集为单人标注（106 个领域里只有 6 个标了去重与沉淀），能验证流程与量级，替代不了你自己的语料评测。
 - 内置 `hashing` 嵌入不是神经模型；要语义跳转请接上表的真模型。

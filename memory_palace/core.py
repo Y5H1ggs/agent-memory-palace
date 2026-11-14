@@ -193,14 +193,21 @@ class PalaceConfig:
     snapshot_every: int = 50
     # 读库时校验 sha256（JSON 后端）。关掉能省几毫秒，代价是「坏数据被当成好数据」。
     verify_checksum: bool = True
+    # SQLite 的落盘强度。FULL：每次 COMMIT 都 fsync，断电不丢已确认的写；
+    # NORMAL（WAL 下）：只在 checkpoint 时 fsync，崩溃最多丢最近几个事务、**不损坏库**。
+    # 默认 FULL 是给「不可再生数据」的；多写者吞吐压力大时才值得换 NORMAL，
+    # 换算比见 tools/concurrency_bench.py 的实测。
+    store_synchronous: str = "FULL"
     # 建索引时把标签也算进文档。标签是人手挑的词，往往比正文更接近提问方式
     # （正文写「不吃香菜与内脏」，标签写「忌口」）—— 不索引它们时，
     # 「我有什么忌口」在标注集上的得分是 0.000：不是排得靠后，是根本没进候选集。
     index_tags: bool = True
 
     # —— 嵌入通道：真正的固定维度稠密向量，可换成本地模型或远程 API ——
-    # "" = 只用词法通道（零依赖默认）；hashing = 内置哈希嵌入；http = OpenAI 兼容 /embeddings
-    embedding_provider: str = ""
+    # "auto"  = 先找本机真模型（sentence-transformers 已安装 → 本机 ollama 在听），
+    #           找不到就**保持词法通道并如实说明**，不偷偷用 hashing 假装有语义。
+    # ""      = 显式只要词法；hashing = 内置哈希（读字面，不读意思）；http = OpenAI 兼容
+    embedding_provider: str = "auto"
     embedding_dim: int = 512
     embedding_endpoint: str = ""
     embedding_model: str = ""
@@ -251,6 +258,7 @@ class PalaceConfig:
         "backend",
         "concurrency",
         "embedding_provider",
+        "store_synchronous",
         "embedding_endpoint",
         "embedding_model",
         "embedding_key_env",
@@ -457,6 +465,7 @@ class PalaceConfig:
         # —— 嵌入 ——
         if self.embedding_provider not in (
             "",
+            "auto",
             "hashing",
             "http",
             "openai",
@@ -466,7 +475,12 @@ class PalaceConfig:
         ):
             raise ValueError(
                 "config.embedding_provider 只能是 "
-                f"'/hashing/http/openai/ollama/st，实际 {self.embedding_provider!r}"
+                f"'/auto/hashing/http/openai/ollama/st，实际 {self.embedding_provider!r}"
+            )
+        if self.store_synchronous not in ("FULL", "NORMAL"):
+            raise ValueError(
+                "config.store_synchronous 只能是 FULL/NORMAL，"
+                f"实际 {self.store_synchronous!r}（OFF 让「断电不损坏」失去保证，不给这个选项）"
             )
         if not 32 <= self.embedding_dim <= 8192:
             raise ValueError("config.embedding_dim 必须落在 [32, 8192]")
@@ -609,26 +623,47 @@ class MemoryNode:
         self.narrated_at = now
         self.narrative_hits += 1
 
-    def stability(self, now: float | None = None, affect_gain: float | None = None) -> float:
-        """记忆稳定性（天）：层级 + 访问次数（对数饱和）+ 访问时间跨度 + 情绪加固。
+    def _static_stability(self) -> float:
+        """稳定性里**不随 now 变**的那一半：层级 × 类型 × 访问历史。
 
-        情绪这一项是「怎么抓都抓不住的东西，偏偏最难忘」的机制解释：
-        它乘在稳定性上，不是加成在权重上 —— 所以它不改变此刻的亮度，只改变衰减的速度。
+        为什么要单独拆出来：检索对每条记忆都要问一次「它现在多强」，
+        而 10k 条书签的剖析显示，`stability` 里的 `log1p` / `sqrt` 与两次字典查表
+        占了单次 recall 的近三成 —— 它们却只依赖访问次数、时间跨度、层级。
+
+        缓存键是那五个字段的元组：任何一个变了（访问一次、改层级、被沉淀），
+        键就不匹配，重算。所以结果与「每次硬算」逐位相同，只是不再重复劳动。
+
+        缓存用 `object.__setattr__` 写入：`__setattr__` 里的脏标记是给**持久化**用的，
+        一次查询顺手把全库标脏，下一次保存就会全量重写 —— 那比慢更糟。
         """
+        key = (self.tier, self.kind, self.access_count, self.last_accessed, self.created_at)
+        cache = self.__dict__.get("_stab")
+        if cache is not None and cache[0] == key:
+            return cache[1]
         span_days = max(0.0, (self.last_accessed - self.created_at) / DAY)
         tier_factor = TIER_STABILITY.get(self.tier, 1.0)
         # 记忆类型决定寿命量级：工作记忆以小时计，身份记忆几乎不衰减。
         from .memory_model import KIND_STABILITY  # 延迟导入：避免 core ↔ memory_model 循环
 
         kind_factor = KIND_STABILITY.get(self.kind, 1.0)
-        gain = self.AFFECT_GAIN if affect_gain is None else affect_gain
-        reference = self.last_accessed if now is None else now
-        hardening = 1.0 + self.affect.stability_bonus(reference, gain)
-        return tier_factor * kind_factor * (
+        value = tier_factor * kind_factor * (
             1.0
             + 0.75 * math.log1p(self.access_count)
             + 0.25 * math.sqrt(span_days)
-        ) * hardening
+        )
+        object.__setattr__(self, "_stab", (key, value))
+        return value
+
+    def stability(self, now: float | None = None, affect_gain: float | None = None) -> float:
+        """记忆稳定性（天）：层级 + 访问次数（对数饱和）+ 访问时间跨度 + 情绪加固。
+
+        情绪这一项是「怎么抓都抓不住的东西，偏偏最难忘」的机制解释：
+        它乘在稳定性上，不是加成在权重上 —— 所以它不改变此刻的亮度，只改变衰减的速度。
+        """
+        gain = self.AFFECT_GAIN if affect_gain is None else affect_gain
+        reference = self.last_accessed if now is None else now
+        hardening = 1.0 + self.affect.stability_bonus(reference, gain)
+        return self._static_stability() * hardening
 
     def effective_weight(self, now: float, affect_gain: float | None = None) -> float:
         """纯函数：任意时刻的有效强度。调用 N 次结果完全一致。"""
