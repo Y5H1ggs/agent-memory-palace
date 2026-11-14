@@ -82,6 +82,11 @@ TOOLS: list[dict[str, Any]] = [
                         "project=本项目（默认）/ session=仅本次会话"
                     ),
                 },
+                "auto_tier": {
+                    "type": "boolean",
+                    "default": True,
+                    "description": "按语用判断建议层级（禁令 core / 暗示 event）。关掉则用 tier 原值",
+                },
                 "supersedes": {
                     "type": "array",
                     "items": {"type": "string"},
@@ -239,6 +244,9 @@ def tool_remember(args: dict[str, Any]) -> dict[str, Any]:
         arousal=args.get("arousal"),
         supersedes=list(args.get("supersedes") or []),
         scope=str(args.get("scope") or ""),
+        # agent 入口默认按语用建议分层：禁令进 core、暗示只进 event。
+        # 这是这一层对 agent 最实际的价值 —— 它不该把「随便你」记成偏好。
+        auto_tier=bool(args.get("auto_tier", True)),
         # agent 入口默认去重：同一句话反复记，不该攒成一堆近义节点
         merge=True,
     )

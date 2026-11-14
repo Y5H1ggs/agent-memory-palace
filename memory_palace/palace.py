@@ -51,6 +51,7 @@ from .persona import (
 )
 from .reflection import ReflectionEngine, ReflectionReport
 from .selfcorrect import SelfCorrector
+from .pragmatics import Speech, classify as classify_speech
 from .scope import (
     GLOBAL,
     detect_project,
@@ -180,6 +181,8 @@ class MemoryPalace:
         supersedes: tuple[str, ...] | list[str] | str = (),
         merge: bool = False,
         scope: str = "",
+        speech: "Speech | None" = None,
+        auto_tier: bool = False,
     ) -> MemoryNode:
         """写入一条记忆。情绪是**写入时**的属性，不是事后贴的标签。
 
@@ -201,6 +204,13 @@ class MemoryPalace:
         """
         with self._lock:
             now = self.now()
+            # 语用分类：这句话是禁令、请求、暗示还是撤回？
+            # 只标注、默认不改层级 —— 自动改 tier 会在误判时把一条随口的话变成规矩。
+            # 需要自动分层时显式传 auto_tier=True（CLI/MCP 的 agent 入口会开）。
+            speech = speech or classify_speech(content)
+            if auto_tier:
+                tier = speech.suggested_tier()
+
             if merge:
                 twin = self._find_duplicate(content, now)
                 if twin is not None:
@@ -208,6 +218,9 @@ class MemoryPalace:
                     twin.access(now, self._config.access_gain)
                     if tags:
                         twin.tags = tuple(dict.fromkeys(twin.tags + tuple(tags)))
+                    if twin.speech.force < speech.force:
+                        # 同一句话先当陈述、后当禁令时，以更硬的那次为准
+                        twin.speech = speech
                     self._log(
                         "merge",
                         {
@@ -232,6 +245,7 @@ class MemoryPalace:
                 affect=self.affect.blank(now),
                 kind=kind,
                 scope=normalize_scope(scope, self.project),
+                speech=speech,
             )
             if valence is not None or arousal is not None:
                 v = 0.0 if valence is None else float(valence)

@@ -16,6 +16,7 @@ from dataclasses import asdict, dataclass, field, fields as dc_fields
 from typing import Any, Callable, ClassVar, Iterable
 
 from .affect import Affect
+from .pragmatics import Speech
 
 DAY = 86400.0
 
@@ -375,6 +376,10 @@ class MemoryNode:
     fingerprint: str | None = None
     revision: int = 0
     affect: Affect = field(default_factory=Affect)
+    # 语用档案：这句话是什么行为（禁令/请求/暗示/撤回）、有多硬、为什么说。
+    # 它不是内容的一部分，是**内容该怎么被对待**的说明。
+    # 「随便你」与「以后都别用表格」字数相近，但对存储的要求完全相反。
+    speech: Speech = field(default_factory=Speech)
     narrative_hits: int = 0  # 被讲述进自述的累计次数（审计用，不直接当地位）
     # 叙事地位是**会退潮的**：heat 是最近几次讲述的泄漏积分，narrated_at 是最后一次被讲述的时刻。
     # 只有累计次数没有时间，等于给每条记忆发一张终身爵位 —— 讲过一次就永远「重要」。
@@ -518,6 +523,7 @@ class MemoryNode:
             if self.kind not in KINDS:
                 raise ValueError(f"{self.name}.kind 未知: {self.kind!r}")
         self.affect.validate(f"{self.name}.affect")
+        self.speech.validate(f"{self.name}.speech")
         if (
             isinstance(self.narrative_hits, bool)
             or not isinstance(self.narrative_hits, int)
@@ -564,6 +570,7 @@ class MemoryNode:
         d["tags"] = list(self.tags)
         d["consolidated_from"] = list(self.consolidated_from)
         d["supersedes"] = list(self.supersedes)
+        d["speech"] = self.speech.to_dict()
         return d
 
     @classmethod
@@ -574,6 +581,7 @@ class MemoryNode:
         d["supersedes"] = tuple(d.get("supersedes", ()))
         d["valid_to"] = d.get("valid_to")
         d["affect"] = Affect.from_dict(d.get("affect"))
+        d["speech"] = Speech.from_dict(d.get("speech"))
         known = {k: v for k, v in d.items() if k in dataclass_field_names(cls)}
         node = cls(**known)
         node.validate()

@@ -235,6 +235,15 @@ def build_context(
             markers.append(f"细节可能失真 {fidelity:.2f}")
         if node.consolidated_from:
             markers.append(f"由 {len(node.consolidated_from)} 条沉淀")
+        # 语用标记：模型必须知道「这是禁令」还是「这是暗示」——
+        # 把暗示当规则执行，比不执行更糟。
+        act = getattr(node.speech, "act", "statement")
+        if act in ("complaint", "hint") or getattr(node.speech, "hedged", False):
+            markers.append(f"{node.speech.label()}·未确认")
+        elif act in ("prohibition", "directive"):
+            markers.append(node.speech.label())
+        elif act == "withdrawal":
+            markers.append("撤回（不等于同意）")
         if markers:
             line += "（" + "；".join(markers) + "）"
         pinned_line = reasons.get(name) == "钉死"
@@ -375,13 +384,16 @@ def cmd_remember(args) -> int:
         supersedes=supersedes,
         merge=not args.no_merge,
         scope=args.scope or "",
+        auto_tier=getattr(args, "auto_tier", False),
     )
     palace.save()
     if node.name != name:
         # 去重命中：没有新建节点，而是强化了已有的那条
         print(f"已合并到 {node.name}（内容几乎相同，未新建）｜累计想起 {node.access_count} 次")
         return 0
-    print(f"已记住 {node.name}｜{_fmt_affect(node)}｜层级 {node.tier}")
+    act = getattr(node.speech, "act", "statement")
+    print(f"已记住 {node.name}｜{_fmt_affect(node)}｜层级 {node.tier}｜{node.speech.label()}"
+          + ("（未确认）" if node.speech.hedged or act in ("complaint", "hint") else ""))
     if node.supersedes:
         print(f"　取代了 {', '.join(node.supersedes)}（它们仍可 as-of 查询，{int(palace._config.history_retention_days)} 天后回收）")
     return 0
@@ -764,6 +776,8 @@ def build_parser() -> argparse.ArgumentParser:
                    help="关闭去重：内容几乎相同时默认合并到已有条目，而不是新开一条")
     p.add_argument("--scope", default="",
                    help="写到哪里：global=跨项目共享 / project=当前项目（默认） / session=仅本次会话")
+    p.add_argument("--auto-tier", action="store_true",
+                   help="按语用判断建议层级（禁令进 core、暗示只进 event）；不给就沿用 --tier")
     p.set_defaults(func=cmd_remember)
 
     p = sub.add_parser("recall", parents=[common], help="检索（语义 / 名字）")

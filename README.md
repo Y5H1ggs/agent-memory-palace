@@ -12,7 +12,7 @@
 
 <p align="center"><sub>↑ 由 <code>memory-palace render</code> 从一份 120 天的演示库直接生成（<a href="docs/sample-palace.html">在线样例</a>）。图上的每个数字都能用一条命令复现。</sub></p>
 
-**TL;DR (English)** — A dependency-free Python implementation of a *memory lifecycle*: idempotent decay, affect that both hardens and distorts recall, consolidation with a one-way door, value-based forgetting with a fixed attention budget, self-narrative as a projection, tree-shaped injection to save tokens, and self-correction bounded by whitelist + value ranges + anti-lag verification. Ships MCP / HTTP / CLI. 340 assertions, 18 mutation audits. Not a vector database; not production-ready.
+**TL;DR (English)** — A dependency-free Python implementation of a *memory lifecycle*: idempotent decay, affect that both hardens and distorts recall, consolidation with a one-way door, value-based forgetting with a fixed attention budget, self-narrative as a projection, tree-shaped injection to save tokens, and self-correction bounded by whitelist + value ranges + anti-lag verification. Ships MCP / HTTP / CLI. 366 assertions, 18 mutation audits + 12 变异体检. Not a vector database; not production-ready.
 
 ---
 
@@ -227,6 +227,8 @@ python tests/test_temporal.py       # 23 项 双时态 / 去重 / 弃答（含�
 python tests/test_scope.py          # 24 项 跨项目分层 / 隔离 / 提升 / 迁移
 python tests/test_extensions.py     # 14 项 编码器 / 外部反思的契约
 python tests/test_lexicon.py        # 16 项 词法层（含 IDF 反事实）
+python tests/test_pragmatics.py     # 26 项 语用层（撤回≠同意 / 模糊降级）
+python tools/greenlight_audit.py    # 绿灯体检：12 个变异，改坏实现看断言会不会红
 python -m memory_palace.bench       # 性能与 token 基准
 ```
 
@@ -261,6 +263,36 @@ python -m memory_palace.bench       # 性能与 token 基准
 
 代价如实记账：200 条 `cycle` 19→51 ms，热查询 1.5→3.1 ms（维度 64→256）。
 三个缓存把损失从 12 倍压到 2.6 倍。详见 [docs/LEXICON.md](docs/LEXICON.md)。
+
+## 语用层：一句话是在做什么事
+
+词法层解决「有哪些词」，语义层解决「和哪条像」，但决定**该不该记、记成什么**的是第三层。
+
+| 说法 | 行为 | 强度 | 该怎么记 |
+|---|---|---|---|
+| 以后都别用表格了 | 禁令 | 0.90 | core |
+| 别用表格 | 禁令（弱） | 0.72 | fact（可协商） |
+| 能不能别用表格 | **请求** | 0.55 | event（可以拒绝） |
+| 表格是不是有点多 | 不满/暗示 | 0.35 | event + 「未确认」 |
+| 我上次说过别用表格 | **纠正** | 0.85 | 重点不是表格，是「你没记住」 |
+| **随便你** | **撤回** | 0.25 | event，**绝不等于同意** |
+
+注入块里会直接标出来，模型能看见差别：
+
+```
+- [格式] 以后都别用表格了（禁令）
+- [格式] 表格是不是有点多（不满·未确认）
+- [格式] 随便你（撤回（不等于同意））
+```
+
+三条原则：**只标不猜到底**（每条判断带 evidence 与 confidence）、
+**强度是乘出来的**（「我觉得可能不要」= 0.9×0.6 = 0.54，只配 event）、
+**否定与模糊分开**（否定改命题，模糊改承诺度）。
+
+两级衰减：禁令 force≥0.8 才进 core，<0.8 退到 fact；带模糊限定的 fact 再退到 event。
+`auto_tier` 只是「建议一个层级」，不是「自动立法」，调用方永远可以覆盖。
+
+完整设计、边界与那次抓到的假绿见 [docs/PRAGMATICS.md](docs/PRAGMATICS.md)。
 
 ## 两个扩展点：默认零依赖，但你可以换掉
 
@@ -313,7 +345,7 @@ Mem0 / Zep(Graphiti) / Letta / Cognee / TencentDB Agent Memory / progressive-mem
 |---|---|---|
 | 设计完整度 | 9/10 | 机制闭环，次序有理由，边界写在 docstring 里 |
 | 工程实现 | 7/10 | 原子写、RLock、零依赖、状态迁移、基准；但**没有跨进程文件锁** |
-| 测试可信度 | 7/10 | 340 断言 + 18 突变 + 3 条反事实；但断言是作者自证，无覆盖率门槛、无语义评测集 |
+| 测试可信度 | 8/10 | 366 断言 + 18 突变 + 12 变异体检（绿灯审计，0 漏洞）；仍无语义评测集 |
 | 可维护性 | 6/10 | `palace.py` 1300+ 行、`demo.py` 2100+ 行；剧本兼任测试 |
 | 生产就绪 | 3/10 | 单写者、无性能 SLA、无语义评测集、API 未冻结 |
 
@@ -342,6 +374,7 @@ memory_palace/
   tree.py              树状注入（根常驻 / 枝展开 / 折叠标注）
   scope.py             作用域：全局 / 项目 / 会话，项目标识推断
   lexicon.py           词法层：归一 / 分词 / 否定词 / IDF
+  pragmatics.py        语用层：言语行为 / 强度 / 动机 / 场景
   palace.py            顶层编排
   cli.py               命令行
   mcp_server.py        MCP 服务（stdio，8 工具，slim/full 档）
@@ -358,12 +391,15 @@ docs/AGENT_INTEGRATION.md 三种时机、成本、不该用的场景
 docs/COMPETITIVE_ANALYSIS.md 同类项目调研：融合了什么、拒绝了什么、还缺什么
 docs/CRITIQUE_RESPONSE.md 三条批评的逐条核查：哪条成立、哪条论据被截断
 docs/LEXICON.md          词法层：四个决定、性能账、边界
+docs/PRAGMATICS.md       语用层：行为分类、强度衰减、撤回≠同意
+tools/greenlight_audit.py 绿灯审计：12 个变异，故意弄坏实现看断言会不会红
 dsh/                     DeepSeek Harness 插件（host 半 + cordis 挂载配置 + 面板）
 AGENTS.md                agent 读得懂的约定
 tests/test_temporal.py   双时态 / 去重 / 弃答（含反事实断言）
 tests/test_scope.py      跨项目分层 / 隔离 / 提升 / 旧快照迁移
 tests/test_extensions.py 编码器 / 外部反思两个扩展点的契约
 tests/test_lexicon.py    词法层：归一 / 分词 / 否定 / IDF（含反事实）
+tests/test_pragmatics.py 语用层：行为 / 强度 / 撤回≠同意 / 模糊降级
 ```
 
 ## 版本
