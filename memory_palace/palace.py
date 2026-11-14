@@ -807,6 +807,8 @@ class MemoryPalace:
         now: float,
         scopes: set[str] | None = None,
         only_hits: bool = False,
+        gate: float | None = None,
+        limit: int = 0,
     ) -> list[dict[str, Any]]:
         """三路打分的拆解：语义 / 标签 / 时近。公开给 score_breakdown，保证可解释。
 
@@ -816,8 +818,13 @@ class MemoryPalace:
         recency 项算出来给人看。10k 条时这类节点占七成，每条都要跑一次
         `effective_weight`（含 exp / log1p），纯属白烧 CPU。
 
-        默认 False：`score_breakdown` 要的是**全量解释**，不是只有命中的那几条。
-        跳过与否都不改变结果 —— 跳过的那些本来就进不了 above。
+        `gate` 再剪一刀，而且这一刀是**严格上界**：
+        `总分 = α·sem + β·tag + γ·rec ≤ α·sem + β·tag + γ`（rec ≤ 1）。
+        若这个上界都够不到召回门槛，这条记忆再怎么「新」也进不了 above。
+        默认 None = 不剪；recall 会把它当前的 gate 传进来。
+        调用方若把 min_score 设成 0，上界剪枝自动失效（退回只剪 sem/tag 双零）。
+
+        默认 False/None：`score_breakdown` 要的是**全量解释**，不是只有命中的那几条。
         """
         cfg = self._config
         wanted = set(query_tags)
@@ -827,15 +834,86 @@ class MemoryPalace:
         sem_scores = self.semantics.scores(text) if text else {}
         wanted_len = max(1, len(wanted))
         rows: list[dict[str, Any]] = []
-        for node in self.graph.all_nodes():
+        # 候选从哪来，决定了这条路径是 O(候选) 还是 O(全库)。
+        # 没有标签条件时，语义通道已经把「0 分」全挡掉了，直接拿它的键当候选：
+        # 20k 条实测，光跳过图中的非候选节点就省掉近一半时间（is_valid_at 与
+        # set(tags) 以前对每一条都要跑一遍）。
+        # 有标签条件时必须全图走 —— 标签命中不依赖语义，那是另一条召回通道。
+        if only_hits and not wanted:
+            source = (
+                (node, sem_scores.get(node.name, 0.0), 0.0)
+                for node in (self.graph.get(name) for name in sem_scores)
+                if node is not None
+            )
+        else:
+            source = (
+                (
+                    node,
+                    sem_scores.get(node.name, 0.0),
+                    len(wanted & set(node.tags)) / wanted_len if wanted else 0.0,
+                )
+                for node in self.graph.all_nodes()
+            )
+        if only_hits and gate is not None and limit > 0:
+            # 两阶段：先用「不含 recency 的下界」筛出可能进榜的，再只对它们算
+            # `effective_weight`（含 exp / log1p，是这条路径最贵的一步）。
+            #
+            # 为什么早停是安全的：`total = base + γ·rec ≥ base`（rec ≥ 0），
+            # 所以按 base 降序遍历时，一旦 `base < 当前第 limit 名的 total`，
+            # 后面所有候选的 total 都不可能超过它 —— 这不是近似，是上界。
+            pool: list[tuple[float, float, float, Any]] = []
+            for node, sem, tag in source:
+                if not node.is_valid_at(now):
+                    continue
+                if scopes is not None and node.scope not in scopes:
+                    continue
+                if sem <= 0.0 and tag <= 0.0:
+                    continue
+                base = cfg.semantic_alpha * sem + cfg.semantic_tag_beta * tag
+                if base + cfg.semantic_recency_gamma < gate:
+                    continue  # 上界都够不到门槛
+                pool.append((base, sem, tag, node))
+            pool.sort(key=lambda r: (-r[0], r[3].name))
+            picked: list[tuple[float, float, float, float, Any]] = []
+            kth = -1.0
+            for base, sem, tag, node in pool:
+                if base < kth:
+                    break  # 见 docstring：这是严格上界，不是经验值
+                rec = min(1.0, max(0.0, node.effective_weight(now)))
+                total = base + cfg.semantic_recency_gamma * rec
+                if total < gate:
+                    continue
+                picked.append((total, sem, tag, rec, node))
+                if len(picked) >= limit:
+                    picked.sort(key=lambda r: (-r[0], r[4].name))
+                    kth = picked[limit - 1][0]
+                    del picked[limit:]
+            picked.sort(key=lambda r: (-r[0], r[4].name))
+            return [
+                {
+                    "name": node.name,
+                    "score": round(total, 6),
+                    "semantic": round(sem, 6),
+                    "tag": round(tag, 6),
+                    "recency": round(rec, 6),
+                }
+                for total, sem, tag, rec, node in picked[:limit]
+            ]
+        for node, sem, tag in source:
             if not node.is_valid_at(now):
                 continue  # 已到期的旧事实不参与现在的检索
             if scopes is not None and node.scope not in scopes:
                 continue  # 别的项目的记忆不该出现在这个项目的候选里
-            sem = sem_scores.get(node.name, 0.0)
-            tag = len(wanted & set(node.tags)) / wanted_len if wanted else 0.0
             if only_hits and sem <= 0.0 and tag <= 0.0:
                 continue  # 必定过不了「语义或标签非零」这道门，算 recency 是白算
+            if gate is not None:
+                ceiling = (
+                    cfg.semantic_alpha * sem
+                    + cfg.semantic_tag_beta * tag
+                    + cfg.semantic_recency_gamma
+                )
+                if ceiling < gate:
+                    continue  # 上界都够不到门槛，recency 再高也没用
             rec = min(1.0, max(0.0, node.effective_weight(now)))
             total = (
                 cfg.semantic_alpha * sem
@@ -921,7 +999,10 @@ class MemoryPalace:
                     )
                 else:
                     retrieval = "semantic" if text else "tags"
-                    rows = self._score_components(text, query_tags, moment, scopes, only_hits=True)
+                    rows = self._score_components(
+                        text, query_tags, moment, scopes,
+                        only_hits=True, gate=gate, limit=limit,
+                    )
                     # 「过了门槛」还不够：必须真的有时近之外的理由。
                     # 总分里含 recency，刚写进来的任何东西都能靠它过线 ——
                     # 那不是相关，是新鲜。语义全零、标签全空时应当召回不到。

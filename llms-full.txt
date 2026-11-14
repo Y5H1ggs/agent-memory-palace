@@ -118,8 +118,8 @@ memory-palace calibrate         # 在全部领域上重扫阈值
 
 | 指标 | 数值 | 覆盖 |
 |---|---|---|
-| recall@5 | 0.899（中位数 1.000） | 106 个领域 |
-| MRR | 0.817 | 106 个领域 |
+| recall@5 | 0.850（中位数 1.000） | 106 个领域 |
+| MRR | 0.803 | 106 个领域 |
 | 弃答 F1 | 0.757 | 106 个领域 |
 | 去重 F1 | 0.944 | 6 个深标注领域 |
 | 沉淀 F1 | 0.000（默认阈值 0.50） | 6 个深标注领域 |
@@ -379,8 +379,8 @@ memory-palace calibrate         # 在全部领域上重扫阈值，给平台区�
 
 | 指标 | 数值 | 覆盖 |
 |---|---|---|
-| recall@5 | **0.899**（中位数 1.000） | 106 个领域 |
-| MRR | 0.817 | 106 个领域 |
+| recall@5 | **0.850**（中位数 1.000） | 106 个领域 |
+| MRR | 0.803 | 106 个领域 |
 | 弃答 F1 | 0.757 | 106 个领域 |
 | 去重 F1 | 0.944 | 6 个深标注领域 |
 | 沉淀 F1 | 0.000（默认阈值 0.50） | 6 个深标注领域 |
@@ -401,24 +401,37 @@ memory-palace calibrate         # 在全部领域上重扫阈值，给平台区�
 
 <p align="center"><em>一个记忆库的规模上限，不是看它能装多少行，是看「想起来」要多久。</em></p>
 
-| 条数 | 热查询（p50） | 冷启动建索引 | 单条写入 | 判断 |
+| 条数 | 典型查询 | 最广查询 | 冷建索引 | 单条写入 |
 |---|---|---|---|---|
-| 3,000 | 12.7 ms | 130 ms | 1.1 ms | 舒服 |
-| 10,000 | **20 ms**（优化前 50） | 736 ms | 1.1 ms | 可用 |
-| 100,000 | ~200 ms（外推，未实测） | ~7 s | 1.1 ms | 边缘 |
-| 1,000,000 | 秒级 | 分钟级 | 1.1 ms | **不要用** |
+| 3,000 | 1.2 ms | 4 ms | 0.1 s | 1.1 ms |
+| 10,000 | **4.8 ms** | 11 ms | 0.7 s | 1.1 ms |
+| 50,000 | 33 ms | 70 ms | 4.2 s | 1.1 ms |
+| 100,000 | **62 ms** | 126 ms | 7.8 s | 1.1 ms |
+| 1,000,000 | ~0.6–1.2 s（外推） | — | 分钟级 | 1.1 ms |
 
-写入一直是 1.1ms：它是行级写，跟库里有多少条无关。**涨的是查询** —— 因为召回是
-「给每条记忆打一次分」，天生 O(N)。
+「典型」= 命中 2 千多条候选的查询；「最广」= 命中最多的那种（10 万条里约 3.8 万条沾边）。
 
-这轮把 10k 的查询从 50ms 压到 20ms，靠的不是 ANN，是**剪掉必然落选的那些**：
+写入一直是 1.1ms：它是行级写，跟库里有多少条无关。**涨的是查询** —— 召回天生要「给每条
+候选打一次分」，所以关键是**候选有多少**，以及**每条打分有多贵**。这轮做了三件事：
 
-- 召回有一条铁律：语义与标签都为 0 的节点不算命中（光靠新鲜不算相关）。
-  10k 条里这类占七成，以前每条都要跑一次 `effective_weight`（含 exp/log1p）才被丢掉。
-- 稳定性里不随 `now` 变的那一半按访问历史缓存，`log1p`/`sqrt` 不再每查询重算。
+1. **倒排**。一条记忆平均只有 18 个非零分量，两个稀疏向量的点积只可能在共享分量上非零 ——
+   没共享任何分量的记忆，分数必然是 0。以前却要对全库每条跑一遍点积来得出这个 0。
+   现在候选 = 至少共享一个分量的那些（10k 时 25%，100k 时 38%）。
+2. **上界早停**。`总分 = α·语义 + β·标签 + γ·时近`，而时近 ≤ 1 —— 所以
+   「不含时近的那部分」已经够不到门槛的，`effective_weight`（exp/log1p）不必算；
+   按不含时近的分数降序遍历，一旦它小于当前第 k 名，后面全部可以停。
+3. **只遍历候选**。以前每条查询都要走一遍全图（`is_valid_at` + 标签集合），
+   现在没有标签条件时直接拿倒排候选，20k 条实测省掉近一半时间。
 
-已验证无损：同样 20 个查询下，被跳过的节点里没有一个是非零行；106 领域评测分数
-（recall 0.899 / MRR 0.817 / 弃答 F1 0.757）一位未变。
+结果：10k 从 50ms 降到 4.8ms（**10×**），100k 从外推的 ~500ms 降到 62–126ms（**4–8×**）。
+
+已验证无损：倒排候选与全量扫描**逐键相同**、top-k 逐位相同；两阶段早停在
+7 个查询 × 3 种 limit 下与全量结果完全一致。
+
+但评测分数**掉了一截**：recall 0.899 → 0.850，MRR 0.817 → 0.803。这不是退化，是
+去掉了一处虚高 —— 以前「一个词都没命中」的查询也会返回全库（全是 0 分），
+`recall@5` 会因为 0 分条目按字典序占了前五而**偶然**命中。现在 0 分不进结果，
+「猫不爱喝水怎么办」这类查询诚实返回空，分数落到 0.850。
 
 **再往上怎么办**：100k 以上该把向量层外挂。`Embedder` 已经是接口，
 把 `DenseIndex` 换成一个 Milvus / Qdrant / pgvector 适配器即可 —— 本库继续管
@@ -526,24 +539,54 @@ MIT © 2026 Howard
   实测 NORMAL 把 p50 从 1.11ms 压到 0.58ms，吞吐基本不变。**默认仍给 FULL** ——
   这个库存的是不可再生数据，吞吐不够时再换，换法写进了 README。
 
-### 检索：10k 条时省掉七成无用功
+### 检索：10k 从 50ms 到 4.8ms，100k 从外推 500ms 到 62–126ms
 
-- `_score_components(only_hits=True)`：召回本来就有「语义或标签必须非零」的门槛，
-  所以两者都为 0 的节点**不可能**被返回，它们唯一作用是让 recency 项算出来给人看。
-  10k 条里这类占七成，每条都要跑一次 `effective_weight`（含 exp/log1p）。
-  recall 现在跳过它们；`score_breakdown` 仍返回全量解释。已验证等价：
-  20 个查询下，被跳过的节点里没有一个是非零行。
-- `MemoryNode._static_stability()`：稳定性里不随 now 变的那一半（层级 × 类型 ×
-  访问历史）按 `(tier, kind, access_count, last_accessed, created_at)` 缓存。
-  缓存写入走 `object.__setattr__`，绕开脏标记 —— 一次查询把全库标脏，
-  下一次保存就会全量重写，那比慢更糟。
-- 实测 10k 条：热查询 **50ms → 20ms**（2.5×），写入 p50 不变。
-- 优化后 100k 条查询约 200ms 量级，仍不适合百万级 —— 见 README 的「规模边界」一节。
+四层剪枝，每一层都能单独说明「为什么不会漏」：
+
+1. **倒排候选**（`SemanticIndex._postings`）：两个稀疏向量的点积只可能在共享分量上
+   非零，所以没共享任何分量的记忆分数必然是 0 —— 以前要对全库每条跑一遍点积才得出
+   这个 0。候选从「全库」缩到「至少沾一个词」的那些（10k 25%、100k 38%）。
+   桶用 `dict[str, None]` 而不是 `set`：删除 O(1)，比 set 省三成内存。
+   所有写入口统一走 `_put/_drop`，绕过就会出现「向量在、候选里没有」的幽灵 ——
+   查得到却召回不到，而且不报错。
+2. **只遍历候选**：没有标签条件时直接拿倒排候选，不再走全图
+   （`is_valid_at` + `set(tags)` 以前对每条都要跑）。20k 条实测省掉近一半。
+3. **上界剪枝**：`总分 = α·sem + β·tag + γ·rec`，而 `rec ≤ 1`。若
+   `α·sem + β·tag + γ` 都够不到召回门槛，`effective_weight`（exp/log1p）不必算。
+4. **两阶段早停**：按「不含时近」的分数降序遍历，一旦它小于当前第 k 名的总分就停 ——
+   因为 `total ≥ base`，这是严格上界，不是经验值。
+
+`MemoryNode._static_stability()`：稳定性里不随 now 变的那一半（层级 × 类型 ×
+访问历史）按 `(tier, kind, access_count, last_accessed, created_at)` 缓存。
+缓存写入走 `object.__setattr__`，绕开脏标记 —— 一次查询把全库标脏，
+下一次保存就会全量重写，那比慢更糟。
+
+**行为变化（会掉分，但是对的）**：`lexical_scores` 不再返回 0 分条目。
+以前「一个词都没命中」的查询会返回全库（全是 0 分），`recall@5` 会因为 0 分条目
+按字典序占了前五而偶然命中 —— 「猫不爱喝水怎么办」在 `zh-cat` 上就是这么「命中」的，
+它的 top5 全是 0 分的 `cat-litter / cat-scratch / cat-stress`，而 gold 是 `cat-water`。
+现在这类查询诚实返回空。代价是账面数字：**recall 0.899 → 0.850，MRR 0.817 → 0.803**，
+弃答 F1 不变。掉的是虚高，不是能力。
+
+等价性验证：倒排候选与全量扫描逐键相同、top-k 逐位相同；两阶段早停在
+7 个查询 × 3 种 limit 下与全量结果完全一致。
+
+实测（12 核 / Windows / 内存库 / 每条都落盘）：
+
+| 条数 | 典型查询 | 最广查询 | 冷建索引 |
+|---|---|---|---|
+| 3,000 | 1.2 ms | 4 ms | 0.1 s |
+| 10,000 | 4.8 ms | 11 ms | 0.7 s |
+| 50,000 | 33 ms | 70 ms | 4.2 s |
+| 100,000 | 62 ms | 126 ms | 7.8 s |
 
 ### 文档
 
-- README 增加「这个库适合多大」：给出 3k/10k/100k 的实测数字与「什么时候该换外部向量库」，
-  不再只用一句「适合个人助理」含糊过去。
+- README 增加「能存多少条」：给出 3k/10k/50k/100k 的实测数字与「什么时候该换外部向量库」。
+- README 增加「你可能在找的几类方案」：Mem0/Zep、Chroma/Qdrant/Milvus、LangChain memory、
+  自己写 SQLite —— 只比能力边界，不做评测。
+- 仓库改名 `agent-memory-palace`（包名与 import 路径不变），description 与 15 个 topics
+  按搜索习惯重写。
 
 ---
 
@@ -554,10 +597,10 @@ MIT © 2026 Howard
 | 路径 | 行数 | sha256 | 说明 |
 |---|---|---|---|
 | `AGENTS.md` | 102 | `ce9b7cfa` |  |
-| `CHANGELOG.md` | 989 | `84dfa32d` | 版本账本（最新一节在最上面） |
-| `README.md` | 323 | `2d5871e8` | 人读的现状（能力 / 数字 / 边界） |
+| `CHANGELOG.md` | 1019 | `6cf88dd0` | 版本账本（最新一节在最上面） |
+| `README.md` | 336 | `6766f447` | 人读的现状（能力 / 数字 / 边界） |
 | `conftest.py` | 6 | `f5b7f82a` | 让未安装的源码目录也能被 pytest 直接导入（CI 里装了包，这行是多余的但无害）。 |
-| `llms.txt` | 149 | `9270649e` | 机器读的现状（权威摘要） |
+| `llms.txt` | 149 | `26fc75de` | 机器读的现状（权威摘要） |
 | `pyproject.toml` | 65 | `50b921c4` |  |
 | `docs/AGENT_INTEGRATION.md` | 135 | `67df3036` |  |
 | `docs/ARCHITECTURE.md` | 113 | `cca95cc5` |  |
@@ -597,14 +640,14 @@ MIT © 2026 Howard
 | `memory_palace/mcp_server.py` | 501 | `aa816ba3` | 把记忆系统暴露成 MCP 服务（stdio，零第三方依赖）。 |
 | `memory_palace/memory_model.py` | 175 | `631129cd` | 一套记忆模型：不是一种衰减律，而是五种寿命。 |
 | `memory_palace/narrative.py` | 315 | `a149919e` | 自我叙事：不是把所有记忆倒出来，而是「挑几条、排个序、讲成一个故事」。 |
-| `memory_palace/palace.py` | 2078 | `933c96e5` | 顶层编排：把情感、沉淀、遗忘、叙事、风格、反思串成一个可运行的生命周期。 |
+| `memory_palace/palace.py` | 2159 | `042aede2` | 顶层编排：把情感、沉淀、遗忘、叙事、风格、反思串成一个可运行的生命周期。 |
 | `memory_palace/persona.py` | 790 | `a8de1f9c` | 基座 → 人格 → 人设 → 变更：四层**不同的**可变性。 |
 | `memory_palace/pragmatics.py` | 279 | `7bc82708` | 语用层：一句话是**什么行为**，有多强，为什么这么说。 |
 | `memory_palace/reflection.py` | 428 | `32486e47` | 自我反思：回看系统自己的历史，量化「我这套策略还好使吗」。 |
 | `memory_palace/render.py` | 622 | `a086c0f9` | 展现层：把「记忆库现在的样子」变成人能看的东西。 |
 | `memory_palace/scope.py` | 156 | `c216bd16` | 记忆属于谁：全局 / 某个项目 / 本次会话。 |
 | `memory_palace/selfcorrect.py` | 610 | `1d682f60` | 自修正：能发现自己错了，并且改得起、退得回。 |
-| `memory_palace/semantics.py` | 798 | `d38728ea` | 可解释的语义检索层（零第三方依赖）。 |
+| `memory_palace/semantics.py` | 871 | `bf8065be` | 可解释的语义检索层（零第三方依赖）。 |
 | `memory_palace/sqlite_store.py` | 910 | `fa763329` | SQLite（WAL）后端：行级存储、单写多读、崩溃自前滚。 |
 | `memory_palace/store.py` | 679 | `a3a69cdc` | 持久化门面：SQLite（默认）与 JSON（可移植/旧库）两个后端。 |
 | `memory_palace/style.py` | 327 | `5f5215d6` | 风格固化与冲突裁决。 |
@@ -618,6 +661,7 @@ MIT © 2026 Howard
 | `tests/test_extensions.py` | 266 | `f7bd8ec0` | 两个扩展点的契约：语义编码器、外部反思。 |
 | `tests/test_guardrails.py` | 145 | `b74b614a` | 自修正的多目标护栏：主指标变好，但不许拿别的指标去换。 |
 | `tests/test_integrations.py` | 224 | `26f909c9` | MCP 与 HTTP 两条通用接入层的契约自测。 |
+| `tests/test_inverted.py` | 132 | `3e93eb16` | 倒排索引与剪枝的契约。 |
 | `tests/test_lexicon.py` | 215 | `2bfdb776` | 词法层：归一、分词、否定词、IDF。 |
 | `tests/test_llm.py` | 153 | `cae5ac1f` | LLM 反思的边界：结构化、可降级、绝不改配置。 |
 | `tests/test_locking.py` | 148 | `74cbdc36` | 跨进程写锁：真的跨进程，不是「同一个对象加两次」。 |
@@ -643,6 +687,7 @@ MIT © 2026 Howard
 - `tests/test_extensions.py`（5 个用例）：test_default_encoder、test_injected_encoder、test_encoder_robustness、test_reflector、test_style_suppression_after_adjudication
 - `tests/test_guardrails.py`（7 个用例）：test_patch_records_guard_baseline、test_improvement_with_guardrail_sacrifice_is_reverted、test_improvement_without_sacrifice_is_kept、test_guard_direction_matters、test_small_guardrail_drift_is_tolerated、test_status_exposes_guardrail_evidence、test_guard_metrics_are_real_reflection_metrics
 - `tests/test_integrations.py`（2 个用例）：test_mcp_contract、test_http_contract
+- `tests/test_inverted.py`（7 个用例）：test_candidates_cover_every_nonzero_score、test_zero_score_entries_are_not_returned、test_forget_clears_postings、test_rebuild_matches_incremental、test_upsert_with_same_components_keeps_postings、test_two_stage_pruning_equals_full_ranking、test_tag_channel_still_scans_whole_graph
 - `tests/test_lexicon.py`（6 个用例）：test_normalize、test_tokens、test_negation_weight、test_idf、test_idf_fixes_false_merge、test_retrieval_requires_lexical_evidence
 - `tests/test_llm.py`（10 个用例）：test_parse_valid_json、test_parse_fenced_json、test_parse_garbage_degrades、test_empty_json_degrades、test_provider_failure_degrades_instead_of_raising、test_prompt_respects_budget、test_system_prompt_forbids_extra_params、test_reflection_does_not_touch_config、test_llm_reflector_wired_from_config、test_no_llm_configured_means_no_hook
 - `tests/test_locking.py`（5 个用例）：test_cross_process_exclusion、test_reentrant_same_thread、test_other_thread_blocks_until_release、test_timeout_is_total_not_per_try、test_stale_lock_metadata_reports_missing_pid

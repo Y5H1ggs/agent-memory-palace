@@ -442,7 +442,18 @@ class SemanticIndex:
         )
         self._learn = (not self._custom) and isinstance(self.encoder, ConceptEncoder)
         self.learned: dict[str, tuple[str, ...]] = {}
-        self._vectors: dict[str, list[float]] = {}
+        self._vectors: dict[str, SparseVector] = {}
+        # —— 倒排：分量号 → {记忆名} ——
+        #
+        # 一条记忆平均只占 18 个非零分量，查询也一样。两个稀疏向量的点积只可能
+        # 在共享分量上非零 —— 换句话说，**没共享任何分量的记忆，分数必然是 0**。
+        # 以前却要对全库每一条跑一遍点积才得出这个 0：10k 条时 10ms，100k 时 100ms，
+        # 全是白烧。倒排让「候选」从「全库」缩到「至少共享一个分量的那些」（实测 25~40%）。
+        #
+        # 为什么用 dict 而不是 set 存桶：删除要 O(1)（遗忘是高频操作），
+        # `dict[str, None]` 每项比 set 省三成内存，合并时 `set().update(dict)` 走 C 层。
+        self._postings: dict[int, dict[str, None]] = {}
+        self._post: dict[str, tuple[int, ...]] = {}
         self._dim: int | None = getattr(self.encoder, "dim", None)
         # 脏标记代替「每次查询都哈希全语料」：写入/遗忘即脏，重建一次后转干净。
         self._dirty = True
@@ -583,16 +594,64 @@ class SemanticIndex:
         except ValueError:
             self.dense_failures += 1
 
+    def _put(self, name: str, vec: SparseVector) -> None:
+        """写入一条向量，同时维护倒排。
+
+        所有写入口都必须走这里 —— 绕过它就会出现「向量在、候选里没有」的幽灵：
+        查得到却召回不到，而且不会报错。这类 bug 最难查，因为它表现为「有时候不准」。
+        """
+        old = self._vectors.get(name)
+        if old is not None:
+            if old.idx == vec.idx:
+                # 分量完全相同（只改了权重）：倒排不动，省一次全桶删除 + 重建
+                self._vectors[name] = vec
+                return
+            self._drop(name)
+        self._vectors[name] = vec
+        if vec.idx:
+            self._post[name] = vec.idx
+            for index in vec.idx:
+                bucket = self._postings.get(index)
+                if bucket is None:
+                    bucket = self._postings[index] = {}
+                bucket[name] = None
+
+    def _drop(self, name: str) -> None:
+        """删一条向量与它在倒排里的全部痕迹；桶空了就删桶（否则 100k 轮换后桶数只增不减）。"""
+        for index in self._post.pop(name, ()):
+            bucket = self._postings.get(index)
+            if bucket is not None:
+                bucket.pop(name, None)
+                if not bucket:
+                    del self._postings[index]
+        self._vectors.pop(name, None)
+
+    def _candidates(self, q: SparseVector) -> Iterable[str]:
+        """至少与查询共享一个非零分量的记忆名。
+
+        候选外点积严格为 0，所以这里剪掉它们不改变任何分数，只是不再空转。
+        倒排还没建（或全空语料）时退回全库 —— 正确性优先于快。
+        """
+        if not self._postings:
+            return self._vectors.keys()
+        seen: set[str] = set()
+        for index in q.idx:
+            bucket = self._postings.get(index)
+            if bucket:
+                seen.update(bucket)
+        return seen
+
     def upsert(self, node: MemoryNode) -> None:
         # 这里用的是「上一次重建时的 IDF」；随后置脏，下次检索会用全语料重算，
         # 所以短暂的不一致不会留在最终索引里。
-        self._vectors[node.name] = self._encode(self._doc(node))
+        self._put(node.name, self._encode(self._doc(node)))
         self._index_dense(node.name, node.content)
         self._dirty = True  # 语料变了，概念词典可能要重学
 
     def forget(self, name: str) -> None:
         self._failed.discard(name)
-        if self._vectors.pop(name, None) is not None:
+        if self._vectors.get(name) is not None:
+            self._drop(name)
             self._dirty = True
         if self._dense is not None:
             self._dense.remove(name)
@@ -615,12 +674,14 @@ class SemanticIndex:
         # IDF 必须先于任何编码算完：同一批向量必须共享同一把尺子，否则余弦没有意义
         self._idf = IdfModel(docs)
         self._vectors.clear()
+        self._postings.clear()
+        self._post.clear()
         self._failed.clear()
         if self._dense is not None:
             self._dense.clear()
         for node in graph.all_nodes():
             text = self._doc(node)
-            self._vectors[node.name] = self._encode(text)
+            self._put(node.name, self._encode(text))
             self._index_dense(node.name, text)
         self._dirty = False
 
@@ -639,14 +700,14 @@ class SemanticIndex:
         live = {n.name for n in graph.all_nodes()}
         filled = 0
         for name in [k for k in self._vectors if k not in live]:
-            del self._vectors[name]           # 幽灵向量：图里已经没有了
+            self._drop(name)                  # 幽灵向量：图里已经没有了
             if self._dense is not None:
                 self._dense.remove(name)
         for node in graph.all_nodes():
             if node.name in self._vectors or node.name in self._failed:
                 continue
             try:
-                self._vectors[node.name] = self._encode(node.content)
+                self._put(node.name, self._encode(node.content))
                 self._index_dense(node.name, node.content)
                 filled += 1
             except ValueError:
@@ -708,20 +769,32 @@ class SemanticIndex:
         return out
 
     def lexical_scores(self, query: str, min_score: float = 0.0) -> dict[str, float]:
-        """纯词法通道（0.9.x 的行为）：调参与对照都靠它。"""
+        """纯词法通道（0.9.x 的行为）：调参与对照都靠它。
+
+        只走**倒排候选**：与查询没有任何共享分量的记忆，点积恒为 0，
+        以前要跑一遍才算得出这个 0。现在它们直接不进结果。
+
+        这带来一个语义上的收紧，值得写清楚：**分数为 0 的条目不再出现在返回里**。
+        以前 `min_score=0` 会把全库都交出去（绝大多数是 0 分），调用方得自己过滤；
+        现在返回的就是「至少沾一个词」的那些。对排序、top-k、弃答判定都没有影响 ——
+        0 分本来就排在最后，且 `max()` 在空集上仍是 0.0。
+        """
         q = self._encode(query)
         if not q:
             return {}
         # 稀疏点积不必再包一层 cosine()：两边都已经 L2 归一化，点积就是余弦；
         # 只需按 cosine 的口径夹到 [0, 1]。
         out: dict[str, float] = {}
-        for name, vec in self._vectors.items():
+        for name in self._candidates(q):
+            vec = self._vectors.get(name)
+            if vec is None:  # 候选与向量表在极端时序下可能差一拍，宁可跳过
+                continue
             score = q.dot(vec)
             if score > 1.0:
                 score = 1.0
             elif score < 0.0:
                 score = 0.0
-            if score >= min_score:
+            if score >= min_score and score > 0.0:
                 out[name] = round(score, 6)
         return out
 
