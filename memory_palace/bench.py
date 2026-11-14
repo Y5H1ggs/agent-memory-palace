@@ -60,7 +60,7 @@ def run_one(n: int) -> dict[str, Any]:
     from .tree import build_tree, render_tree, tree_stats
 
     tmp = tempfile.mkdtemp(prefix="mp-bench-")
-    store = os.path.join(tmp, "store.json")
+    store = os.path.join(tmp, "store.sqlite")
 
     write_ms, palace = _timed(lambda: make_palace(n))
     save_ms, _ = _timed(lambda: palace.save(store))
@@ -85,6 +85,19 @@ def run_one(n: int) -> dict[str, Any]:
     load_ms, loaded = _timed(lambda: MemoryPalace(path=store, clock=MutableClock()))
     reload_query_ms, _ = _timed(lambda: loaded.recall(query="仓位怎么分配"))
 
+    # 单次调用延迟才是 agent 真正感知的东西：每一步都会 remember 一笔。
+    # 取中位数而不是均值：一次 GC 或一次 fsync 抖动就能把均值拉歪。
+    per_write = []
+    autosave = MemoryPalace(path=os.path.join(tmp, "lat.sqlite"), clock=MutableClock(), autosave=True)
+    for i in range(25):
+        ms, _ = _timed(lambda i=i: autosave.remember(f"lat{i}", f"延迟样本 {i} 仓位与复盘", tags=("压测",)))
+        per_write.append(ms)
+    per_write.sort()
+    write_p50 = per_write[len(per_write) // 2]
+    write_p95 = per_write[int(len(per_write) * 0.95) - 1]
+    # 改一条：增量写应当与库的大小基本无关
+    update_ms, _ = _timed(lambda: autosave.remember("lat3", "延迟样本 3 仓位与复盘（改一条）", tags=("压测",)))
+
     flat_chars = len(flat_text)
     tree_chars = len(tree["text"])
     return {
@@ -96,6 +109,9 @@ def run_one(n: int) -> dict[str, Any]:
         "query_cold_ms": round(cold_ms, 1),
         "query_warm_ms": round(warm_ms, 1),
         "query_after_load_ms": round(reload_query_ms, 1),
+        "write_p50_ms": round(write_p50, 2),
+        "write_p95_ms": round(write_p95, 2),
+        "update_one_ms": round(update_ms, 2),
         "context_ms": round(ctx_ms, 1),
         "context_tree_ms": round(tree_ms, 1),
         "cycle_ms": round(cycle_ms, 1),
@@ -132,6 +148,10 @@ def main(argv: list[str] | None = None) -> int:
                 f"        查询 冷 {row['query_cold_ms']:>6.1f}ms / 热 {row['query_warm_ms']:>6.1f}ms"
                 f"｜context 平铺 {row['context_ms']:>6.1f}ms / 树 {row['context_tree_ms']:>6.1f}ms"
                 f"｜cycle {row['cycle_ms']:>6.1f}ms"
+            )
+            print(
+                f"        单次写入 p50 {row['write_p50_ms']:>6.2f}ms / p95 {row['write_p95_ms']:>6.2f}ms"
+                f"｜改一条 {row['update_one_ms']:>5.2f}ms"
             )
             print(
                 f"        注入 扁平(6条) {row['flat_chars']:>4} 字 / 扁平(30条) {row['wide_flat_chars']:>5} 字"

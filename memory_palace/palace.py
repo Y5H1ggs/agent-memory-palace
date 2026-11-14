@@ -15,10 +15,12 @@ remember() 不传 valence / arousal 时走评价器（文本依据），运行�
 """
 from __future__ import annotations
 
+import functools
 import os
 import threading
 from collections import Counter
-from typing import Any
+from contextlib import contextmanager
+from typing import Any, Callable, Iterator
 
 from .affect import AffectEngine
 from .consolidation import ConsolidationEngine, ConsolidationResult, Summarizer
@@ -30,7 +32,6 @@ from .core import (
     MemoryGraph,
     MemoryNode,
     PalaceConfig,
-    atomic_write_json,
     dataclass_field_names,
     read_json,
     wall_clock,
@@ -58,16 +59,39 @@ from .scope import (
     normalize_project,
     normalize_scope,
 )
+from .locking import LockBusy
+from .llm import make_reflector
+from .store import Store, StoreEmpty, StoreError, open_store
 from .semantics import Encoder, SemanticIndex, cosine
 from .style import StyleEngine
 from .value import ValueModel
 
-STATE_VERSION = 6
-# v4 快照没有叙事热度与情绪来源字段，但节点结构兼容（缺字段走默认值），可直接迁移。
-SUPPORTED_STATE_VERSIONS = (4, 5, 6)
+# v7 起快照带 revision / state_id / checksum，并允许 journal 前滚。
+# v4~v6 快照仍可直接读（缺的字段走默认值），写回时自动升到 v7。
+STATE_VERSION = 7
+SUPPORTED_STATE_VERSIONS = (4, 5, 6, 7)
 
 # amend_foundation 的哨兵：traits={"__remove__": ["playfulness"]} 表示删除维度
 _REMOVE = "__remove__"
+
+
+def _mutating(reason: str = ""):
+    """给写操作套一层「跨进程事务」。
+
+    为什么放在装饰器而不是每个方法里手写：写路径有二十来个入口，
+    漏掉一个就等于给「丢更新」留了一个后门，而这种后门在单进程测试里永远不出现。
+    装饰器让「哪些方法是写操作」变成可以 grep 出来的事实。
+    """
+
+    def wrap(fn: Callable[..., Any]) -> Callable[..., Any]:
+        @functools.wraps(fn)
+        def inner(self: "MemoryPalace", *args: Any, **kwargs: Any) -> Any:
+            with self._txn(reason or fn.__name__):
+                return fn(self, *args, **kwargs)
+
+        return inner
+
+    return wrap
 
 
 class MemoryPalace:
@@ -81,29 +105,75 @@ class MemoryPalace:
         autosave: bool = False,
         project: str | None = None,
         reflector: Callable[[dict[str, Any]], list[str]] | None = None,
+        store: DurableStore | None = None,
+        concurrency: str | None = None,
+        embedder: Any = None,
+        backend: str | None = None,
     ) -> None:
         self._lock = threading.RLock()
         self._clock: Clock = clock or wall_clock
         self._config = config or PalaceConfig()
+        # 显式传参优先于配置：同一个库既可能被 CLI（单进程）用，也可能被 server（多进程）用。
+        if concurrency:
+            self._config.concurrency = concurrency
+        if backend:
+            self._config.backend = backend
         # 边界必须校验：`PalaceConfig(...)` 本身不会自动验证，而一个坏参数不会报错，
         # 只会让系统「安静地做错事」—— semantic_alpha=-5 会让检索永远返回空，
         # forget_w=-1 会让所有记忆立刻可忘，grasp_budget=nan 会让预算判断全假。
         # 到这里为止还没读过任何状态，是唯一能干净失败的位置。
         self._config.validate()
+        self._config_override = config
         self._summarizer = summarizer
         self._autosave = autosave
         self._path = path
         # 当前项目：决定「默认写进哪里」与「默认读哪些」。显式传优先，否则按 cwd 推断。
         self.project = normalize_project(project) if project else detect_project()
 
+        # —— 持久化后端：默认 SQLite（WAL）；没有 path 就只有内存 ——
+        self._store: Store | None = store
+        if self._store is None and path:
+            self._store = open_store(
+                path,
+                backend=self._config.backend,
+                lock_timeout=self._config.lock_timeout,
+                journal_enabled=self._config.journal_enabled,
+                journal_keep=self._config.journal_keep,
+                verify=self._config.verify_checksum,
+                snapshot_every=self._config.snapshot_every,
+                validate=lambda s: self._validate_state(s, self._path or ""),
+            )
+        if self._store is not None:
+            self._path = self._store.path
+            if hasattr(self._store, "event_limit"):
+                self._store.event_limit = self._config.max_events  # type: ignore[attr-defined]
+        self.revision = 0
+        self.state_id = ""
+        self.recovered = False
+        self.conflict_count = 0
+        self.last_save_result: dict[str, Any] | None = None
+        self._txn_depth = 0
+        self._stale_after_rollback = False
+        # 增量写需要的两个游标：哪些名字已经在库里、事件写到了第几条。
+        # 它们只影响「要不要写」，不影响「写什么」—— 写什么永远由内存里的真实状态决定。
+        self._persisted_nodes: set[str] = set()
+        self._event_cursor = 0
+
         self.graph = MemoryGraph()
         self.style = StyleEngine(self._config)
-        self.semantics = SemanticIndex(encoder, config=self._config)
+        self.semantics = SemanticIndex(
+            encoder, config=self._config, embedder=embedder
+        )
         self.consolidation = ConsolidationEngine(
             self._config, summarizer, vector_lookup=self._vector_of
         )
-        # 外部反思钩子：传了就用（例如接一次 LLM），不传就是规则化监控。
-        # 它只产出文字，不改配置 —— 让模型直接改参数等于让它改自己的人格。
+        # 外部反思钩子：传了就用（显式传参优先，其次按配置造 LLM 反思器），
+        # 都没有就是规则化监控。它只产出文字，不改配置 ——
+        # 让模型直接改参数等于让它改自己的人格。
+        self.llm: Any = None
+        if reflector is None:
+            self.llm = make_reflector(self._config)
+            reflector = self.llm.as_callable() if self.llm is not None else None
         self.reflection = ReflectionEngine(self._config, reflector=reflector)
         self.affect = AffectEngine(self._config)
         self.logic = LogicGraph()
@@ -132,6 +202,8 @@ class MemoryPalace:
 
         if path and os.path.exists(path):
             self._load_unlocked(path, config_override=config)
+        elif self._store is not None and self._store.exists():
+            self._load_unlocked(self._store.path, config_override=config)
 
     def now(self) -> float:
         return self._clock()
@@ -165,21 +237,109 @@ class MemoryPalace:
         if len(self.events) > limit:
             self.events = self.events[-limit:]
 
+    # ---------- 并发写：跨进程事务 ----------
+
+    @contextmanager
+    def _txn(self, reason: str = "write") -> Iterator[None]:
+        """写事务：开事务（SQLite: BEGIN IMMEDIATE / JSON: 文件锁）→ 若磁盘更新先重载
+        → 执行修改 → 提交。
+
+        「先重载再修改」是这里唯一重要的事。反过来（先改后查）两边都认为自己最新，
+        后写的一方会把前一方**已经提交**的修改整段覆盖，而没有任何一方报错 ——
+        这是丢数据最隐蔽的形态，也是「多进程写同一份记忆」以前不适用的根本原因。
+
+        `BEGIN IMMEDIATE` 而不是 `BEGIN`：后者要等到第一次写才升级锁，
+        两个进程可能都读完了才发现要抢同一个写锁，白白多一次死锁/重试。
+        一开始就声明「我是写者」，排队的人从第一毫秒就在排队。
+
+        重入是允许的（`_txn_depth`）：外层已经开过事务并重载过，内层不必再来一遍，
+        更不能在内层重载 —— 那会把外层尚未提交的修改直接扔掉。
+        """
+        with self._lock:
+            outer = self._txn_depth == 0
+            self._txn_depth += 1
+            begun = False
+            try:
+                if outer and self._store is not None and self._path and (
+                    self._config.concurrency == "process"
+                ):
+                    self._store.begin(reason)
+                    begun = True
+                    stale = self._stale_after_rollback
+                    self._stale_after_rollback = False
+                    self._refresh_from_disk(force=stale)
+                yield
+            except BaseException:
+                if begun and self._store is not None:
+                    self._store.rollback()
+                    # 事务回滚了，但内存里的修改还在 —— 下一次事务必须先对齐磁盘，
+                    # 否则这份「从未提交过」的修改会混进下一次提交。
+                    self._stale_after_rollback = True
+                raise
+            else:
+                if begun and self._store is not None:
+                    self._store.commit()
+            finally:
+                self._txn_depth -= 1
+
+    def refresh(self, force: bool = False) -> bool:
+        """把别人的提交读进来（只读路径也调用）。
+
+        以前只有写事务会重载，于是长驻进程（MCP server / HTTP 服务）看到的永远是
+        「自己上次写完那一刻」的库 —— 另一个进程写进去的记忆，它一条也看不见，
+        而且不会报错。这在单进程里测不出来，在多进程里是致命的。
+
+        代价是一次 `peek_revision()`（SQLite 一次主键查询，约 0.05ms）。
+        事务进行中不重载：那会把尚未提交的修改扔掉。
+        """
+        with self._lock:
+            if self._txn_depth:
+                return False
+            if self._store is None or not self._path:
+                return False
+            return self._refresh_from_disk(force=force)
+
+    def _refresh_from_disk(self, force: bool = False) -> bool:
+        """磁盘比内存新时，先把别人的提交读进来。返回是否发生了重载。
+
+        只在写事务开头调用，且此时还没有任何本事务的修改 ——
+        所以整库重载是安全的，不会吞掉自己刚做的事。
+        """
+        if self._store is None or not self._path:
+            return False
+        if not force:
+            disk = self._store.peek_revision()
+            if disk is None or disk == self.revision:
+                return False
+        try:
+            result = self._store.load(
+                validate=lambda s: self._validate_state(s, self._path or "")
+            )
+        except StoreEmpty:
+            return False
+        self._restore_state(result.payload, self._path, self._config_override)
+        self.revision = result.revision
+        self.state_id = result.state_id
+        self.conflict_count += 1
+        self._log("concurrent_reload", {"revision": result.revision}, self.now())
+        return True
+
     def _maybe_save(self) -> bool:
         """自动保存失败不得炸穿主流程，但必须留下可观测的痕迹。"""
         if not (self._autosave and self._path):
             return True
         try:
-            self._save_unlocked(self._path)
-            self.last_save_ok = True
-            return True
-        except OSError as exc:
+            durable = self._save_unlocked(self._path, reason="autosave")
+            self.last_save_ok = bool(durable)
+            return bool(durable)
+        except (OSError, StoreError, LockBusy) as exc:
             self.last_save_ok = False
             self._log("save_failed", {"path": self._path, "error": str(exc)})
             return False
 
     # ---------- 写入与检索 ----------
 
+    @_mutating("remember")
     def remember(
         self,
         name: str,
@@ -293,7 +453,23 @@ class MemoryPalace:
 
             self.memory.enroll(node)
             node.validate()  # 类型名拼错必须当场炸
-            self.graph.add_node(node)
+            stored = self.graph.add_node(node)
+            if stored is not node:
+                # 同名记忆已存在。以前这里会静默返回旧节点、把新内容丢掉 ——
+                # 「写进去了」与「什么都没发生」在返回值上完全一样，最坏的那种失败。
+                # 正确的语义是：同名 = 同一条记忆，就地更新它。
+                stored.content = content
+                if tags:
+                    stored.tags = tuple(tags)
+                stored.tier = tier
+                stored.pinned = bool(pinned) or stored.pinned
+                stored.kind = node.kind
+                stored.speech = speech
+                stored.access(now, self._config.access_gain)
+                self.semantics.upsert(stored)
+                self._log("replace", {"name": name, "reason": "same_name"}, now)
+                self._maybe_save()
+                return stored
             self.semantics.upsert(node)
             self._maybe_save()
             return node
@@ -334,6 +510,7 @@ class MemoryPalace:
 
     # ---------- 情感 ----------
 
+    @_mutating("feel")
     def feel(self, name: str, valence: float, arousal: float) -> MemoryNode | None:
         """给一条已存在的记忆追加情绪。注意：这**不会**强化它，只改它的衰减速度。"""
         with self._lock:
@@ -350,6 +527,7 @@ class MemoryPalace:
             self._maybe_save()
             return node
 
+    @_mutating("feel_outcome")
     def feel_outcome(self, name: str, outcome: str) -> MemoryNode | None:
         """运行时结果反馈：止损兑现 / 被反证 / 顺利想起 —— 情绪由此而来。
 
@@ -375,6 +553,7 @@ class MemoryPalace:
             self._maybe_save()
             return node
 
+    @_mutating("reappraise")
     def reappraise(self, name: str, valence: float) -> MemoryNode | None:
         """重估：改的是「现在怎么看」，不是「当时发生了什么」。内容与强度都不动。"""
         with self._lock:
@@ -397,6 +576,7 @@ class MemoryPalace:
     def _bump_logic(self) -> None:
         self._logic_rev += 1
 
+    @_mutating("assert_relation")
     def assert_relation(
         self,
         src: str,
@@ -437,6 +617,7 @@ class MemoryPalace:
 
     # ---------- 自我叙事 ----------
 
+    @_mutating("tell")
     def tell(self) -> NarrativeRevision:
         """让系统把此刻的自己讲一遍，并如实交出它放下了什么。"""
         with self._lock:
@@ -516,6 +697,7 @@ class MemoryPalace:
             self.semantics.sync(self.graph)
             return self.semantics.explain(text)
 
+    @_mutating("age")
     def age(self, name: str, days: float) -> MemoryNode | None:
         """把某条记忆的最后访问时间往回拨（管理/测试用）。"""
         with self._lock:
@@ -524,6 +706,7 @@ class MemoryPalace:
                 node.last_accessed -= days * DAY
             return node
 
+    @_mutating("pin")
     def pin(self, name: str, pinned: bool = True) -> MemoryNode | None:
         """钉死 / 解钉。钉死 = 不衰减、不参与自动遗忘，只能在解钉后才会被放手。
 
@@ -541,6 +724,7 @@ class MemoryPalace:
             self._maybe_save()
             return node
 
+    @_mutating("promote")
     def promote(self, name: str, to: str = GLOBAL) -> MemoryNode | None:
         """把一条记忆提升为跨项目（或改成指定作用域）。
 
@@ -568,6 +752,7 @@ class MemoryPalace:
             counts[node.scope] = counts.get(node.scope, 0) + 1
         return dict(sorted(counts.items(), key=lambda kv: (-kv[1], kv[0])))
 
+    @_mutating("drop")
     def drop(self, name: str, reason: str = "user_requested") -> bool:
         """显式丢弃一条记忆（人要求的删除，不是系统判的遗忘）。
 
@@ -655,6 +840,8 @@ class MemoryPalace:
         默认只返回现在有效的：一条已经被取代的旧偏好，不该和新的并排出现。
         """
         with self._lock:
+            if self._txn_depth == 0:
+                self.refresh()
             now = self.now()
             moment = now if as_of is None else float(as_of)
             retrieval = "names"
@@ -762,6 +949,7 @@ class MemoryPalace:
             self._maybe_save()
             return hits
 
+    @_mutating("observe_style")
     def observe_style(
         self,
         key: str,
@@ -787,6 +975,7 @@ class MemoryPalace:
         with self._lock:
             return [a.to_dict() for a in self.style.adjudication_log[-limit:]]
 
+    @_mutating("pin_style")
     def pin_style(self, key: str, statement: str = "") -> None:
         """人工裁决入口：钉死一条，系统据此抑制与它对立的条目。证据不动。"""
         with self._lock:
@@ -798,6 +987,7 @@ class MemoryPalace:
 
     # ---------- 基础人格：宪法层，系统只读 ----------
 
+    @_mutating("found")
     def found(
         self,
         traits: dict[str, dict[str, Any]] | None = None,
@@ -866,6 +1056,7 @@ class MemoryPalace:
             self._maybe_save()
             return foundation
 
+    @_mutating("amend_foundation")
     def amend_foundation(
         self,
         reason: str,
@@ -959,6 +1150,7 @@ class MemoryPalace:
 
     # ---------- 人格：逐步构筑 ----------
 
+    @_mutating("observe_trait")
     def observe_trait(
         self, key: str, signal: float, weight: float = 1.0
     ) -> dict[str, Any]:
@@ -986,6 +1178,7 @@ class MemoryPalace:
 
     # ---------- 人设：建立、完善、变更 ----------
 
+    @_mutating("define_persona")
     def define_persona(
         self,
         key: str,
@@ -1023,6 +1216,7 @@ class MemoryPalace:
             self._maybe_save()
             return persona
 
+    @_mutating("activate_persona")
     def activate_persona(
         self, key: str, reason: str = "", author: str = "user"
     ) -> PersonaRevision:
@@ -1034,6 +1228,7 @@ class MemoryPalace:
             self._maybe_save()
             return revision
 
+    @_mutating("rollback_persona")
     def rollback_persona(self, rev: int, author: str = "user") -> PersonaRevision:
         with self._lock:
             now = self.now()
@@ -1346,24 +1541,28 @@ class MemoryPalace:
 
     # ---------- 对外引擎入口 ----------
 
+    @_mutating("consolidate")
     def consolidate(self) -> ConsolidationResult:
         with self._lock:
             result = self._consolidate_unlocked(self.now())
             self._maybe_save()
             return result
 
+    @_mutating("gc")
     def gc(self) -> list[str]:
         with self._lock:
             victims = self._gc_unlocked(self.now())
             self._maybe_save()
             return victims
 
+    @_mutating("reflect")
     def reflect(self) -> ReflectionReport:
         with self._lock:
             report = self._reflect_unlocked(self.now())
             self._maybe_save()
             return report
 
+    @_mutating("self_correct")
     def self_correct(self) -> dict[str, Any]:
         """手动触发一次自修正。只动白名单内的派生参数，基座与人设一律不碰。"""
         with self._lock:
@@ -1395,6 +1594,7 @@ class MemoryPalace:
         with self._lock:
             return self.memory.describe(self.graph)
 
+    @_mutating("run_cycle")
     def run_cycle(self) -> dict[str, Any]:
         """一轮完整的认知代谢。返回摘要，不抛异常吞状态。"""
         with self._lock:
@@ -1451,6 +1651,7 @@ class MemoryPalace:
                 "report": report.to_dict(),
             }
 
+    @_mutating("restore")
     def restore(self, name: str) -> MemoryNode | None:
         """误删可回滚：从墓碑复活，并给记忆一次完整的重生权重。"""
         with self._lock:
@@ -1468,6 +1669,7 @@ class MemoryPalace:
             self._maybe_save()
             return node
 
+    @_mutating("apply_suggestion")
     def apply_suggestion(self, param: str, value: Any) -> Any:
         """显式采纳反思建议。三个引擎共享同一 config 对象，改一处即全局生效。"""
         with self._lock:
@@ -1489,6 +1691,8 @@ class MemoryPalace:
 
     def snapshot(self) -> dict[str, Any]:
         with self._lock:
+            if self._txn_depth == 0:
+                self.refresh()
             now = self.now()
             graph_nodes = self.graph.all_nodes()
             tiers = Counter(n.tier for n in graph_nodes)
@@ -1562,14 +1766,10 @@ class MemoryPalace:
                 "last_report": self.last_report,
             }
 
-    def _save_unlocked(self, path: str | None) -> None:
-        if not path:
-            raise ValueError("未指定持久化路径")
-        state = {
-            "version": STATE_VERSION,
-            "saved_at": self.now(),
+    def _blobs(self) -> dict[str, Any]:
+        """小体积的引擎状态：整体替换，不做行级差分（它们本来就是整体对象）。"""
+        return {
             "config": self._config.to_dict(),
-            "graph": self.graph.to_dict(),
             "logic": self.logic.to_dict(),
             "style": self.style.to_dict(),
             "narrative": self.narrative.to_dict(),
@@ -1577,17 +1777,105 @@ class MemoryPalace:
             "personality": self.personality.to_dict(),
             "persona": self.persona.to_dict(),
             "selfcorrect": self.corrector.to_dict(),
-            "events": [e.to_dict() for e in self.events],
-            "tombstone": [n.to_dict() for n in self.tombstone.values()],
             "last_report": self.last_report,
         }
-        atomic_write_json(path, state)
-        self._path = path
 
-    def save(self, path: str | None = None) -> str:
+    def _state_payload(self) -> dict[str, Any]:
+        """完整快照（JSON 后端、导出、备份用）。"""
+        payload = self._blobs()
+        payload["version"] = STATE_VERSION
+        payload["saved_at"] = self.now()
+        payload["graph"] = self.graph.to_dict()
+        payload["events"] = [e.to_dict() for e in self.events]
+        payload["tombstone"] = [n.to_dict() for n in self.tombstone.values()]
+        return payload
+
+    def _delta_payload(self) -> dict[str, Any]:
+        """增量提交：只带「自上次落盘以来变过的」节点与事件。
+
+        为什么值得单独一条路径：改一条记忆却序列化整个库，是「扩展性」这句话
+        在实现层面的真实含义。这里只把脏节点交给 store，其余行一个字节都不碰。
+        """
+        dirty: list[dict[str, Any]] = []
+        for node in self.graph.all_nodes():
+            if getattr(node, "_dirty", True) or node.name not in self._persisted_nodes:
+                dirty.append(node.to_dict())
+        current = set(self.graph.nodes())
+        removed = sorted(self._persisted_nodes - current)
+        if len(self.events) >= self._event_cursor:
+            fresh_events = self.events[self._event_cursor :]
+        else:
+            # 事件被 trim 过，游标失效：整段重发，靠 (ts,kind) 唯一索引去重
+            fresh_events = list(self.events)
+        edges = (
+            [[a, b, e.to_dict()] for a, b, e in self.graph.edges()]
+            if getattr(self.graph, "_edge_dirty", True) or removed
+            else None
+        )
+        return {
+            "version": STATE_VERSION,
+            "saved_at": self.now(),
+            "blobs": self._blobs(),
+            "nodes": dirty,
+            "removed": removed,
+            "edges": edges,
+            "events": [e.to_dict() for e in fresh_events],
+            "tombstone": [n.to_dict() for n in self.tombstone.values()],
+        }
+
+    def _after_persist(self) -> None:
+        """提交成功后才更新游标与脏标记 —— 顺序反了就会「以为存过了」。"""
+        self._persisted_nodes = set(self.graph.nodes())
+        self._event_cursor = len(self.events)
+        for node in self.graph.all_nodes():
+            if getattr(node, "_dirty", False):
+                node._dirty = False
+        self.graph._edge_dirty = False
+
+    def _save_unlocked(self, path: str | None = None, reason: str = "save") -> bool:
+        """返回「是否已持久化」。"""
+        target = path or self._path
+        if not target:
+            raise ValueError("未指定持久化路径")
+        if self._store is not None and os.path.abspath(target) == self._store.path:
+            if getattr(self._store, "supports_delta", False):
+                result = self._store.save(
+                    self._delta_payload(),
+                    reason=reason,
+                    delta=True,
+                    base_revision=self.revision,
+                )
+            else:
+                result = self._store.save(self._state_payload(), reason=reason)
+            self.revision = result.revision
+            self.state_id = result.state_id
+            self.last_save_result = result.to_dict()
+            if result.rebased:
+                self.conflict_count += result.rebased
+            self._after_persist()
+            self._path = target
+            return result.durable
+        # 写到别的路径 = 复制一份库到那儿（`save as`），**不切换**当前库。
+        # 切换的语义会让「拿一份副本来对比」顺手把主库的写入路径也改掉 ——
+        # 之后所有自动保存都写进副本，主库从此不再更新，而没有任何报错。
+        copy = open_store(target, backend=self._config.backend)
+        copy.save(self._state_payload(), reason="copy")
+        if hasattr(copy, "close"):
+            copy.close()  # type: ignore[attr-defined]
+        return True
+
+    def save(self, path: str | None = None, reason: str = "save") -> str:
+        """显式落盘。
+
+        注意：它写的是**内存里现在这份**，不会先跟磁盘合并。
+        多进程同时改同一个库时请用 autosave=True —— 那样每次修改都在事务里提交
+        （先重载、再改、再写），才不会把别人的提交整段盖掉。
+        """
         with self._lock:
             target = path or self._path
-            self._save_unlocked(target)
+            if not target:
+                raise ValueError("未指定持久化路径")
+            self._save_unlocked(target, reason=reason)
             return target
 
     REQUIRED_STATE_KEYS: tuple[str, ...] = (
@@ -1626,10 +1914,29 @@ class MemoryPalace:
     def _load_unlocked(
         self, path: str, config_override: PalaceConfig | None = None
     ) -> None:
-        state = read_json(path)
-        self._validate_state(state, path)
-        # 严格校验只对「本版快照」生效：v4/v5 快照缺的是本版新增字段，
-        # 用默认值补齐才是正确的迁移方向；反过来，v6 快照里出现未知字段
+        if self._store is not None and os.path.abspath(path) == self._store.path:
+            try:
+                result = self._store.load(validate=lambda s: self._validate_state(s, path))
+            except StoreEmpty:
+                # 库文件在、但还没有任何提交（另一个进程刚建好）。这就是空库，
+                # 不是损坏 —— 保持默认状态，第一笔写入会把它初始化。
+                return
+            state = result.payload
+            self.revision = result.revision
+            self.state_id = result.state_id
+            self.recovered = result.recovered
+        else:
+            state = read_json(path)
+            self._validate_state(state, path)
+            if isinstance(state.get("payload"), dict):  # 别人递来的信封格式
+                state = state["payload"]
+        self._restore_state(state, path, config_override)
+
+    def _restore_state(
+        self, state: dict[str, Any], path: str, config_override: PalaceConfig | None
+    ) -> None:
+        # 严格校验只对「本版快照」生效：v4/v5/v6 快照缺的是本版新增字段，
+        # 用默认值补齐才是正确的迁移方向；反过来，v7 快照里出现未知字段
         # 说明是别的版本写的，必须当场拒绝 —— 两种错误不能混为一谈。
         cfg = PalaceConfig.from_dict(
             state["config"], strict=int(state.get("version", 0)) >= STATE_VERSION
@@ -1647,7 +1954,10 @@ class MemoryPalace:
         self.consolidation = ConsolidationEngine(
             cfg, self._summarizer, vector_lookup=self._vector_of
         )
-        self.reflection = ReflectionEngine(cfg, reflector=self.reflection.reflector)
+        if getattr(cfg, "llm_provider", "") and self.llm is None:
+            self.llm = make_reflector(cfg)
+        hook = self.llm.as_callable() if self.llm is not None else self.reflection.reflector
+        self.reflection = ReflectionEngine(cfg, reflector=hook)
         self.affect = AffectEngine(cfg)
         self.value = ValueModel(cfg)
         self.narrative = NarrativeEngine.from_dict(state.get("narrative"), cfg)
@@ -1672,6 +1982,12 @@ class MemoryPalace:
         self.tombstone = {n.name: n for n in restored}
         self.last_report = state["last_report"]
         self._path = path
+        # 刚从磁盘读上来的东西不是「脏」的 —— 不重置的话，下一次 save 会把整个库再写一遍。
+        self._persisted_nodes = set(self.graph.nodes())
+        self._event_cursor = len(self.events)
+        for node in self.graph.all_nodes():
+            node._dirty = False
+        self.graph._edge_dirty = False
 
     def load(self, path: str | None = None) -> None:
         with self._lock:
@@ -1683,3 +1999,14 @@ class MemoryPalace:
     def __exit__(self, exc_type, exc, tb) -> None:
         if self._path:
             self.save()
+        self.close()
+
+    def close(self) -> None:
+        """释放存储句柄。
+
+        Windows 上必须显式关：SQLite 连接不关，文件就被占用，
+        删库/搬库/测试清理都会报 PermissionError —— 而错误出现在**下一步**，
+        离真正的原因很远。
+        """
+        if self._store is not None and hasattr(self._store, "close"):
+            self._store.close()  # type: ignore[attr-defined]

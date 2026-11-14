@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "memory-palace"
-version = "0.9.3"
-description = "A dependency-free memory lifecycle: idempotent decay, affect, consolidation, value-based forgetting, self-narrative and bounded self-correction."
+version = "0.10.0"
+description = "A dependency-free memory lifecycle with a SQLite/WAL backend, row-level writes, multi-process safety, pluggable embeddings, component benchmarks and bounded self-correction."
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
@@ -17,10 +17,12 @@ keywords = [
     "forgetting-curve",
     "self-narrative",
     "python",
+    "sqlite",
+    "durable",
     "zero-dependencies",
 ]
 classifiers = [
-    "Development Status :: 3 - Alpha",
+    "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
     "Intended Audience :: Science/Research",
     "Programming Language :: Python :: 3",

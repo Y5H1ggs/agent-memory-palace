@@ -1,6 +1,5 @@
 {
-  "version": 6,
-  "saved_at": 1794533014.0116167,
+  "revision": 1,
   "config": {
     "forget_w": 0.02,
     "access_gain": 0.5,
@@ -32,7 +31,7 @@
     "history_retention_days": 90.0,
     "dedupe_similarity": 0.92,
     "dedupe_length_ratio": 0.85,
-    "abstain_semantic_floor": 0.3,
+    "abstain_semantic_floor": 0.2,
     "affect_arousal_half_life_days": 3.0,
     "affect_valence_half_life_days": 10.0,
     "affect_stability_gain": 1.8,
@@ -44,7 +43,7 @@
     "importance_w_affect": 0.9,
     "importance_w_support": 0.8,
     "importance_w_central": 1.1,
-    "importance_forget": 0.084,
+    "importance_forget": 0.12,
     "grasp_budget": 4.0,
     "grasp_gain": 0.3,
     "narrative_max_nodes": 9,
@@ -78,1111 +77,29 @@
     "selfcorrect_max_reverts": 2,
     "selfcorrect_effect_min": 0.05,
     "selfcorrect_max_extensions": 2,
-    "selfcorrect_settle_ratio": 0.5
-  },
-  "graph": {
-    "nodes": [
-      {
-        "name": "rule:no-fabricate",
-        "content": "不要编造版本号或 API 参数，不确定就说不确定",
-        "tier": "core",
-        "tags": [
-          "硬规则",
-          "诚实"
-        ],
-        "created_at": 1789349014.0116167,
-        "last_accessed": 1794187414.0116167,
-        "base_weight": 8.5,
-        "access_count": 16,
-        "pinned": true,
-        "origin": "external",
-        "consolidated_from": [],
-        "consolidated_into": null,
-        "fingerprint": null,
-        "revision": 0,
-        "affect": {
-          "valence": 0.0,
-          "arousal": 0.0,
-          "peak_arousal": 0.0,
-          "felt_at": 1789349014.0116167,
-          "arousal_half_life": 3.0,
-          "valence_half_life": 10.0,
-          "source": "neutral",
-          "drivers": []
-        },
-        "speech": {
-          "act": "prohibition",
-          "force": 0.9,
-          "register": "chat",
-          "motive": "",
-          "hedged": false,
-          "confidence": 0.55,
-          "evidence": [
-            "不要"
-          ]
-        },
-        "narrative_hits": 3,
-        "narrative_heat": 0.330078125,
-        "narrated_at": 1794533014.0116167,
-        "kind": "identity",
-        "scope": "proj:Y5H1ggs/memory-palace",
-        "valid_from": 0.0,
-        "valid_to": null,
-        "superseded_by": "",
-        "supersedes": []
-      },
-      {
-        "name": "rule:schema",
-        "content": "改数据结构必须同时升状态版本并写迁移，否则旧快照会加载失败",
-        "tier": "core",
-        "tags": [
-          "硬规则",
-          "工程"
-        ],
-        "created_at": 1789349014.0116167,
-        "last_accessed": 1794187414.0116167,
-        "base_weight": 8.5,
-        "access_count": 16,
-        "pinned": true,
-        "origin": "external",
-        "consolidated_from": [],
-        "consolidated_into": null,
-        "fingerprint": null,
-        "revision": 0,
-        "affect": {
-          "valence": -0.35,
-          "arousal": 0.7,
-          "peak_arousal": 0.7,
-          "felt_at": 1789349014.0116167,
-          "arousal_half_life": 3.0,
-          "valence_half_life": 10.0,
-          "source": "text",
-          "drivers": [
-            "失败"
-          ]
-        },
-        "speech": {
-          "act": "directive",
-          "force": 1.0,
-          "register": "chat",
-          "motive": "",
-          "hedged": false,
-          "confidence": 0.75,
-          "evidence": [
-            "必须"
-          ]
-        },
-        "narrative_hits": 3,
-        "narrative_heat": 0.330078125,
-        "narrated_at": 1794533014.0116167,
-        "kind": "identity",
-        "scope": "proj:Y5H1ggs/memory-palace",
-        "valid_from": 0.0,
-        "valid_to": null,
-        "superseded_by": "",
-        "supersedes": []
-      },
-      {
-        "name": "rule:test-first",
-        "content": "说「完成」之前先跑一遍自测，绿了才算完成",
-        "tier": "core",
-        "tags": [
-          "硬规则",
-          "工程"
-        ],
-        "created_at": 1789349014.0116167,
-        "last_accessed": 1794187414.0116167,
-        "base_weight": 8.5,
-        "access_count": 16,
-        "pinned": true,
-        "origin": "external",
-        "consolidated_from": [],
-        "consolidated_into": null,
-        "fingerprint": null,
-        "revision": 0,
-        "affect": {
-          "valence": -0.25,
-          "arousal": 0.65,
-          "peak_arousal": 0.65,
-          "felt_at": 1794533014.0116167,
-          "arousal_half_life": 3.0,
-          "valence_half_life": 10.0,
-          "source": "outcome",
-          "drivers": [
-            "结果:contradicted",
-            "被反证推翻"
-          ]
-        },
-        "speech": {
-          "act": "statement",
-          "force": 0.5,
-          "register": "chat",
-          "motive": "",
-          "hedged": false,
-          "confidence": 0.3,
-          "evidence": []
-        },
-        "narrative_hits": 3,
-        "narrative_heat": 0.330078125,
-        "narrated_at": 1794533014.0116167,
-        "kind": "identity",
-        "scope": "proj:Y5H1ggs/memory-palace",
-        "valid_from": 0.0,
-        "valid_to": null,
-        "superseded_by": "",
-        "supersedes": []
-      },
-      {
-        "name": "rule:no-emoji",
-        "content": "正式文档不用 emoji 装饰",
-        "tier": "fact",
-        "tags": [
-          "硬规则",
-          "格式"
-        ],
-        "created_at": 1789349014.0116167,
-        "last_accessed": 1794187414.0116167,
-        "base_weight": 10.0,
-        "access_count": 25,
-        "pinned": true,
-        "origin": "external",
-        "consolidated_from": [],
-        "consolidated_into": null,
-        "fingerprint": null,
-        "revision": 0,
-        "affect": {
-          "valence": 0.0,
-          "arousal": 0.0,
-          "peak_arousal": 0.0,
-          "felt_at": 1789349014.0116167,
-          "arousal_half_life": 3.0,
-          "valence_half_life": 10.0,
-          "source": "neutral",
-          "drivers": []
-        },
-        "speech": {
-          "act": "statement",
-          "force": 0.5,
-          "register": "chat",
-          "motive": "",
-          "hedged": false,
-          "confidence": 0.3,
-          "evidence": []
-        },
-        "narrative_hits": 3,
-        "narrative_heat": 0.330078125,
-        "narrated_at": 1794533014.0116167,
-        "kind": "identity",
-        "scope": "proj:Y5H1ggs/memory-palace",
-        "valid_from": 0.0,
-        "valid_to": null,
-        "superseded_by": "",
-        "supersedes": []
-      },
-      {
-        "name": "pref:table",
-        "content": "能用表格就不用段落",
-        "tier": "fact",
-        "tags": [
-          "偏好",
-          "格式"
-        ],
-        "created_at": 1789349014.0116167,
-        "last_accessed": 1794533014.0116167,
-        "base_weight": 6.194584273172343,
-        "access_count": 27,
-        "pinned": false,
-        "origin": "external",
-        "consolidated_from": [],
-        "consolidated_into": null,
-        "fingerprint": null,
-        "revision": 0,
-        "affect": {
-          "valence": 0.0,
-          "arousal": 0.0,
-          "peak_arousal": 0.0,
-          "felt_at": 1789349014.0116167,
-          "arousal_half_life": 3.0,
-          "valence_half_life": 10.0,
-          "source": "neutral",
-          "drivers": []
-        },
-        "speech": {
-          "act": "statement",
-          "force": 0.5,
-          "register": "chat",
-          "motive": "",
-          "hedged": false,
-          "confidence": 0.3,
-          "evidence": []
-        },
-        "narrative_hits": 3,
-        "narrative_heat": 0.330078125,
-        "narrated_at": 1794533014.0116167,
-        "kind": "semantic",
-        "scope": "proj:Y5H1ggs/memory-palace",
-        "valid_from": 0.0,
-        "valid_to": null,
-        "superseded_by": "",
-        "supersedes": []
-      },
-      {
-        "name": "pref:concise",
-        "content": "先给结论再给理由，不要铺垫",
-        "tier": "fact",
-        "tags": [
-          "偏好",
-          "格式"
-        ],
-        "created_at": 1789349014.0116167,
-        "last_accessed": 1794533014.0116167,
-        "base_weight": 6.194584273172343,
-        "access_count": 27,
-        "pinned": false,
-        "origin": "external",
-        "consolidated_from": [],
-        "consolidated_into": null,
-        "fingerprint": null,
-        "revision": 0,
-        "affect": {
-          "valence": 0.0,
-          "arousal": 0.0,
-          "peak_arousal": 0.0,
-          "felt_at": 1789349014.0116167,
-          "arousal_half_life": 3.0,
-          "valence_half_life": 10.0,
-          "source": "neutral",
-          "drivers": []
-        },
-        "speech": {
-          "act": "prohibition",
-          "force": 0.9,
-          "register": "chat",
-          "motive": "",
-          "hedged": false,
-          "confidence": 0.55,
-          "evidence": [
-            "不要"
-          ]
-        },
-        "narrative_hits": 3,
-        "narrative_heat": 0.330078125,
-        "narrated_at": 1794533014.0116167,
-        "kind": "semantic",
-        "scope": "proj:Y5H1ggs/memory-palace",
-        "valid_from": 0.0,
-        "valid_to": null,
-        "superseded_by": "",
-        "supersedes": []
-      },
-      {
-        "name": "d018:10",
-        "content": "把配置项逐字段对拍了一遍，发现两个字段被静默吞掉",
-        "tier": "trace",
-        "tags": [
-          "复盘",
-          "教训"
-        ],
-        "created_at": 1790904214.0116167,
-        "last_accessed": 1794101014.0116167,
-        "base_weight": 0.6464504244450315,
-        "access_count": 9,
-        "pinned": false,
-        "origin": "external",
-        "consolidated_from": [],
-        "consolidated_into": "core:e90f9cad",
-        "fingerprint": null,
-        "revision": 0,
-        "affect": {
-          "valence": 0.165,
-          "arousal": 0.55,
-          "peak_arousal": 0.55,
-          "felt_at": 1790904214.0116167,
-          "arousal_half_life": 3.0,
-          "valence_half_life": 10.0,
-          "source": "explicit",
-          "drivers": []
-        },
-        "speech": {
-          "act": "statement",
-          "force": 0.5,
-          "register": "chat",
-          "motive": "",
-          "hedged": false,
-          "confidence": 0.3,
-          "evidence": []
-        },
-        "narrative_hits": 0,
-        "narrative_heat": 0.0,
-        "narrated_at": 0.0,
-        "kind": "episodic",
-        "scope": "proj:Y5H1ggs/memory-palace",
-        "valid_from": 0.0,
-        "valid_to": null,
-        "superseded_by": "",
-        "supersedes": []
-      },
-      {
-        "name": "d020:11",
-        "content": "先写失败用例再修，比盯着代码猜快得多",
-        "tier": "event",
-        "tags": [
-          "方法",
-          "习惯"
-        ],
-        "created_at": 1791077014.0116167,
-        "last_accessed": 1791077014.0116167,
-        "base_weight": 1.0,
-        "access_count": 1,
-        "pinned": false,
-        "origin": "external",
-        "consolidated_from": [],
-        "consolidated_into": null,
-        "fingerprint": null,
-        "revision": 0,
-        "affect": {
-          "valence": 0.135,
-          "arousal": 0.45,
-          "peak_arousal": 0.45,
-          "felt_at": 1791077014.0116167,
-          "arousal_half_life": 3.0,
-          "valence_half_life": 10.0,
-          "source": "explicit",
-          "drivers": []
-        },
-        "speech": {
-          "act": "statement",
-          "force": 0.5,
-          "register": "coding",
-          "motive": "",
-          "hedged": false,
-          "confidence": 0.3,
-          "evidence": []
-        },
-        "narrative_hits": 0,
-        "narrative_heat": 0.0,
-        "narrated_at": 0.0,
-        "kind": "procedural",
-        "scope": "proj:Y5H1ggs/memory-palace",
-        "valid_from": 0.0,
-        "valid_to": null,
-        "superseded_by": "",
-        "supersedes": []
-      },
-      {
-        "name": "d022:12",
-        "content": "给每个结论都标了概率，读者反馈说清楚多了",
-        "tier": "event",
-        "tags": [
-          "方法",
-          "沟通"
-        ],
-        "created_at": 1791249814.0116167,
-        "last_accessed": 1791249814.0116167,
-        "base_weight": 1.0,
-        "access_count": 1,
-        "pinned": false,
-        "origin": "external",
-        "consolidated_from": [],
-        "consolidated_into": null,
-        "fingerprint": null,
-        "revision": 0,
-        "affect": {
-          "valence": 0.12,
-          "arousal": 0.4,
-          "peak_arousal": 0.4,
-          "felt_at": 1791249814.0116167,
-          "arousal_half_life": 3.0,
-          "valence_half_life": 10.0,
-          "source": "explicit",
-          "drivers": []
-        },
-        "speech": {
-          "act": "statement",
-          "force": 0.5,
-          "register": "chat",
-          "motive": "",
-          "hedged": false,
-          "confidence": 0.3,
-          "evidence": []
-        },
-        "narrative_hits": 0,
-        "narrative_heat": 0.0,
-        "narrated_at": 0.0,
-        "kind": "procedural",
-        "scope": "proj:Y5H1ggs/memory-palace",
-        "valid_from": 0.0,
-        "valid_to": null,
-        "superseded_by": "",
-        "supersedes": []
-      },
-      {
-        "name": "d024:13",
-        "content": "把「查不到」和「没有」分开说，避免了两次误判",
-        "tier": "event",
-        "tags": [
-          "方法",
-          "诚实"
-        ],
-        "created_at": 1791422614.0116167,
-        "last_accessed": 1791422614.0116167,
-        "base_weight": 1.0,
-        "access_count": 1,
-        "pinned": false,
-        "origin": "external",
-        "consolidated_from": [],
-        "consolidated_into": null,
-        "fingerprint": null,
-        "revision": 0,
-        "affect": {
-          "valence": 0.15,
-          "arousal": 0.5,
-          "peak_arousal": 0.5,
-          "felt_at": 1791422614.0116167,
-          "arousal_half_life": 3.0,
-          "valence_half_life": 10.0,
-          "source": "explicit",
-          "drivers": []
-        },
-        "speech": {
-          "act": "statement",
-          "force": 0.5,
-          "register": "chat",
-          "motive": "",
-          "hedged": false,
-          "confidence": 0.3,
-          "evidence": []
-        },
-        "narrative_hits": 1,
-        "narrative_heat": 0.125,
-        "narrated_at": 1791941014.0116167,
-        "kind": "procedural",
-        "scope": "proj:Y5H1ggs/memory-palace",
-        "valid_from": 0.0,
-        "valid_to": null,
-        "superseded_by": "",
-        "supersedes": []
-      },
-      {
-        "name": "core:e90f9cad",
-        "content": "[沉淀] 主题=复盘、教训（交集）| 来源=4条 | 要点：CI 在 Windows 上因为控制台编码炸了，排查两小时；把配置项逐字段对拍了一遍，发现两个字段被静默吞掉；测试用例自己写错了：用常数学习率制造「无惯性」，结果测不出来；把并发测试的断言写成「没报错」，等于没测",
-        "tier": "core",
-        "tags": [
-          "复盘",
-          "教训"
-        ],
-        "created_at": 1791941014.0116167,
-        "last_accessed": 1794533014.0116167,
-        "base_weight": 3.633343014295081,
-        "access_count": 11,
-        "pinned": false,
-        "origin": "consolidated",
-        "consolidated_from": [
-          "d012:7",
-          "d018:10",
-          "d016:9",
-          "d014:8"
-        ],
-        "consolidated_into": null,
-        "fingerprint": "c:e90f9cad4dcf",
-        "revision": 0,
-        "affect": {
-          "valence": 0.0,
-          "arousal": 0.0,
-          "peak_arousal": 0.0,
-          "felt_at": 0.0,
-          "arousal_half_life": 3.0,
-          "valence_half_life": 10.0,
-          "source": "neutral",
-          "drivers": []
-        },
-        "speech": {
-          "act": "statement",
-          "force": 0.5,
-          "register": "chat",
-          "motive": "",
-          "hedged": false,
-          "confidence": 0.4,
-          "evidence": []
-        },
-        "narrative_hits": 3,
-        "narrative_heat": 0.330078125,
-        "narrated_at": 1794533014.0116167,
-        "kind": "semantic",
-        "scope": "proj:Y5H1ggs/memory-palace",
-        "valid_from": 0.0,
-        "valid_to": null,
-        "superseded_by": "",
-        "supersedes": []
-      },
-      {
-        "name": "d040:21",
-        "content": "搜了半小时才发现官方文档里就写着",
-        "tier": "event",
-        "tags": [
-          "踩坑",
-          "教训"
-        ],
-        "created_at": 1792805014.0116167,
-        "last_accessed": 1794101014.0116167,
-        "base_weight": 0.9683219784857044,
-        "access_count": 5,
-        "pinned": false,
-        "origin": "external",
-        "consolidated_from": [],
-        "consolidated_into": null,
-        "fingerprint": null,
-        "revision": 0,
-        "affect": {
-          "valence": -0.3,
-          "arousal": 0.6,
-          "peak_arousal": 0.6,
-          "felt_at": 1792805014.0116167,
-          "arousal_half_life": 3.0,
-          "valence_half_life": 10.0,
-          "source": "explicit",
-          "drivers": []
-        },
-        "speech": {
-          "act": "statement",
-          "force": 0.5,
-          "register": "chat",
-          "motive": "",
-          "hedged": false,
-          "confidence": 0.3,
-          "evidence": []
-        },
-        "narrative_hits": 1,
-        "narrative_heat": 0.125,
-        "narrated_at": 1793237014.0116167,
-        "kind": "episodic",
-        "scope": "proj:Y5H1ggs/memory-palace",
-        "valid_from": 0.0,
-        "valid_to": null,
-        "superseded_by": "",
-        "supersedes": []
-      },
-      {
-        "name": "d044:23",
-        "content": "漏了一个空输入的分支，整个批处理挂掉",
-        "tier": "event",
-        "tags": [
-          "踩坑",
-          "教训"
-        ],
-        "created_at": 1793150614.0116167,
-        "last_accessed": 1794101014.0116167,
-        "base_weight": 0.9804177334166854,
-        "access_count": 4,
-        "pinned": false,
-        "origin": "external",
-        "consolidated_from": [],
-        "consolidated_into": null,
-        "fingerprint": null,
-        "revision": 0,
-        "affect": {
-          "valence": -0.35,
-          "arousal": 0.7,
-          "peak_arousal": 0.7,
-          "felt_at": 1793150614.0116167,
-          "arousal_half_life": 3.0,
-          "valence_half_life": 10.0,
-          "source": "explicit",
-          "drivers": []
-        },
-        "speech": {
-          "act": "statement",
-          "force": 0.5,
-          "register": "chat",
-          "motive": "",
-          "hedged": false,
-          "confidence": 0.3,
-          "evidence": []
-        },
-        "narrative_hits": 2,
-        "narrative_heat": 0.234375,
-        "narrated_at": 1794533014.0116167,
-        "kind": "episodic",
-        "scope": "proj:Y5H1ggs/memory-palace",
-        "valid_from": 0.0,
-        "valid_to": null,
-        "superseded_by": "",
-        "supersedes": []
-      },
-      {
-        "name": "d046:24",
-        "content": "给定时任务加了幂等，重跑不会再重复写入",
-        "tier": "event",
-        "tags": [
-          "工程",
-          "方法"
-        ],
-        "created_at": 1793323414.0116167,
-        "last_accessed": 1793323414.0116167,
-        "base_weight": 1.0,
-        "access_count": 1,
-        "pinned": false,
-        "origin": "external",
-        "consolidated_from": [],
-        "consolidated_into": null,
-        "fingerprint": null,
-        "revision": 0,
-        "affect": {
-          "valence": 0.15,
-          "arousal": 0.5,
-          "peak_arousal": 0.5,
-          "felt_at": 1793323414.0116167,
-          "arousal_half_life": 3.0,
-          "valence_half_life": 10.0,
-          "source": "explicit",
-          "drivers": []
-        },
-        "speech": {
-          "act": "statement",
-          "force": 0.5,
-          "register": "chat",
-          "motive": "",
-          "hedged": false,
-          "confidence": 0.3,
-          "evidence": []
-        },
-        "narrative_hits": 0,
-        "narrative_heat": 0.0,
-        "narrated_at": 0.0,
-        "kind": "procedural",
-        "scope": "proj:Y5H1ggs/memory-palace",
-        "valid_from": 0.0,
-        "valid_to": null,
-        "superseded_by": "",
-        "supersedes": []
-      },
-      {
-        "name": "d050:26",
-        "content": "用户说「别解释了，直接给方案」，记下来",
-        "tier": "event",
-        "tags": [
-          "偏好",
-          "沟通"
-        ],
-        "created_at": 1793669014.0116167,
-        "last_accessed": 1793669014.0116167,
-        "base_weight": 1.0,
-        "access_count": 1,
-        "pinned": false,
-        "origin": "external",
-        "consolidated_from": [],
-        "consolidated_into": null,
-        "fingerprint": null,
-        "revision": 0,
-        "affect": {
-          "valence": 0.12,
-          "arousal": 0.4,
-          "peak_arousal": 0.4,
-          "felt_at": 1793669014.0116167,
-          "arousal_half_life": 3.0,
-          "valence_half_life": 10.0,
-          "source": "explicit",
-          "drivers": []
-        },
-        "speech": {
-          "act": "statement",
-          "force": 0.5,
-          "register": "chat",
-          "motive": "",
-          "hedged": false,
-          "confidence": 0.3,
-          "evidence": []
-        },
-        "narrative_hits": 0,
-        "narrative_heat": 0.0,
-        "narrated_at": 0.0,
-        "kind": "episodic",
-        "scope": "proj:Y5H1ggs/memory-palace",
-        "valid_from": 0.0,
-        "valid_to": null,
-        "superseded_by": "",
-        "supersedes": []
-      },
-      {
-        "name": "d052:27",
-        "content": "发现自己在重复解释同一个概念，写成了短文档",
-        "tier": "event",
-        "tags": [
-          "文档",
-          "方法"
-        ],
-        "created_at": 1793841814.0116167,
-        "last_accessed": 1794533014.0116167,
-        "base_weight": 0.9684151940557855,
-        "access_count": 2,
-        "pinned": false,
-        "origin": "external",
-        "consolidated_from": [],
-        "consolidated_into": null,
-        "fingerprint": null,
-        "revision": 0,
-        "affect": {
-          "valence": 0.135,
-          "arousal": 0.45,
-          "peak_arousal": 0.45,
-          "felt_at": 1793841814.0116167,
-          "arousal_half_life": 3.0,
-          "valence_half_life": 10.0,
-          "source": "explicit",
-          "drivers": []
-        },
-        "speech": {
-          "act": "statement",
-          "force": 0.5,
-          "register": "chat",
-          "motive": "",
-          "hedged": false,
-          "confidence": 0.3,
-          "evidence": []
-        },
-        "narrative_hits": 1,
-        "narrative_heat": 0.125,
-        "narrated_at": 1794533014.0116167,
-        "kind": "procedural",
-        "scope": "proj:Y5H1ggs/memory-palace",
-        "valid_from": 0.0,
-        "valid_to": null,
-        "superseded_by": "",
-        "supersedes": []
-      },
-      {
-        "name": "d054:28",
-        "content": "把「不确定」写进结论，反而更容易被信任",
-        "tier": "event",
-        "tags": [
-          "诚实",
-          "沟通"
-        ],
-        "created_at": 1794014614.0116167,
-        "last_accessed": 1794014614.0116167,
-        "base_weight": 1.0,
-        "access_count": 1,
-        "pinned": false,
-        "origin": "external",
-        "consolidated_from": [],
-        "consolidated_into": null,
-        "fingerprint": null,
-        "revision": 0,
-        "affect": {
-          "valence": 0.15,
-          "arousal": 0.5,
-          "peak_arousal": 0.5,
-          "felt_at": 1794014614.0116167,
-          "arousal_half_life": 3.0,
-          "valence_half_life": 10.0,
-          "source": "explicit",
-          "drivers": []
-        },
-        "speech": {
-          "act": "statement",
-          "force": 0.5,
-          "register": "chat",
-          "motive": "",
-          "hedged": false,
-          "confidence": 0.3,
-          "evidence": []
-        },
-        "narrative_hits": 0,
-        "narrative_heat": 0.0,
-        "narrated_at": 0.0,
-        "kind": "episodic",
-        "scope": "proj:Y5H1ggs/memory-palace",
-        "valid_from": 0.0,
-        "valid_to": null,
-        "superseded_by": "",
-        "supersedes": []
-      },
-      {
-        "name": "d056:29",
-        "content": "压测时连接池打满，扩了一倍才稳住",
-        "tier": "event",
-        "tags": [
-          "性能",
-          "工程"
-        ],
-        "created_at": 1794187414.0116167,
-        "last_accessed": 1794187414.0116167,
-        "base_weight": 1.0,
-        "access_count": 1,
-        "pinned": false,
-        "origin": "external",
-        "consolidated_from": [],
-        "consolidated_into": null,
-        "fingerprint": null,
-        "revision": 0,
-        "affect": {
-          "valence": 0.18,
-          "arousal": 0.6,
-          "peak_arousal": 0.6,
-          "felt_at": 1794187414.0116167,
-          "arousal_half_life": 3.0,
-          "valence_half_life": 10.0,
-          "source": "explicit",
-          "drivers": []
-        },
-        "speech": {
-          "act": "statement",
-          "force": 0.5,
-          "register": "chat",
-          "motive": "",
-          "hedged": false,
-          "confidence": 0.3,
-          "evidence": []
-        },
-        "narrative_hits": 0,
-        "narrative_heat": 0.0,
-        "narrated_at": 0.0,
-        "kind": "episodic",
-        "scope": "proj:Y5H1ggs/memory-palace",
-        "valid_from": 0.0,
-        "valid_to": null,
-        "superseded_by": "",
-        "supersedes": []
-      },
-      {
-        "name": "d058:30",
-        "content": "把一次慢查询从 1.2 秒压到 90 毫秒，加了索引",
-        "tier": "event",
-        "tags": [
-          "性能",
-          "工程"
-        ],
-        "created_at": 1794360214.0116167,
-        "last_accessed": 1794360214.0116167,
-        "base_weight": 1.0,
-        "access_count": 1,
-        "pinned": false,
-        "origin": "external",
-        "consolidated_from": [],
-        "consolidated_into": null,
-        "fingerprint": null,
-        "revision": 0,
-        "affect": {
-          "valence": 0.165,
-          "arousal": 0.55,
-          "peak_arousal": 0.55,
-          "felt_at": 1794360214.0116167,
-          "arousal_half_life": 3.0,
-          "valence_half_life": 10.0,
-          "source": "explicit",
-          "drivers": []
-        },
-        "speech": {
-          "act": "statement",
-          "force": 0.5,
-          "register": "chat",
-          "motive": "",
-          "hedged": false,
-          "confidence": 0.3,
-          "evidence": []
-        },
-        "narrative_hits": 0,
-        "narrative_heat": 0.0,
-        "narrated_at": 0.0,
-        "kind": "episodic",
-        "scope": "proj:Y5H1ggs/memory-palace",
-        "valid_from": 0.0,
-        "valid_to": null,
-        "superseded_by": "",
-        "supersedes": []
-      }
-    ],
-    "edges": [
-      [
-        "rule:no-fabricate",
-        "rule:schema",
-        {
-          "weight": 15.0,
-          "coactivations": 15,
-          "last_coactivated": 1794187414.0116167
-        }
-      ],
-      [
-        "rule:no-fabricate",
-        "rule:test-first",
-        {
-          "weight": 15.0,
-          "coactivations": 15,
-          "last_coactivated": 1794187414.0116167
-        }
-      ],
-      [
-        "rule:no-emoji",
-        "rule:no-fabricate",
-        {
-          "weight": 15.0,
-          "coactivations": 15,
-          "last_coactivated": 1794187414.0116167
-        }
-      ],
-      [
-        "pref:table",
-        "rule:no-fabricate",
-        {
-          "weight": 15.0,
-          "coactivations": 15,
-          "last_coactivated": 1794187414.0116167
-        }
-      ],
-      [
-        "pref:concise",
-        "rule:no-fabricate",
-        {
-          "weight": 15.0,
-          "coactivations": 15,
-          "last_coactivated": 1794187414.0116167
-        }
-      ],
-      [
-        "rule:schema",
-        "rule:test-first",
-        {
-          "weight": 15.0,
-          "coactivations": 15,
-          "last_coactivated": 1794187414.0116167
-        }
-      ],
-      [
-        "rule:no-emoji",
-        "rule:schema",
-        {
-          "weight": 15.0,
-          "coactivations": 15,
-          "last_coactivated": 1794187414.0116167
-        }
-      ],
-      [
-        "pref:table",
-        "rule:schema",
-        {
-          "weight": 15.0,
-          "coactivations": 15,
-          "last_coactivated": 1794187414.0116167
-        }
-      ],
-      [
-        "pref:concise",
-        "rule:schema",
-        {
-          "weight": 15.0,
-          "coactivations": 15,
-          "last_coactivated": 1794187414.0116167
-        }
-      ],
-      [
-        "rule:no-emoji",
-        "rule:test-first",
-        {
-          "weight": 15.0,
-          "coactivations": 15,
-          "last_coactivated": 1794187414.0116167
-        }
-      ],
-      [
-        "pref:table",
-        "rule:test-first",
-        {
-          "weight": 15.0,
-          "coactivations": 15,
-          "last_coactivated": 1794187414.0116167
-        }
-      ],
-      [
-        "pref:concise",
-        "rule:test-first",
-        {
-          "weight": 15.0,
-          "coactivations": 15,
-          "last_coactivated": 1794187414.0116167
-        }
-      ],
-      [
-        "pref:table",
-        "rule:no-emoji",
-        {
-          "weight": 24.0,
-          "coactivations": 24,
-          "last_coactivated": 1794187414.0116167
-        }
-      ],
-      [
-        "pref:concise",
-        "rule:no-emoji",
-        {
-          "weight": 24.0,
-          "coactivations": 24,
-          "last_coactivated": 1794187414.0116167
-        }
-      ],
-      [
-        "pref:concise",
-        "pref:table",
-        {
-          "weight": 24.0,
-          "coactivations": 24,
-          "last_coactivated": 1794187414.0116167
-        }
-      ],
-      [
-        "core:e90f9cad",
-        "d018:10",
-        {
-          "weight": 7.0,
-          "coactivations": 6,
-          "last_coactivated": 1794101014.0116167
-        }
-      ],
-      [
-        "d018:10",
-        "d040:21",
-        {
-          "weight": 4.0,
-          "coactivations": 4,
-          "last_coactivated": 1794101014.0116167
-        }
-      ],
-      [
-        "d018:10",
-        "d044:23",
-        {
-          "weight": 3.0,
-          "coactivations": 3,
-          "last_coactivated": 1794101014.0116167
-        }
-      ],
-      [
-        "core:e90f9cad",
-        "d040:21",
-        {
-          "weight": 4.0,
-          "coactivations": 4,
-          "last_coactivated": 1794101014.0116167
-        }
-      ],
-      [
-        "core:e90f9cad",
-        "d044:23",
-        {
-          "weight": 3.0,
-          "coactivations": 3,
-          "last_coactivated": 1794101014.0116167
-        }
-      ],
-      [
-        "d040:21",
-        "d044:23",
-        {
-          "weight": 3.0,
-          "coactivations": 3,
-          "last_coactivated": 1794101014.0116167
-        }
-      ]
-    ]
+    "selfcorrect_settle_ratio": 0.5,
+    "selfcorrect_guard_margin": 0.15,
+    "backend": "auto",
+    "concurrency": "process",
+    "journal_enabled": true,
+    "journal_keep": 32,
+    "lock_timeout": 10.0,
+    "snapshot_every": 50,
+    "verify_checksum": true,
+    "embedding_provider": "",
+    "embedding_dim": 512,
+    "embedding_endpoint": "",
+    "embedding_model": "",
+    "embedding_key_env": "MEMORY_PALACE_EMBED_KEY",
+    "hybrid_weight": 0.45,
+    "llm_provider": "",
+    "llm_endpoint": "",
+    "llm_model": "",
+    "llm_key_env": "MEMORY_PALACE_LLM_KEY",
+    "llm_timeout": 30.0,
+    "llm_temperature": 0.2,
+    "llm_evidence_nodes": 10,
+    "llm_max_chars": 6000
   },
   "logic": {
     "edges": [
@@ -1191,7 +108,7 @@
         "dst": "rule:schema",
         "kind": "entails",
         "strength": 0.8,
-        "since": 1789349014.0116167,
+        "since": 1792808772.9847717,
         "observations": 1
       },
       {
@@ -1199,7 +116,7 @@
         "dst": "pref:table",
         "kind": "entails",
         "strength": 0.7,
-        "since": 1794533014.0116167,
+        "since": 1794536772.9847717,
         "observations": 1
       },
       {
@@ -1207,15 +124,15 @@
         "dst": "pref:concise",
         "kind": "entails",
         "strength": 0.7,
-        "since": 1794533014.0116167,
+        "since": 1794536772.9847717,
         "observations": 1
       },
       {
         "src": "rule:test-first",
-        "dst": "core:e90f9cad",
+        "dst": "d010:6",
         "kind": "entails",
         "strength": 0.7,
-        "since": 1794533014.0116167,
+        "since": 1794536772.9847717,
         "observations": 1
       }
     ]
@@ -1225,26 +142,26 @@
       {
         "key": "concise",
         "statement": "输出尽量精简，先结论后理由",
-        "support": 5.793767969154432,
+        "support": 3.28816280193777,
         "contradict": 0.0,
-        "observations": 10,
-        "first_seen": 1789349014.0116167,
-        "last_evidence": 1794014614.0116167,
+        "observations": 4,
+        "first_seen": 1792808772.9847717,
+        "last_evidence": 1794363972.9847717,
         "crystallized": true,
         "pinned_by_user": false,
         "opposes": [],
         "flip_count": 0,
         "suppressed_by": "ambiguous",
-        "adjudications": 14
+        "adjudications": 1
       },
       {
         "key": "tables",
         "statement": "能用表格就用表格",
-        "support": 5.793767969154432,
+        "support": 3.28816280193777,
         "contradict": 0.0,
-        "observations": 10,
-        "first_seen": 1789349014.0116167,
-        "last_evidence": 1794014614.0116167,
+        "observations": 4,
+        "first_seen": 1792808772.9847717,
+        "last_evidence": 1794363972.9847717,
         "crystallized": true,
         "pinned_by_user": false,
         "opposes": [],
@@ -1255,11 +172,11 @@
       {
         "key": "verbose",
         "statement": "复杂问题要展开讲清楚",
-        "support": 5.793767969154432,
+        "support": 3.28816280193777,
         "contradict": 0.0,
-        "observations": 10,
-        "first_seen": 1789349014.0116167,
-        "last_evidence": 1794014614.0116167,
+        "observations": 4,
+        "first_seen": 1792808772.9847717,
+        "last_evidence": 1794363972.9847717,
         "crystallized": true,
         "pinned_by_user": false,
         "opposes": [
@@ -1267,12 +184,12 @@
         ],
         "flip_count": 0,
         "suppressed_by": "ambiguous",
-        "adjudications": 14
+        "adjudications": 1
       }
     ],
     "adjudications": [
       {
-        "ts": 1791941014.0116167,
+        "ts": 1794536772.9847717,
         "pair": [
           "concise",
           "verbose"
@@ -1281,506 +198,48 @@
         "reason": "ambiguous",
         "margin": 0.0,
         "confidence": [
-          0.8135,
-          0.8135
-        ]
-      },
-      {
-        "ts": 1792459414.0116167,
-        "pair": [
-          "concise",
-          "verbose"
-        ],
-        "winner": "concise",
-        "reason": "evidence_strength",
-        "margin": 0.242817,
-        "confidence": [
-          0.8275,
-          0.7916
-        ]
-      },
-      {
-        "ts": 1792459414.0116167,
-        "pair": [
-          "concise",
-          "verbose"
-        ],
-        "winner": "concise",
-        "reason": "evidence_strength",
-        "margin": 0.242817,
-        "confidence": [
-          0.8275,
-          0.7916
-        ]
-      },
-      {
-        "ts": 1792459414.0116167,
-        "pair": [
-          "concise",
-          "verbose"
-        ],
-        "winner": null,
-        "reason": "ambiguous",
-        "margin": 0.0,
-        "confidence": [
-          0.8275,
-          0.8275
-        ]
-      },
-      {
-        "ts": 1792977814.0116167,
-        "pair": [
-          "concise",
-          "verbose"
-        ],
-        "winner": "concise",
-        "reason": "evidence_strength",
-        "margin": 0.22328,
-        "confidence": [
-          0.8381,
-          0.8068
-        ]
-      },
-      {
-        "ts": 1792977814.0116167,
-        "pair": [
-          "concise",
-          "verbose"
-        ],
-        "winner": "concise",
-        "reason": "evidence_strength",
-        "margin": 0.22328,
-        "confidence": [
-          0.8381,
-          0.8068
-        ]
-      },
-      {
-        "ts": 1792977814.0116167,
-        "pair": [
-          "concise",
-          "verbose"
-        ],
-        "winner": null,
-        "reason": "ambiguous",
-        "margin": 0.0,
-        "confidence": [
-          0.8381,
-          0.8381
-        ]
-      },
-      {
-        "ts": 1793496214.0116167,
-        "pair": [
-          "concise",
-          "verbose"
-        ],
-        "winner": "concise",
-        "reason": "evidence_strength",
-        "margin": 0.20859,
-        "confidence": [
-          0.8463,
-          0.8184
-        ]
-      },
-      {
-        "ts": 1793496214.0116167,
-        "pair": [
-          "concise",
-          "verbose"
-        ],
-        "winner": "concise",
-        "reason": "evidence_strength",
-        "margin": 0.20859,
-        "confidence": [
-          0.8463,
-          0.8184
-        ]
-      },
-      {
-        "ts": 1793496214.0116167,
-        "pair": [
-          "concise",
-          "verbose"
-        ],
-        "winner": null,
-        "reason": "ambiguous",
-        "margin": 0.0,
-        "confidence": [
-          0.8463,
-          0.8463
-        ]
-      },
-      {
-        "ts": 1794014614.0116167,
-        "pair": [
-          "concise",
-          "verbose"
-        ],
-        "winner": "concise",
-        "reason": "evidence_strength",
-        "margin": 0.197248,
-        "confidence": [
-          0.8528,
-          0.8274
-        ]
-      },
-      {
-        "ts": 1794014614.0116167,
-        "pair": [
-          "concise",
-          "verbose"
-        ],
-        "winner": "concise",
-        "reason": "evidence_strength",
-        "margin": 0.197248,
-        "confidence": [
-          0.8528,
-          0.8274
-        ]
-      },
-      {
-        "ts": 1794014614.0116167,
-        "pair": [
-          "concise",
-          "verbose"
-        ],
-        "winner": null,
-        "reason": "ambiguous",
-        "margin": 0.0,
-        "confidence": [
-          0.8528,
-          0.8528
-        ]
-      },
-      {
-        "ts": 1794533014.0116167,
-        "pair": [
-          "concise",
-          "verbose"
-        ],
-        "winner": null,
-        "reason": "ambiguous",
-        "margin": 0.0,
-        "confidence": [
-          0.8345,
-          0.8345
+          0.7584,
+          0.7584
         ]
       }
     ]
   },
   "narrative": {
-    "rev": 3,
+    "rev": 1,
     "history": [
       {
         "rev": 1,
-        "at": 1791941014.0116167,
+        "at": 1794536772.9847717,
         "chapters": [
           {
             "title": "硬规则",
             "arc": "起源",
             "nodes": [
-              "rule:schema",
               "rule:test-first",
+              "rule:schema",
               "rule:no-emoji",
               "rule:no-fabricate"
             ],
-            "share": 0.503084,
-            "reliability": 0.93875
+            "share": 0.533395,
+            "reliability": 0.881875
           },
           {
-            "title": "其他",
+            "title": "复盘",
             "arc": "转折",
             "nodes": [
-              "d024:13",
-              "core:e90f9cad"
+              "core:a6a15da4"
             ],
-            "share": 0.190254,
-            "reliability": 0.9125
-          },
-          {
-            "title": "琐事",
-            "arc": "转折",
-            "nodes": [
-              "d030:16"
-            ],
-            "share": 0.105482,
-            "reliability": 0.9475
-          },
-          {
-            "title": "偏好",
-            "arc": "当下",
-            "nodes": [
-              "pref:concise",
-              "pref:table"
-            ],
-            "share": 0.20118,
-            "reliability": 1.0
-          }
-        ],
-        "selected": [
-          "rule:schema",
-          "rule:test-first",
-          "d030:16",
-          "core:e90f9cad",
-          "pref:concise",
-          "pref:table",
-          "rule:no-emoji",
-          "rule:no-fabricate",
-          "d024:13"
-        ],
-        "dropped": [
-          {
-            "name": "d022:12",
-            "total": 0.770582,
-            "reason": "capacity"
-          },
-          {
-            "name": "d020:11",
-            "total": 0.723739,
-            "reason": "capacity"
-          },
-          {
-            "name": "d028:15",
-            "total": 0.498601,
-            "reason": "capacity"
-          },
-          {
-            "name": "d010:6",
-            "total": 0.363671,
-            "reason": "below_threshold"
-          },
-          {
-            "name": "d006:4",
-            "total": 0.29269,
-            "reason": "below_threshold"
-          },
-          {
-            "name": "d002:2",
-            "total": 0.278842,
-            "reason": "below_threshold"
-          },
-          {
-            "name": "d026:14",
-            "total": 0.220382,
-            "reason": "below_threshold"
-          },
-          {
-            "name": "d012:7",
-            "total": 1.211596,
-            "reason": "delegated_fragment"
-          },
-          {
-            "name": "d014:8",
-            "total": 1.189485,
-            "reason": "delegated_fragment"
-          },
-          {
-            "name": "d016:9",
-            "total": 1.094046,
-            "reason": "delegated_fragment"
-          },
-          {
-            "name": "d018:10",
-            "total": 1.044178,
-            "reason": "delegated_fragment"
-          }
-        ],
-        "unreliable": [],
-        "coherence": 1.0,
-        "reliability": 0.9475,
-        "monopoly": 0.503084,
-        "text": "第 1 次自述：20 条记忆里，我留下 9 条、放下 11 条。线索是 起源「硬规则」4条 → 转折「其他」2条 → 转折「琐事」1条 → 当下「偏好」2条。连续性 1.00，可靠度 0.95，单主题占比 0.50。"
-      },
-      {
-        "rev": 2,
-        "at": 1793237014.0116167,
-        "chapters": [
-          {
-            "title": "硬规则",
-            "arc": "起源",
-            "nodes": [
-              "rule:schema",
-              "rule:test-first",
-              "rule:no-emoji",
-              "rule:no-fabricate"
-            ],
-            "share": 0.479887,
-            "reliability": 0.93875
-          },
-          {
-            "title": "偏好",
-            "arc": "转折",
-            "nodes": [
-              "pref:concise",
-              "pref:table"
-            ],
-            "share": 0.195202,
+            "share": 0.092013,
             "reliability": 1.0
           },
           {
             "title": "踩坑",
             "arc": "转折",
             "nodes": [
-              "d040:21",
-              "d044:23"
+              "d006:4"
             ],
-            "share": 0.227311,
-            "reliability": 0.7725
-          },
-          {
-            "title": "复盘",
-            "arc": "当下",
-            "nodes": [
-              "core:e90f9cad"
-            ],
-            "share": 0.097601,
-            "reliability": 1.0
-          }
-        ],
-        "selected": [
-          "rule:schema",
-          "d044:23",
-          "rule:test-first",
-          "d040:21",
-          "core:e90f9cad",
-          "pref:concise",
-          "pref:table",
-          "rule:no-emoji",
-          "rule:no-fabricate"
-        ],
-        "dropped": [
-          {
-            "name": "d024:13",
-            "total": 0.556942,
-            "reason": "capacity"
-          },
-          {
-            "name": "d042:22",
-            "total": 0.523222,
-            "reason": "capacity"
-          },
-          {
-            "name": "d022:12",
-            "total": 0.393628,
-            "reason": "below_threshold"
-          },
-          {
-            "name": "d020:11",
-            "total": 0.384605,
-            "reason": "below_threshold"
-          },
-          {
-            "name": "d038:20",
-            "total": 0.270186,
-            "reason": "below_threshold"
-          },
-          {
-            "name": "d010:6",
-            "total": 0.227586,
-            "reason": "below_threshold"
-          },
-          {
-            "name": "d006:4",
-            "total": 0.187196,
-            "reason": "below_threshold"
-          },
-          {
-            "name": "d036:19",
-            "total": 0.168971,
-            "reason": "below_threshold"
-          },
-          {
-            "name": "d002:2",
-            "total": 0.157685,
-            "reason": "below_threshold"
-          },
-          {
-            "name": "d030:16",
-            "total": 0.134819,
-            "reason": "below_threshold"
-          },
-          {
-            "name": "d034:18",
-            "total": 0.121233,
-            "reason": "below_threshold"
-          },
-          {
-            "name": "d032:17",
-            "total": 0.090643,
-            "reason": "below_threshold"
-          },
-          {
-            "name": "d028:15",
-            "total": 0.026508,
-            "reason": "below_threshold"
-          },
-          {
-            "name": "d026:14",
-            "total": 0.012873,
-            "reason": "below_threshold"
-          },
-          {
-            "name": "d012:7",
-            "total": 0.201189,
-            "reason": "delegated_fragment"
-          },
-          {
-            "name": "d014:8",
-            "total": 0.202041,
-            "reason": "delegated_fragment"
-          },
-          {
-            "name": "d016:9",
-            "total": 0.295527,
-            "reason": "delegated_fragment"
-          },
-          {
-            "name": "d018:10",
-            "total": 0.750062,
-            "reason": "delegated_fragment"
-          }
-        ],
-        "unreliable": [],
-        "coherence": 0.836364,
-        "reliability": 0.922222,
-        "monopoly": 0.479887,
-        "text": "第 2 次自述：27 条记忆里，我留下 9 条、放下 18 条。线索是 起源「硬规则」4条 → 转折「偏好」2条 → 转折「踩坑」2条 → 当下「复盘」1条。连续性 0.84，可靠度 0.92，单主题占比 0.48。"
-      },
-      {
-        "rev": 3,
-        "at": 1794533014.0116167,
-        "chapters": [
-          {
-            "title": "硬规则",
-            "arc": "起源",
-            "nodes": [
-              "rule:test-first",
-              "rule:schema",
-              "rule:no-emoji",
-              "rule:no-fabricate"
-            ],
-            "share": 0.477415,
-            "reliability": 0.881875
-          },
-          {
-            "title": "其他",
-            "arc": "转折",
-            "nodes": [
-              "d044:23",
-              "d052:27"
-            ],
-            "share": 0.138664,
-            "reliability": 0.79875
-          },
-          {
-            "title": "复盘",
-            "arc": "转折",
-            "nodes": [
-              "core:e90f9cad"
-            ],
-            "share": 0.127974,
-            "reliability": 1.0
+            "share": 0.08751,
+            "reliability": 0.7375
           },
           {
             "title": "偏好",
@@ -1789,78 +248,72 @@
               "pref:concise",
               "pref:table"
             ],
-            "share": 0.255947,
+            "share": 0.287081,
             "reliability": 1.0
           }
         ],
         "selected": [
           "rule:test-first",
           "rule:schema",
-          "core:e90f9cad",
           "pref:concise",
           "pref:table",
+          "core:a6a15da4",
           "rule:no-emoji",
           "rule:no-fabricate",
-          "d052:27",
-          "d044:23"
+          "d006:4"
         ],
         "dropped": [
           {
-            "name": "d058:30",
-            "total": 0.758565,
-            "reason": "capacity"
-          },
-          {
-            "name": "d040:21",
-            "total": 0.747696,
-            "reason": "capacity"
-          },
-          {
-            "name": "d046:24",
-            "total": 0.628547,
-            "reason": "capacity"
-          },
-          {
-            "name": "d056:29",
-            "total": 0.521909,
+            "name": "d002:2",
+            "total": 0.440487,
             "reason": "below_threshold"
           },
           {
-            "name": "d024:13",
-            "total": 0.331049,
+            "name": "d008:5",
+            "total": 0.29989,
             "reason": "below_threshold"
           },
           {
-            "name": "d054:28",
-            "total": 0.31819,
+            "name": "pref:cn-comment",
+            "total": 0.185062,
             "reason": "below_threshold"
           },
           {
-            "name": "d020:11",
-            "total": 0.230357,
+            "name": "pref:no-flattery",
+            "total": 0.185062,
             "reason": "below_threshold"
           },
           {
-            "name": "d022:12",
-            "total": 0.225483,
-            "reason": "below_threshold"
+            "name": "d010:6",
+            "total": 1.007695,
+            "reason": "delegated_fragment"
           },
           {
-            "name": "d050:26",
-            "total": 0.151055,
-            "reason": "below_threshold"
+            "name": "d012:7",
+            "total": 0.367292,
+            "reason": "delegated_fragment"
+          },
+          {
+            "name": "d014:8",
+            "total": 0.346019,
+            "reason": "delegated_fragment"
+          },
+          {
+            "name": "d016:9",
+            "total": 0.304685,
+            "reason": "delegated_fragment"
           },
           {
             "name": "d018:10",
-            "total": 0.285354,
+            "total": 0.412239,
             "reason": "delegated_fragment"
           }
         ],
         "unreliable": [],
-        "coherence": 0.91,
-        "reliability": 0.902778,
-        "monopoly": 0.477415,
-        "text": "第 3 次自述：19 条记忆里，我留下 9 条、放下 10 条。线索是 起源「硬规则」4条 → 转折「其他」2条 → 转折「复盘」1条 → 当下「偏好」2条。连续性 0.91，可靠度 0.90，单主题占比 0.48。"
+        "coherence": 0.944444,
+        "reliability": 0.908125,
+        "monopoly": 0.533395,
+        "text": "第 1 次自述：17 条记忆里，我留下 8 条、放下 9 条。线索是 起源「硬规则」4条 → 转折「复盘」1条 → 转折「踩坑」1条 → 当下「偏好」2条。连续性 0.94，可靠度 0.91，单主题占比 0.53。"
       }
     ]
   },
@@ -2036,39 +489,1134 @@
     "next_rev": 1
   },
   "selfcorrect": {
-    "patches": [
-      {
-        "pid": "p1",
-        "param": "importance_forget",
-        "before": 0.12,
-        "after": 0.084,
-        "code": "mass_forgetting",
-        "reason": "单轮清理占比 51%：遗忘太快，记忆来不及被沉淀就被扫走。",
-        "created_at": 1794533014.0116167,
-        "verify_at": 1794619414.0116167,
-        "metric": "forget_pressure",
-        "baseline": 0.5128,
-        "better": "lower",
-        "status": "pending",
-        "observed": null,
-        "applied_at": 1794533014.0116167,
-        "observed_at": 0.0,
-        "samples": [],
-        "deferred": 0,
-        "evidence": "pending"
-      }
-    ],
-    "cooldowns": {
-      "importance_forget": 1794619414.0116167
-    },
+    "patches": [],
+    "cooldowns": {},
     "reverted_count": {},
     "blocked": [],
     "escalations": [],
-    "seq": 1
+    "seq": 0
+  },
+  "last_report": {
+    "generated_at": 1794536772.9847717,
+    "window_days": 30.0,
+    "metrics": {
+      "events_in_window": 25.0,
+      "retrieval_coverage": 1.0,
+      "retrieval_attempts": 10.0,
+      "consolidation_yield": 0.5294,
+      "core_hit_ratio": 0.8667,
+      "forget_pressure": 0.1053,
+      "gc_deletes": 2.0,
+      "consolidations": 1.0,
+      "crystallizations": 3.0,
+      "decrystallizations": 0.0,
+      "restores": 0.0,
+      "style_conflict_pairs": 1.0,
+      "active_style_conflicts": 0.0,
+      "unresolved_style_conflicts": 2.0,
+      "avg_style_confidence": 0.7584,
+      "loose_fragments": 3.0,
+      "tombstone_size": 2.0,
+      "semantic_recalls": 0.0,
+      "semantic_only_hits": 0.0,
+      "avg_top_score": 0.0,
+      "logic_edges": 4.0,
+      "contested": 0.0,
+      "entropy": 0.917938,
+      "attention_top_share": 0.137036,
+      "attention_top3_share": 0.371585,
+      "structure_isolated": 0.235294,
+      "structure_fragmentation": 0.352941,
+      "structure_degree_entropy": 0.792063,
+      "structure_giant_share": 0.411765,
+      "grasp_coverage": 0.5,
+      "ungrabbed_share": 0.5,
+      "narrative_coherence": 0.944444,
+      "narrative_reliability": 0.908125,
+      "narrative_monopoly": 0.533395,
+      "foundation_version": 1.0,
+      "persona_drift": 0.0,
+      "persona_oversell": 0.0,
+      "persona_switches": 0.0,
+      "persona_unjustified": 0.0
+    },
+    "findings": [
+      "2 条风格因对立证据不足被停用，未参与输出：concise(ambiguous), verbose(ambiguous) —— 需要更多证据或人工裁决。",
+      "重要性分布几乎无梯度（前三条合计只占 37%），什么都一样重要，等于没有取舍。"
+    ],
+    "suggestions": [
+      {
+        "param": "importance_w_support",
+        "current": 0.8,
+        "suggested": 0.9,
+        "reason": "让有凭据的记忆在价值判断里拉开差距，避免一切等价。"
+      }
+    ],
+    "narrative": "第 1 轮自我回看：窗口 30 天内 25 次事件，沉淀 1 次、遗忘 2 条、风格固化 3 次 / 撤销 0 次；当前 17 个节点中 9 个为高层记忆。发现 2 项待核查信号，提出 1 条参数建议（不自动执行）。｜第 1 次自述：17 条记忆里，我留下 8 条、放下 9 条。线索是 起源「硬规则」4条 → 转折「复盘」1条 → 转折「踩坑」1条 → 当下「偏好」2条。连续性 0.94，可靠度 0.91，单主题占比 0.53。"
+  },
+  "version": 7,
+  "saved_at": 1794536772.9847717,
+  "graph": {
+    "nodes": [
+      {
+        "name": "rule:no-fabricate",
+        "content": "不要编造版本号或 API 参数，不确定就说不确定",
+        "tier": "core",
+        "tags": [
+          "硬规则",
+          "诚实"
+        ],
+        "created_at": 1792808772.9847717,
+        "last_accessed": 1794191172.9847717,
+        "base_weight": 3.5,
+        "access_count": 6,
+        "pinned": true,
+        "origin": "external",
+        "consolidated_from": [],
+        "consolidated_into": null,
+        "fingerprint": null,
+        "revision": 0,
+        "affect": {
+          "valence": 0.0,
+          "arousal": 0.0,
+          "peak_arousal": 0.0,
+          "felt_at": 1792808772.9847717,
+          "arousal_half_life": 3.0,
+          "valence_half_life": 10.0,
+          "source": "neutral",
+          "drivers": []
+        },
+        "speech": {
+          "act": "prohibition",
+          "force": 0.9,
+          "register": "chat",
+          "motive": "",
+          "hedged": false,
+          "confidence": 0.55,
+          "evidence": [
+            "不要"
+          ]
+        },
+        "narrative_hits": 1,
+        "narrative_heat": 0.125,
+        "narrated_at": 1794536772.9847717,
+        "kind": "identity",
+        "scope": "proj:Y5H1ggs/memory-palace",
+        "valid_from": 0.0,
+        "valid_to": null,
+        "superseded_by": "",
+        "supersedes": []
+      },
+      {
+        "name": "rule:schema",
+        "content": "改数据结构必须同时升状态版本并写迁移，否则旧快照会加载失败",
+        "tier": "core",
+        "tags": [
+          "硬规则",
+          "工程"
+        ],
+        "created_at": 1792808772.9847717,
+        "last_accessed": 1794191172.9847717,
+        "base_weight": 3.5,
+        "access_count": 6,
+        "pinned": true,
+        "origin": "external",
+        "consolidated_from": [],
+        "consolidated_into": null,
+        "fingerprint": null,
+        "revision": 0,
+        "affect": {
+          "valence": -0.35,
+          "arousal": 0.7,
+          "peak_arousal": 0.7,
+          "felt_at": 1792808772.9847717,
+          "arousal_half_life": 3.0,
+          "valence_half_life": 10.0,
+          "source": "text",
+          "drivers": [
+            "失败"
+          ]
+        },
+        "speech": {
+          "act": "directive",
+          "force": 1.0,
+          "register": "chat",
+          "motive": "",
+          "hedged": false,
+          "confidence": 0.75,
+          "evidence": [
+            "必须"
+          ]
+        },
+        "narrative_hits": 1,
+        "narrative_heat": 0.125,
+        "narrated_at": 1794536772.9847717,
+        "kind": "identity",
+        "scope": "proj:Y5H1ggs/memory-palace",
+        "valid_from": 0.0,
+        "valid_to": null,
+        "superseded_by": "",
+        "supersedes": []
+      },
+      {
+        "name": "rule:test-first",
+        "content": "说「完成」之前先跑一遍自测，绿了才算完成",
+        "tier": "core",
+        "tags": [
+          "硬规则",
+          "工程"
+        ],
+        "created_at": 1792808772.9847717,
+        "last_accessed": 1794191172.9847717,
+        "base_weight": 3.5,
+        "access_count": 6,
+        "pinned": true,
+        "origin": "external",
+        "consolidated_from": [],
+        "consolidated_into": null,
+        "fingerprint": null,
+        "revision": 0,
+        "affect": {
+          "valence": -0.25,
+          "arousal": 0.65,
+          "peak_arousal": 0.65,
+          "felt_at": 1794536772.9847717,
+          "arousal_half_life": 3.0,
+          "valence_half_life": 10.0,
+          "source": "outcome",
+          "drivers": [
+            "结果:contradicted",
+            "被反证推翻"
+          ]
+        },
+        "speech": {
+          "act": "statement",
+          "force": 0.5,
+          "register": "chat",
+          "motive": "",
+          "hedged": false,
+          "confidence": 0.3,
+          "evidence": []
+        },
+        "narrative_hits": 1,
+        "narrative_heat": 0.125,
+        "narrated_at": 1794536772.9847717,
+        "kind": "identity",
+        "scope": "proj:Y5H1ggs/memory-palace",
+        "valid_from": 0.0,
+        "valid_to": null,
+        "superseded_by": "",
+        "supersedes": []
+      },
+      {
+        "name": "rule:no-emoji",
+        "content": "正式文档不用 emoji 装饰",
+        "tier": "fact",
+        "tags": [
+          "硬规则",
+          "格式"
+        ],
+        "created_at": 1792808772.9847717,
+        "last_accessed": 1794191172.9847717,
+        "base_weight": 5.0,
+        "access_count": 9,
+        "pinned": true,
+        "origin": "external",
+        "consolidated_from": [],
+        "consolidated_into": null,
+        "fingerprint": null,
+        "revision": 0,
+        "affect": {
+          "valence": 0.0,
+          "arousal": 0.0,
+          "peak_arousal": 0.0,
+          "felt_at": 1792808772.9847717,
+          "arousal_half_life": 3.0,
+          "valence_half_life": 10.0,
+          "source": "neutral",
+          "drivers": []
+        },
+        "speech": {
+          "act": "statement",
+          "force": 0.5,
+          "register": "chat",
+          "motive": "",
+          "hedged": false,
+          "confidence": 0.3,
+          "evidence": []
+        },
+        "narrative_hits": 1,
+        "narrative_heat": 0.125,
+        "narrated_at": 1794536772.9847717,
+        "kind": "identity",
+        "scope": "proj:Y5H1ggs/memory-palace",
+        "valid_from": 0.0,
+        "valid_to": null,
+        "superseded_by": "",
+        "supersedes": []
+      },
+      {
+        "name": "pref:table",
+        "content": "能用表格就不用段落",
+        "tier": "fact",
+        "tags": [
+          "偏好",
+          "格式"
+        ],
+        "created_at": 1792808772.9847717,
+        "last_accessed": 1794536772.9847717,
+        "base_weight": 3.2385120906780145,
+        "access_count": 10,
+        "pinned": false,
+        "origin": "external",
+        "consolidated_from": [],
+        "consolidated_into": null,
+        "fingerprint": null,
+        "revision": 0,
+        "affect": {
+          "valence": 0.0,
+          "arousal": 0.0,
+          "peak_arousal": 0.0,
+          "felt_at": 1792808772.9847717,
+          "arousal_half_life": 3.0,
+          "valence_half_life": 10.0,
+          "source": "neutral",
+          "drivers": []
+        },
+        "speech": {
+          "act": "statement",
+          "force": 0.5,
+          "register": "chat",
+          "motive": "",
+          "hedged": false,
+          "confidence": 0.3,
+          "evidence": []
+        },
+        "narrative_hits": 1,
+        "narrative_heat": 0.125,
+        "narrated_at": 1794536772.9847717,
+        "kind": "semantic",
+        "scope": "proj:Y5H1ggs/memory-palace",
+        "valid_from": 0.0,
+        "valid_to": null,
+        "superseded_by": "",
+        "supersedes": []
+      },
+      {
+        "name": "pref:concise",
+        "content": "先给结论再给理由，不要铺垫",
+        "tier": "fact",
+        "tags": [
+          "偏好",
+          "格式"
+        ],
+        "created_at": 1792808772.9847717,
+        "last_accessed": 1794536772.9847717,
+        "base_weight": 3.2385120906780145,
+        "access_count": 10,
+        "pinned": false,
+        "origin": "external",
+        "consolidated_from": [],
+        "consolidated_into": null,
+        "fingerprint": null,
+        "revision": 0,
+        "affect": {
+          "valence": 0.0,
+          "arousal": 0.0,
+          "peak_arousal": 0.0,
+          "felt_at": 1792808772.9847717,
+          "arousal_half_life": 3.0,
+          "valence_half_life": 10.0,
+          "source": "neutral",
+          "drivers": []
+        },
+        "speech": {
+          "act": "prohibition",
+          "force": 0.9,
+          "register": "chat",
+          "motive": "",
+          "hedged": false,
+          "confidence": 0.55,
+          "evidence": [
+            "不要"
+          ]
+        },
+        "narrative_hits": 1,
+        "narrative_heat": 0.125,
+        "narrated_at": 1794536772.9847717,
+        "kind": "semantic",
+        "scope": "proj:Y5H1ggs/memory-palace",
+        "valid_from": 0.0,
+        "valid_to": null,
+        "superseded_by": "",
+        "supersedes": []
+      },
+      {
+        "name": "pref:cn-comment",
+        "content": "注释写中文，变量名用英文",
+        "tier": "fact",
+        "tags": [
+          "偏好",
+          "工程"
+        ],
+        "created_at": 1792808772.9847717,
+        "last_accessed": 1792808772.9847717,
+        "base_weight": 1.0,
+        "access_count": 1,
+        "pinned": false,
+        "origin": "external",
+        "consolidated_from": [],
+        "consolidated_into": null,
+        "fingerprint": null,
+        "revision": 0,
+        "affect": {
+          "valence": 0.0,
+          "arousal": 0.0,
+          "peak_arousal": 0.0,
+          "felt_at": 1792808772.9847717,
+          "arousal_half_life": 3.0,
+          "valence_half_life": 10.0,
+          "source": "neutral",
+          "drivers": []
+        },
+        "speech": {
+          "act": "statement",
+          "force": 0.5,
+          "register": "chat",
+          "motive": "",
+          "hedged": false,
+          "confidence": 0.3,
+          "evidence": []
+        },
+        "narrative_hits": 0,
+        "narrative_heat": 0.0,
+        "narrated_at": 0.0,
+        "kind": "semantic",
+        "scope": "proj:Y5H1ggs/memory-palace",
+        "valid_from": 0.0,
+        "valid_to": null,
+        "superseded_by": "",
+        "supersedes": []
+      },
+      {
+        "name": "pref:no-flattery",
+        "content": "不要奉承式开场",
+        "tier": "fact",
+        "tags": [
+          "偏好",
+          "语气"
+        ],
+        "created_at": 1792808772.9847717,
+        "last_accessed": 1792808772.9847717,
+        "base_weight": 1.0,
+        "access_count": 1,
+        "pinned": false,
+        "origin": "external",
+        "consolidated_from": [],
+        "consolidated_into": null,
+        "fingerprint": null,
+        "revision": 0,
+        "affect": {
+          "valence": 0.0,
+          "arousal": 0.0,
+          "peak_arousal": 0.0,
+          "felt_at": 1792808772.9847717,
+          "arousal_half_life": 3.0,
+          "valence_half_life": 10.0,
+          "source": "neutral",
+          "drivers": []
+        },
+        "speech": {
+          "act": "prohibition",
+          "force": 0.9,
+          "register": "chat",
+          "motive": "",
+          "hedged": false,
+          "confidence": 0.55,
+          "evidence": [
+            "不要"
+          ]
+        },
+        "narrative_hits": 0,
+        "narrative_heat": 0.0,
+        "narrated_at": 0.0,
+        "kind": "semantic",
+        "scope": "proj:Y5H1ggs/memory-palace",
+        "valid_from": 0.0,
+        "valid_to": null,
+        "superseded_by": "",
+        "supersedes": []
+      },
+      {
+        "name": "d002:2",
+        "content": "把长函数拆开之后可读性明显变好",
+        "tier": "event",
+        "tags": [
+          "重构",
+          "习惯"
+        ],
+        "created_at": 1792981572.9847717,
+        "last_accessed": 1792981572.9847717,
+        "base_weight": 1.0,
+        "access_count": 1,
+        "pinned": false,
+        "origin": "external",
+        "consolidated_from": [],
+        "consolidated_into": null,
+        "fingerprint": null,
+        "revision": 0,
+        "affect": {
+          "valence": 0.09,
+          "arousal": 0.3,
+          "peak_arousal": 0.3,
+          "felt_at": 1792981572.9847717,
+          "arousal_half_life": 3.0,
+          "valence_half_life": 10.0,
+          "source": "explicit",
+          "drivers": []
+        },
+        "speech": {
+          "act": "statement",
+          "force": 0.5,
+          "register": "coding",
+          "motive": "",
+          "hedged": false,
+          "confidence": 0.3,
+          "evidence": []
+        },
+        "narrative_hits": 0,
+        "narrative_heat": 0.0,
+        "narrated_at": 0.0,
+        "kind": "procedural",
+        "scope": "proj:Y5H1ggs/memory-palace",
+        "valid_from": 0.0,
+        "valid_to": null,
+        "superseded_by": "",
+        "supersedes": []
+      },
+      {
+        "name": "d006:4",
+        "content": "缓存键忘了带用户名，两个账号互相串数据",
+        "tier": "event",
+        "tags": [
+          "踩坑",
+          "教训"
+        ],
+        "created_at": 1793327172.9847717,
+        "last_accessed": 1794536772.9847717,
+        "base_weight": 0.7422464730273198,
+        "access_count": 4,
+        "pinned": false,
+        "origin": "external",
+        "consolidated_from": [],
+        "consolidated_into": null,
+        "fingerprint": null,
+        "revision": 0,
+        "affect": {
+          "valence": -0.375,
+          "arousal": 0.75,
+          "peak_arousal": 0.75,
+          "felt_at": 1793327172.9847717,
+          "arousal_half_life": 3.0,
+          "valence_half_life": 10.0,
+          "source": "explicit",
+          "drivers": []
+        },
+        "speech": {
+          "act": "statement",
+          "force": 0.5,
+          "register": "chat",
+          "motive": "",
+          "hedged": false,
+          "confidence": 0.3,
+          "evidence": []
+        },
+        "narrative_hits": 1,
+        "narrative_heat": 0.125,
+        "narrated_at": 1794536772.9847717,
+        "kind": "episodic",
+        "scope": "proj:Y5H1ggs/memory-palace",
+        "valid_from": 0.0,
+        "valid_to": null,
+        "superseded_by": "",
+        "supersedes": []
+      },
+      {
+        "name": "d008:5",
+        "content": "日志里打了完整凭据，被安全扫描抓出来",
+        "tier": "event",
+        "tags": [
+          "踩坑",
+          "安全"
+        ],
+        "created_at": 1793499972.9847717,
+        "last_accessed": 1793499972.9847717,
+        "base_weight": 1.0,
+        "access_count": 1,
+        "pinned": false,
+        "origin": "external",
+        "consolidated_from": [],
+        "consolidated_into": null,
+        "fingerprint": null,
+        "revision": 0,
+        "affect": {
+          "valence": -0.425,
+          "arousal": 0.85,
+          "peak_arousal": 0.85,
+          "felt_at": 1793499972.9847717,
+          "arousal_half_life": 3.0,
+          "valence_half_life": 10.0,
+          "source": "explicit",
+          "drivers": []
+        },
+        "speech": {
+          "act": "statement",
+          "force": 0.5,
+          "register": "chat",
+          "motive": "",
+          "hedged": false,
+          "confidence": 0.3,
+          "evidence": []
+        },
+        "narrative_hits": 0,
+        "narrative_heat": 0.0,
+        "narrated_at": 0.0,
+        "kind": "episodic",
+        "scope": "proj:Y5H1ggs/memory-palace",
+        "valid_from": 0.0,
+        "valid_to": null,
+        "superseded_by": "",
+        "supersedes": []
+      },
+      {
+        "name": "d010:6",
+        "content": "线上回滚了一次，原因是迁移脚本没在测试库跑过，很痛",
+        "tier": "trace",
+        "tags": [
+          "复盘",
+          "教训"
+        ],
+        "created_at": 1793672772.9847717,
+        "last_accessed": 1794104772.9847717,
+        "base_weight": 1.092323011347294,
+        "access_count": 3,
+        "pinned": false,
+        "origin": "external",
+        "consolidated_from": [],
+        "consolidated_into": "core:a6a15da4",
+        "fingerprint": null,
+        "revision": 0,
+        "affect": {
+          "valence": -0.45,
+          "arousal": 0.9,
+          "peak_arousal": 0.9,
+          "felt_at": 1793672772.9847717,
+          "arousal_half_life": 3.0,
+          "valence_half_life": 10.0,
+          "source": "explicit",
+          "drivers": []
+        },
+        "speech": {
+          "act": "statement",
+          "force": 0.5,
+          "register": "coding",
+          "motive": "",
+          "hedged": false,
+          "confidence": 0.3,
+          "evidence": []
+        },
+        "narrative_hits": 0,
+        "narrative_heat": 0.0,
+        "narrated_at": 0.0,
+        "kind": "episodic",
+        "scope": "proj:Y5H1ggs/memory-palace",
+        "valid_from": 0.0,
+        "valid_to": null,
+        "superseded_by": "",
+        "supersedes": []
+      },
+      {
+        "name": "d012:7",
+        "content": "CI 在 Windows 上因为控制台编码炸了，排查两小时",
+        "tier": "trace",
+        "tags": [
+          "复盘",
+          "教训"
+        ],
+        "created_at": 1793845572.9847717,
+        "last_accessed": 1794104772.9847717,
+        "base_weight": 1.0040134030797834,
+        "access_count": 2,
+        "pinned": false,
+        "origin": "external",
+        "consolidated_from": [],
+        "consolidated_into": "core:a6a15da4",
+        "fingerprint": null,
+        "revision": 0,
+        "affect": {
+          "valence": -0.4,
+          "arousal": 0.8,
+          "peak_arousal": 0.8,
+          "felt_at": 1793845572.9847717,
+          "arousal_half_life": 3.0,
+          "valence_half_life": 10.0,
+          "source": "explicit",
+          "drivers": []
+        },
+        "speech": {
+          "act": "statement",
+          "force": 0.5,
+          "register": "chat",
+          "motive": "",
+          "hedged": false,
+          "confidence": 0.3,
+          "evidence": []
+        },
+        "narrative_hits": 0,
+        "narrative_heat": 0.0,
+        "narrated_at": 0.0,
+        "kind": "episodic",
+        "scope": "proj:Y5H1ggs/memory-palace",
+        "valid_from": 0.0,
+        "valid_to": null,
+        "superseded_by": "",
+        "supersedes": []
+      },
+      {
+        "name": "d014:8",
+        "content": "把并发测试的断言写成「没报错」，等于没测",
+        "tier": "trace",
+        "tags": [
+          "复盘",
+          "教训"
+        ],
+        "created_at": 1794018372.9847717,
+        "last_accessed": 1794104772.9847717,
+        "base_weight": 1.2919172612254755,
+        "access_count": 2,
+        "pinned": false,
+        "origin": "external",
+        "consolidated_from": [],
+        "consolidated_into": "core:a6a15da4",
+        "fingerprint": null,
+        "revision": 0,
+        "affect": {
+          "valence": -0.35,
+          "arousal": 0.7,
+          "peak_arousal": 0.7,
+          "felt_at": 1794018372.9847717,
+          "arousal_half_life": 3.0,
+          "valence_half_life": 10.0,
+          "source": "explicit",
+          "drivers": []
+        },
+        "speech": {
+          "act": "statement",
+          "force": 0.5,
+          "register": "coding",
+          "motive": "",
+          "hedged": false,
+          "confidence": 0.3,
+          "evidence": []
+        },
+        "narrative_hits": 0,
+        "narrative_heat": 0.0,
+        "narrated_at": 0.0,
+        "kind": "episodic",
+        "scope": "proj:Y5H1ggs/memory-palace",
+        "valid_from": 0.0,
+        "valid_to": null,
+        "superseded_by": "",
+        "supersedes": []
+      },
+      {
+        "name": "d016:9",
+        "content": "测试用例自己写错了：用常数学习率制造「无惯性」，结果测不出来",
+        "tier": "trace",
+        "tags": [
+          "复盘",
+          "教训"
+        ],
+        "created_at": 1794191172.9847717,
+        "last_accessed": 1794191172.9847717,
+        "base_weight": 1.0,
+        "access_count": 1,
+        "pinned": false,
+        "origin": "external",
+        "consolidated_from": [],
+        "consolidated_into": "core:a6a15da4",
+        "fingerprint": null,
+        "revision": 0,
+        "affect": {
+          "valence": -0.325,
+          "arousal": 0.65,
+          "peak_arousal": 0.65,
+          "felt_at": 1794191172.9847717,
+          "arousal_half_life": 3.0,
+          "valence_half_life": 10.0,
+          "source": "explicit",
+          "drivers": []
+        },
+        "speech": {
+          "act": "statement",
+          "force": 0.5,
+          "register": "coding",
+          "motive": "",
+          "hedged": false,
+          "confidence": 0.3,
+          "evidence": []
+        },
+        "narrative_hits": 0,
+        "narrative_heat": 0.0,
+        "narrated_at": 0.0,
+        "kind": "episodic",
+        "scope": "proj:Y5H1ggs/memory-palace",
+        "valid_from": 0.0,
+        "valid_to": null,
+        "superseded_by": "",
+        "supersedes": []
+      },
+      {
+        "name": "d018:10",
+        "content": "把配置项逐字段对拍了一遍，发现两个字段被静默吞掉",
+        "tier": "trace",
+        "tags": [
+          "复盘",
+          "教训"
+        ],
+        "created_at": 1794363972.9847717,
+        "last_accessed": 1794363972.9847717,
+        "base_weight": 1.0,
+        "access_count": 1,
+        "pinned": false,
+        "origin": "external",
+        "consolidated_from": [],
+        "consolidated_into": "core:a6a15da4",
+        "fingerprint": null,
+        "revision": 0,
+        "affect": {
+          "valence": 0.165,
+          "arousal": 0.55,
+          "peak_arousal": 0.55,
+          "felt_at": 1794363972.9847717,
+          "arousal_half_life": 3.0,
+          "valence_half_life": 10.0,
+          "source": "explicit",
+          "drivers": []
+        },
+        "speech": {
+          "act": "statement",
+          "force": 0.5,
+          "register": "chat",
+          "motive": "",
+          "hedged": false,
+          "confidence": 0.3,
+          "evidence": []
+        },
+        "narrative_hits": 0,
+        "narrative_heat": 0.0,
+        "narrated_at": 0.0,
+        "kind": "episodic",
+        "scope": "proj:Y5H1ggs/memory-palace",
+        "valid_from": 0.0,
+        "valid_to": null,
+        "superseded_by": "",
+        "supersedes": []
+      },
+      {
+        "name": "core:a6a15da4",
+        "content": "[沉淀] 主题=复盘、教训（交集）| 来源=5条 | 要点：线上回滚了一次，原因是迁移脚本没在测试库跑过，很痛；测试用例自己写错了：用常数学习率制造「无惯性」，结果测不出来；把并发测试的断言写成「没报错」，等于没测；CI 在 Windows 上因为控制台编码炸了，排查两小时",
+        "tier": "core",
+        "tags": [
+          "复盘",
+          "教训"
+        ],
+        "created_at": 1794536772.9847717,
+        "last_accessed": 1794536772.9847717,
+        "base_weight": 2.8,
+        "access_count": 3,
+        "pinned": false,
+        "origin": "consolidated",
+        "consolidated_from": [
+          "d010:6",
+          "d016:9",
+          "d014:8",
+          "d012:7",
+          "d018:10"
+        ],
+        "consolidated_into": null,
+        "fingerprint": "c:a6a15da4a208",
+        "revision": 0,
+        "affect": {
+          "valence": 0.0,
+          "arousal": 0.0,
+          "peak_arousal": 0.0,
+          "felt_at": 0.0,
+          "arousal_half_life": 3.0,
+          "valence_half_life": 10.0,
+          "source": "neutral",
+          "drivers": []
+        },
+        "speech": {
+          "act": "statement",
+          "force": 0.5,
+          "register": "chat",
+          "motive": "",
+          "hedged": false,
+          "confidence": 0.4,
+          "evidence": []
+        },
+        "narrative_hits": 1,
+        "narrative_heat": 0.125,
+        "narrated_at": 1794536772.9847717,
+        "kind": "semantic",
+        "scope": "proj:Y5H1ggs/memory-palace",
+        "valid_from": 0.0,
+        "valid_to": null,
+        "superseded_by": "",
+        "supersedes": []
+      }
+    ],
+    "edges": [
+      [
+        "rule:no-fabricate",
+        "rule:schema",
+        {
+          "weight": 5.0,
+          "coactivations": 5,
+          "last_coactivated": 1794191172.9847717
+        }
+      ],
+      [
+        "rule:no-fabricate",
+        "rule:test-first",
+        {
+          "weight": 5.0,
+          "coactivations": 5,
+          "last_coactivated": 1794191172.9847717
+        }
+      ],
+      [
+        "rule:no-emoji",
+        "rule:no-fabricate",
+        {
+          "weight": 5.0,
+          "coactivations": 5,
+          "last_coactivated": 1794191172.9847717
+        }
+      ],
+      [
+        "pref:table",
+        "rule:no-fabricate",
+        {
+          "weight": 5.0,
+          "coactivations": 5,
+          "last_coactivated": 1794191172.9847717
+        }
+      ],
+      [
+        "pref:concise",
+        "rule:no-fabricate",
+        {
+          "weight": 5.0,
+          "coactivations": 5,
+          "last_coactivated": 1794191172.9847717
+        }
+      ],
+      [
+        "rule:schema",
+        "rule:test-first",
+        {
+          "weight": 5.0,
+          "coactivations": 5,
+          "last_coactivated": 1794191172.9847717
+        }
+      ],
+      [
+        "rule:no-emoji",
+        "rule:schema",
+        {
+          "weight": 5.0,
+          "coactivations": 5,
+          "last_coactivated": 1794191172.9847717
+        }
+      ],
+      [
+        "pref:table",
+        "rule:schema",
+        {
+          "weight": 5.0,
+          "coactivations": 5,
+          "last_coactivated": 1794191172.9847717
+        }
+      ],
+      [
+        "pref:concise",
+        "rule:schema",
+        {
+          "weight": 5.0,
+          "coactivations": 5,
+          "last_coactivated": 1794191172.9847717
+        }
+      ],
+      [
+        "rule:no-emoji",
+        "rule:test-first",
+        {
+          "weight": 5.0,
+          "coactivations": 5,
+          "last_coactivated": 1794191172.9847717
+        }
+      ],
+      [
+        "pref:table",
+        "rule:test-first",
+        {
+          "weight": 5.0,
+          "coactivations": 5,
+          "last_coactivated": 1794191172.9847717
+        }
+      ],
+      [
+        "pref:concise",
+        "rule:test-first",
+        {
+          "weight": 5.0,
+          "coactivations": 5,
+          "last_coactivated": 1794191172.9847717
+        }
+      ],
+      [
+        "pref:table",
+        "rule:no-emoji",
+        {
+          "weight": 8.0,
+          "coactivations": 8,
+          "last_coactivated": 1794191172.9847717
+        }
+      ],
+      [
+        "pref:concise",
+        "rule:no-emoji",
+        {
+          "weight": 8.0,
+          "coactivations": 8,
+          "last_coactivated": 1794191172.9847717
+        }
+      ],
+      [
+        "pref:concise",
+        "pref:table",
+        {
+          "weight": 8.0,
+          "coactivations": 8,
+          "last_coactivated": 1794191172.9847717
+        }
+      ],
+      [
+        "d006:4",
+        "d010:6",
+        {
+          "weight": 2.0,
+          "coactivations": 2,
+          "last_coactivated": 1794104772.9847717
+        }
+      ],
+      [
+        "d006:4",
+        "d012:7",
+        {
+          "weight": 1.0,
+          "coactivations": 1,
+          "last_coactivated": 1794104772.9847717
+        }
+      ],
+      [
+        "d006:4",
+        "d014:8",
+        {
+          "weight": 1.0,
+          "coactivations": 1,
+          "last_coactivated": 1794104772.9847717
+        }
+      ],
+      [
+        "d010:6",
+        "d012:7",
+        {
+          "weight": 1.0,
+          "coactivations": 1,
+          "last_coactivated": 1794104772.9847717
+        }
+      ],
+      [
+        "d010:6",
+        "d014:8",
+        {
+          "weight": 1.0,
+          "coactivations": 1,
+          "last_coactivated": 1794104772.9847717
+        }
+      ],
+      [
+        "core:a6a15da4",
+        "d010:6",
+        {
+          "weight": 2.0,
+          "coactivations": 1,
+          "last_coactivated": 1794536772.9847717
+        }
+      ],
+      [
+        "d012:7",
+        "d014:8",
+        {
+          "weight": 1.0,
+          "coactivations": 1,
+          "last_coactivated": 1794104772.9847717
+        }
+      ],
+      [
+        "core:a6a15da4",
+        "d012:7",
+        {
+          "weight": 2.0,
+          "coactivations": 1,
+          "last_coactivated": 1794536772.9847717
+        }
+      ],
+      [
+        "core:a6a15da4",
+        "d014:8",
+        {
+          "weight": 2.0,
+          "coactivations": 1,
+          "last_coactivated": 1794536772.9847717
+        }
+      ],
+      [
+        "core:a6a15da4",
+        "d016:9",
+        {
+          "weight": 2.0,
+          "coactivations": 1,
+          "last_coactivated": 1794536772.9847717
+        }
+      ],
+      [
+        "core:a6a15da4",
+        "d018:10",
+        {
+          "weight": 2.0,
+          "coactivations": 1,
+          "last_coactivated": 1794536772.9847717
+        }
+      ]
+    ]
   },
   "events": [
     {
-      "ts": 1789349014.0116167,
+      "ts": 1792808772.9847717,
       "kind": "appraise",
       "payload": {
         "name": "rule:schema",
@@ -2081,7 +1629,7 @@
       }
     },
     {
-      "ts": 1789349014.0116167,
+      "ts": 1792808772.9847717,
       "kind": "assert_relation",
       "payload": {
         "src": "rule:test-first",
@@ -2091,7 +1639,7 @@
       }
     },
     {
-      "ts": 1789349014.0116167,
+      "ts": 1792808772.9847717,
       "kind": "recall",
       "payload": {
         "names": [
@@ -2111,33 +1659,7 @@
       }
     },
     {
-      "ts": 1789349014.0116167,
-      "kind": "recall",
-      "payload": {
-        "names": [
-          "rule:no-fabricate",
-          "rule:schema",
-          "rule:test-first",
-          "rule:no-emoji",
-          "pref:table",
-          "pref:concise"
-        ],
-        "retrieval": "names",
-        "top_score": 0.0,
-        "semantic_only": [],
-        "spread_hits": [],
-        "core_hits": [
-          "rule:no-fabricate",
-          "rule:schema",
-          "rule:test-first",
-          "rule:no-emoji",
-          "pref:table",
-          "pref:concise"
-        ]
-      }
-    },
-    {
-      "ts": 1789694614.0116167,
+      "ts": 1792808772.9847717,
       "kind": "recall",
       "payload": {
         "names": [
@@ -2163,27 +1685,7 @@
       }
     },
     {
-      "ts": 1789953814.0116167,
-      "kind": "recall",
-      "payload": {
-        "names": [
-          "rule:no-emoji",
-          "pref:table",
-          "pref:concise"
-        ],
-        "retrieval": "names",
-        "top_score": 0.0,
-        "semantic_only": [],
-        "spread_hits": [],
-        "core_hits": [
-          "rule:no-emoji",
-          "pref:table",
-          "pref:concise"
-        ]
-      }
-    },
-    {
-      "ts": 1790040214.0116167,
+      "ts": 1793154372.9847717,
       "kind": "recall",
       "payload": {
         "names": [
@@ -2209,7 +1711,53 @@
       }
     },
     {
-      "ts": 1790213014.0116167,
+      "ts": 1793413572.9847717,
+      "kind": "recall",
+      "payload": {
+        "names": [
+          "rule:no-emoji",
+          "pref:table",
+          "pref:concise"
+        ],
+        "retrieval": "names",
+        "top_score": 0.0,
+        "semantic_only": [],
+        "spread_hits": [],
+        "core_hits": [
+          "rule:no-emoji",
+          "pref:table",
+          "pref:concise"
+        ]
+      }
+    },
+    {
+      "ts": 1793499972.9847717,
+      "kind": "recall",
+      "payload": {
+        "names": [
+          "rule:no-fabricate",
+          "rule:schema",
+          "rule:test-first",
+          "rule:no-emoji",
+          "pref:table",
+          "pref:concise"
+        ],
+        "retrieval": "names",
+        "top_score": 0.0,
+        "semantic_only": [],
+        "spread_hits": [],
+        "core_hits": [
+          "rule:no-fabricate",
+          "rule:schema",
+          "rule:test-first",
+          "rule:no-emoji",
+          "pref:table",
+          "pref:concise"
+        ]
+      }
+    },
+    {
+      "ts": 1793672772.9847717,
       "kind": "recall",
       "payload": {
         "names": [
@@ -2224,7 +1772,7 @@
       }
     },
     {
-      "ts": 1790385814.0116167,
+      "ts": 1793845572.9847717,
       "kind": "recall",
       "payload": {
         "names": [
@@ -2250,7 +1798,7 @@
       }
     },
     {
-      "ts": 1790558614.0116167,
+      "ts": 1794018372.9847717,
       "kind": "recall",
       "payload": {
         "names": [
@@ -2270,7 +1818,7 @@
       }
     },
     {
-      "ts": 1790645014.0116167,
+      "ts": 1794104772.9847717,
       "kind": "recall",
       "payload": {
         "names": [
@@ -2287,7 +1835,7 @@
       }
     },
     {
-      "ts": 1790731414.0116167,
+      "ts": 1794191172.9847717,
       "kind": "recall",
       "payload": {
         "names": [
@@ -2313,680 +1861,7 @@
       }
     },
     {
-      "ts": 1791077014.0116167,
-      "kind": "recall",
-      "payload": {
-        "names": [
-          "d012:7",
-          "d014:8",
-          "d016:9",
-          "d018:10"
-        ],
-        "retrieval": "names",
-        "top_score": 0.0,
-        "semantic_only": [],
-        "spread_hits": [],
-        "core_hits": []
-      }
-    },
-    {
-      "ts": 1791077014.0116167,
-      "kind": "recall",
-      "payload": {
-        "names": [
-          "rule:no-fabricate",
-          "rule:schema",
-          "rule:test-first",
-          "rule:no-emoji",
-          "pref:table",
-          "pref:concise"
-        ],
-        "retrieval": "names",
-        "top_score": 0.0,
-        "semantic_only": [],
-        "spread_hits": [],
-        "core_hits": [
-          "rule:no-fabricate",
-          "rule:schema",
-          "rule:test-first",
-          "rule:no-emoji",
-          "pref:table",
-          "pref:concise"
-        ]
-      }
-    },
-    {
-      "ts": 1791163414.0116167,
-      "kind": "recall",
-      "payload": {
-        "names": [
-          "rule:no-emoji",
-          "pref:table",
-          "pref:concise"
-        ],
-        "retrieval": "names",
-        "top_score": 0.0,
-        "semantic_only": [],
-        "spread_hits": [],
-        "core_hits": [
-          "rule:no-emoji",
-          "pref:table",
-          "pref:concise"
-        ]
-      }
-    },
-    {
-      "ts": 1791422614.0116167,
-      "kind": "recall",
-      "payload": {
-        "names": [
-          "rule:no-fabricate",
-          "rule:schema",
-          "rule:test-first",
-          "rule:no-emoji",
-          "pref:table",
-          "pref:concise"
-        ],
-        "retrieval": "names",
-        "top_score": 0.0,
-        "semantic_only": [],
-        "spread_hits": [],
-        "core_hits": [
-          "rule:no-fabricate",
-          "rule:schema",
-          "rule:test-first",
-          "rule:no-emoji",
-          "pref:table",
-          "pref:concise"
-        ]
-      }
-    },
-    {
-      "ts": 1791509014.0116167,
-      "kind": "recall",
-      "payload": {
-        "names": [
-          "d012:7",
-          "d014:8",
-          "d016:9",
-          "d018:10"
-        ],
-        "retrieval": "names",
-        "top_score": 0.0,
-        "semantic_only": [],
-        "spread_hits": [],
-        "core_hits": []
-      }
-    },
-    {
-      "ts": 1791768214.0116167,
-      "kind": "recall",
-      "payload": {
-        "names": [
-          "rule:no-emoji",
-          "pref:table",
-          "pref:concise"
-        ],
-        "retrieval": "names",
-        "top_score": 0.0,
-        "semantic_only": [],
-        "spread_hits": [],
-        "core_hits": [
-          "rule:no-emoji",
-          "pref:table",
-          "pref:concise"
-        ]
-      }
-    },
-    {
-      "ts": 1791768214.0116167,
-      "kind": "recall",
-      "payload": {
-        "names": [
-          "rule:no-fabricate",
-          "rule:schema",
-          "rule:test-first",
-          "rule:no-emoji",
-          "pref:table",
-          "pref:concise"
-        ],
-        "retrieval": "names",
-        "top_score": 0.0,
-        "semantic_only": [],
-        "spread_hits": [],
-        "core_hits": [
-          "rule:no-fabricate",
-          "rule:schema",
-          "rule:test-first",
-          "rule:no-emoji",
-          "pref:table",
-          "pref:concise"
-        ]
-      }
-    },
-    {
-      "ts": 1791941014.0116167,
-      "kind": "recall",
-      "payload": {
-        "names": [
-          "d012:7",
-          "d014:8",
-          "d016:9",
-          "d018:10"
-        ],
-        "retrieval": "names",
-        "top_score": 0.0,
-        "semantic_only": [],
-        "spread_hits": [],
-        "core_hits": []
-      }
-    },
-    {
-      "ts": 1791941014.0116167,
-      "kind": "crystallize",
-      "payload": {
-        "key": "concise",
-        "confidence": 0.8135,
-        "observations": 6,
-        "span_days": 30.0,
-        "reason": "evidence_crystallized"
-      }
-    },
-    {
-      "ts": 1791941014.0116167,
-      "kind": "crystallize",
-      "payload": {
-        "key": "tables",
-        "confidence": 0.8135,
-        "observations": 6,
-        "span_days": 30.0,
-        "reason": "evidence_crystallized"
-      }
-    },
-    {
-      "ts": 1791941014.0116167,
-      "kind": "crystallize",
-      "payload": {
-        "key": "verbose",
-        "confidence": 0.8135,
-        "observations": 6,
-        "span_days": 30.0,
-        "reason": "evidence_crystallized"
-      }
-    },
-    {
-      "ts": 1791941014.0116167,
-      "kind": "adjudicate",
-      "payload": {
-        "ts": 1791941014.0116167,
-        "pair": [
-          "concise",
-          "verbose"
-        ],
-        "winner": null,
-        "reason": "ambiguous",
-        "margin": 0.0,
-        "confidence": [
-          0.8135,
-          0.8135
-        ]
-      }
-    },
-    {
-      "ts": 1791941014.0116167,
-      "kind": "consolidate",
-      "payload": {
-        "target": "core:e90f9cad",
-        "members": [
-          "d012:7",
-          "d018:10",
-          "d016:9",
-          "d014:8"
-        ],
-        "fingerprint": "c:e90f9cad4dcf",
-        "reused": false,
-        "via": "tags"
-      }
-    },
-    {
-      "ts": 1791941014.0116167,
-      "kind": "grasp",
-      "payload": {
-        "grabbed": [
-          "d030:16",
-          "core:e90f9cad",
-          "pref:concise",
-          "pref:table"
-        ],
-        "spent": 4.0
-      }
-    },
-    {
-      "ts": 1791941014.0116167,
-      "kind": "gc",
-      "payload": {
-        "deleted": [
-          "pref:cn-comment",
-          "pref:no-flattery",
-          "d000:1",
-          "d004:3",
-          "d008:5"
-        ],
-        "scanned": 25,
-        "reasons": {
-          "pref:cn-comment": "importance_below_threshold",
-          "pref:no-flattery": "importance_below_threshold",
-          "d000:1": "weight_floor",
-          "d004:3": "weight_floor",
-          "d008:5": "weight_floor"
-        },
-        "protected_by_kind": [],
-        "pruned_relations": []
-      }
-    },
-    {
-      "ts": 1791941014.0116167,
-      "kind": "narrate",
-      "payload": {
-        "rev": 1,
-        "selected": 9,
-        "dropped": 11,
-        "coherence": 1.0,
-        "reliability": 0.9475,
-        "monopoly": 0.503084
-      }
-    },
-    {
-      "ts": 1791941014.0116167,
-      "kind": "persona_health",
-      "payload": {
-        "health": "stable",
-        "distance": 0.0,
-        "consistent": true,
-        "oversell": 0.0,
-        "churn_unstable": false
-      }
-    },
-    {
-      "ts": 1791941014.0116167,
-      "kind": "reflect",
-      "payload": {
-        "findings": 3,
-        "suggestions": 1,
-        "narrative": "第 1 轮自我回看：窗口 30 天内 29 次事件，沉淀 1 次、遗忘 5 条、风格固化 3 次 / 撤销 0 次；当前 20 个节点中 7 个为高层记忆。发现 3 项待核查信号，提出 1 条参数建议（不自动执行）。｜第 1 次自述：20 条记忆里，我留下 9 条、放下 11 条。线索是 起源「硬规则」4条 → 转折「其他」2条 → 转折「琐事」1条 → 当下「偏好」2条。连续性 1.00，可靠度 0.95，单主题占比 0.50。"
-      }
-    },
-    {
-      "ts": 1792113814.0116167,
-      "kind": "recall",
-      "payload": {
-        "names": [
-          "rule:no-fabricate",
-          "rule:schema",
-          "rule:test-first",
-          "rule:no-emoji",
-          "pref:table",
-          "pref:concise"
-        ],
-        "retrieval": "names",
-        "top_score": 0.0,
-        "semantic_only": [],
-        "spread_hits": [],
-        "core_hits": [
-          "rule:no-fabricate",
-          "rule:schema",
-          "rule:test-first",
-          "rule:no-emoji",
-          "pref:table",
-          "pref:concise"
-        ]
-      }
-    },
-    {
-      "ts": 1792373014.0116167,
-      "kind": "recall",
-      "payload": {
-        "names": [
-          "d014:8",
-          "d016:9",
-          "d018:10",
-          "core:e90f9cad"
-        ],
-        "retrieval": "names",
-        "top_score": 0.0,
-        "semantic_only": [],
-        "spread_hits": [],
-        "core_hits": [
-          "core:e90f9cad"
-        ]
-      }
-    },
-    {
-      "ts": 1792373014.0116167,
-      "kind": "recall",
-      "payload": {
-        "names": [
-          "rule:no-emoji",
-          "pref:table",
-          "pref:concise"
-        ],
-        "retrieval": "names",
-        "top_score": 0.0,
-        "semantic_only": [],
-        "spread_hits": [],
-        "core_hits": [
-          "rule:no-emoji",
-          "pref:table",
-          "pref:concise"
-        ]
-      }
-    },
-    {
-      "ts": 1792459414.0116167,
-      "kind": "recall",
-      "payload": {
-        "names": [
-          "rule:no-fabricate",
-          "rule:schema",
-          "rule:test-first",
-          "rule:no-emoji",
-          "pref:table",
-          "pref:concise"
-        ],
-        "retrieval": "names",
-        "top_score": 0.0,
-        "semantic_only": [],
-        "spread_hits": [],
-        "core_hits": [
-          "rule:no-fabricate",
-          "rule:schema",
-          "rule:test-first",
-          "rule:no-emoji",
-          "pref:table",
-          "pref:concise"
-        ]
-      }
-    },
-    {
-      "ts": 1792805014.0116167,
-      "kind": "recall",
-      "payload": {
-        "names": [
-          "d016:9",
-          "d018:10",
-          "core:e90f9cad",
-          "d040:21"
-        ],
-        "retrieval": "names",
-        "top_score": 0.0,
-        "semantic_only": [],
-        "spread_hits": [],
-        "core_hits": [
-          "core:e90f9cad"
-        ]
-      }
-    },
-    {
-      "ts": 1792805014.0116167,
-      "kind": "recall",
-      "payload": {
-        "names": [
-          "rule:no-fabricate",
-          "rule:schema",
-          "rule:test-first",
-          "rule:no-emoji",
-          "pref:table",
-          "pref:concise"
-        ],
-        "retrieval": "names",
-        "top_score": 0.0,
-        "semantic_only": [],
-        "spread_hits": [],
-        "core_hits": [
-          "rule:no-fabricate",
-          "rule:schema",
-          "rule:test-first",
-          "rule:no-emoji",
-          "pref:table",
-          "pref:concise"
-        ]
-      }
-    },
-    {
-      "ts": 1792977814.0116167,
-      "kind": "recall",
-      "payload": {
-        "names": [
-          "rule:no-emoji",
-          "pref:table",
-          "pref:concise"
-        ],
-        "retrieval": "names",
-        "top_score": 0.0,
-        "semantic_only": [],
-        "spread_hits": [],
-        "core_hits": [
-          "rule:no-emoji",
-          "pref:table",
-          "pref:concise"
-        ]
-      }
-    },
-    {
-      "ts": 1793150614.0116167,
-      "kind": "recall",
-      "payload": {
-        "names": [
-          "rule:no-fabricate",
-          "rule:schema",
-          "rule:test-first",
-          "rule:no-emoji",
-          "pref:table",
-          "pref:concise"
-        ],
-        "retrieval": "names",
-        "top_score": 0.0,
-        "semantic_only": [],
-        "spread_hits": [],
-        "core_hits": [
-          "rule:no-fabricate",
-          "rule:schema",
-          "rule:test-first",
-          "rule:no-emoji",
-          "pref:table",
-          "pref:concise"
-        ]
-      }
-    },
-    {
-      "ts": 1793237014.0116167,
-      "kind": "recall",
-      "payload": {
-        "names": [
-          "d018:10",
-          "core:e90f9cad",
-          "d040:21",
-          "d044:23"
-        ],
-        "retrieval": "names",
-        "top_score": 0.0,
-        "semantic_only": [],
-        "spread_hits": [],
-        "core_hits": [
-          "core:e90f9cad"
-        ]
-      }
-    },
-    {
-      "ts": 1793237014.0116167,
-      "kind": "narrate",
-      "payload": {
-        "rev": 2,
-        "selected": 9,
-        "dropped": 18,
-        "coherence": 0.836364,
-        "reliability": 0.922222,
-        "monopoly": 0.479887
-      }
-    },
-    {
-      "ts": 1793496214.0116167,
-      "kind": "recall",
-      "payload": {
-        "names": [
-          "rule:no-fabricate",
-          "rule:schema",
-          "rule:test-first",
-          "rule:no-emoji",
-          "pref:table",
-          "pref:concise"
-        ],
-        "retrieval": "names",
-        "top_score": 0.0,
-        "semantic_only": [],
-        "spread_hits": [],
-        "core_hits": [
-          "rule:no-fabricate",
-          "rule:schema",
-          "rule:test-first",
-          "rule:no-emoji",
-          "pref:table",
-          "pref:concise"
-        ]
-      }
-    },
-    {
-      "ts": 1793582614.0116167,
-      "kind": "recall",
-      "payload": {
-        "names": [
-          "rule:no-emoji",
-          "pref:table",
-          "pref:concise"
-        ],
-        "retrieval": "names",
-        "top_score": 0.0,
-        "semantic_only": [],
-        "spread_hits": [],
-        "core_hits": [
-          "rule:no-emoji",
-          "pref:table",
-          "pref:concise"
-        ]
-      }
-    },
-    {
-      "ts": 1793669014.0116167,
-      "kind": "recall",
-      "payload": {
-        "names": [
-          "d018:10",
-          "core:e90f9cad",
-          "d040:21",
-          "d044:23"
-        ],
-        "retrieval": "names",
-        "top_score": 0.0,
-        "semantic_only": [],
-        "spread_hits": [],
-        "core_hits": [
-          "core:e90f9cad"
-        ]
-      }
-    },
-    {
-      "ts": 1793841814.0116167,
-      "kind": "recall",
-      "payload": {
-        "names": [
-          "rule:no-fabricate",
-          "rule:schema",
-          "rule:test-first",
-          "rule:no-emoji",
-          "pref:table",
-          "pref:concise"
-        ],
-        "retrieval": "names",
-        "top_score": 0.0,
-        "semantic_only": [],
-        "spread_hits": [],
-        "core_hits": [
-          "rule:no-fabricate",
-          "rule:schema",
-          "rule:test-first",
-          "rule:no-emoji",
-          "pref:table",
-          "pref:concise"
-        ]
-      }
-    },
-    {
-      "ts": 1794101014.0116167,
-      "kind": "recall",
-      "payload": {
-        "names": [
-          "d018:10",
-          "core:e90f9cad",
-          "d040:21",
-          "d044:23"
-        ],
-        "retrieval": "names",
-        "top_score": 0.0,
-        "semantic_only": [],
-        "spread_hits": [],
-        "core_hits": [
-          "core:e90f9cad"
-        ]
-      }
-    },
-    {
-      "ts": 1794187414.0116167,
-      "kind": "recall",
-      "payload": {
-        "names": [
-          "rule:no-emoji",
-          "pref:table",
-          "pref:concise"
-        ],
-        "retrieval": "names",
-        "top_score": 0.0,
-        "semantic_only": [],
-        "spread_hits": [],
-        "core_hits": [
-          "rule:no-emoji",
-          "pref:table",
-          "pref:concise"
-        ]
-      }
-    },
-    {
-      "ts": 1794187414.0116167,
-      "kind": "recall",
-      "payload": {
-        "names": [
-          "rule:no-fabricate",
-          "rule:schema",
-          "rule:test-first",
-          "rule:no-emoji",
-          "pref:table",
-          "pref:concise"
-        ],
-        "retrieval": "names",
-        "top_score": 0.0,
-        "semantic_only": [],
-        "spread_hits": [],
-        "core_hits": [
-          "rule:no-fabricate",
-          "rule:schema",
-          "rule:test-first",
-          "rule:no-emoji",
-          "pref:table",
-          "pref:concise"
-        ]
-      }
-    },
-    {
-      "ts": 1794533014.0116167,
+      "ts": 1794536772.9847717,
       "kind": "assert_relation",
       "payload": {
         "src": "rule:test-first",
@@ -2996,7 +1871,7 @@
       }
     },
     {
-      "ts": 1794533014.0116167,
+      "ts": 1794536772.9847717,
       "kind": "assert_relation",
       "payload": {
         "src": "rule:test-first",
@@ -3006,17 +1881,17 @@
       }
     },
     {
-      "ts": 1794533014.0116167,
+      "ts": 1794536772.9847717,
       "kind": "assert_relation",
       "payload": {
         "src": "rule:test-first",
-        "dst": "core:e90f9cad",
+        "dst": "d010:6",
         "kind": "entails",
         "strength": 0.7
       }
     },
     {
-      "ts": 1794533014.0116167,
+      "ts": 1794536772.9847717,
       "kind": "feel_outcome",
       "payload": {
         "name": "rule:test-first",
@@ -3030,10 +1905,43 @@
       }
     },
     {
-      "ts": 1794533014.0116167,
+      "ts": 1794536772.9847717,
+      "kind": "crystallize",
+      "payload": {
+        "key": "concise",
+        "confidence": 0.7584,
+        "observations": 4,
+        "span_days": 18.0,
+        "reason": "evidence_crystallized"
+      }
+    },
+    {
+      "ts": 1794536772.9847717,
+      "kind": "crystallize",
+      "payload": {
+        "key": "tables",
+        "confidence": 0.7584,
+        "observations": 4,
+        "span_days": 18.0,
+        "reason": "evidence_crystallized"
+      }
+    },
+    {
+      "ts": 1794536772.9847717,
+      "kind": "crystallize",
+      "payload": {
+        "key": "verbose",
+        "confidence": 0.7584,
+        "observations": 4,
+        "span_days": 18.0,
+        "reason": "evidence_crystallized"
+      }
+    },
+    {
+      "ts": 1794536772.9847717,
       "kind": "adjudicate",
       "payload": {
-        "ts": 1794533014.0116167,
+        "ts": 1794536772.9847717,
         "pair": [
           "concise",
           "verbose"
@@ -3042,199 +1950,92 @@
         "reason": "ambiguous",
         "margin": 0.0,
         "confidence": [
-          0.8345,
-          0.8345
+          0.7584,
+          0.7584
         ]
       }
     },
     {
-      "ts": 1794533014.0116167,
+      "ts": 1794536772.9847717,
+      "kind": "consolidate",
+      "payload": {
+        "target": "core:a6a15da4",
+        "members": [
+          "d010:6",
+          "d016:9",
+          "d014:8",
+          "d012:7",
+          "d018:10"
+        ],
+        "fingerprint": "c:a6a15da4a208",
+        "reused": false,
+        "via": "tags"
+      }
+    },
+    {
+      "ts": 1794536772.9847717,
       "kind": "grasp",
       "payload": {
         "grabbed": [
-          "core:e90f9cad",
           "pref:concise",
           "pref:table",
-          "d052:27"
+          "core:a6a15da4",
+          "d006:4"
         ],
         "spent": 4.0
       }
     },
     {
-      "ts": 1794533014.0116167,
+      "ts": 1794536772.9847717,
       "kind": "gc",
       "payload": {
         "deleted": [
-          "d002:2",
-          "d006:4",
-          "d010:6",
-          "d012:7",
-          "d014:8",
-          "d016:9",
-          "d026:14",
-          "d028:15",
-          "d030:16",
-          "d032:17",
-          "d034:18",
-          "d036:19",
-          "d038:20",
-          "d042:22",
-          "d048:25"
+          "d000:1",
+          "d004:3"
         ],
-        "scanned": 34,
+        "scanned": 19,
         "reasons": {
-          "d002:2": "importance_below_threshold",
-          "d006:4": "weight_floor",
-          "d010:6": "weight_floor",
-          "d012:7": "weight_floor",
-          "d014:8": "weight_floor",
-          "d016:9": "weight_floor",
-          "d026:14": "weight_floor",
-          "d028:15": "weight_floor",
-          "d030:16": "weight_floor",
-          "d032:17": "weight_floor",
-          "d034:18": "weight_floor",
-          "d036:19": "weight_floor",
-          "d038:20": "weight_floor",
-          "d042:22": "weight_floor",
-          "d048:25": "importance_below_threshold"
+          "d000:1": "weight_floor",
+          "d004:3": "weight_floor"
         },
         "protected_by_kind": [],
         "pruned_relations": []
       }
     },
     {
-      "ts": 1794533014.0116167,
+      "ts": 1794536772.9847717,
       "kind": "narrate",
       "payload": {
-        "rev": 3,
-        "selected": 9,
-        "dropped": 10,
-        "coherence": 0.91,
-        "reliability": 0.902778,
-        "monopoly": 0.477415
+        "rev": 1,
+        "selected": 8,
+        "dropped": 9,
+        "coherence": 0.944444,
+        "reliability": 0.908125,
+        "monopoly": 0.533395
       }
     },
     {
-      "ts": 1794533014.0116167,
+      "ts": 1794536772.9847717,
+      "kind": "persona_health",
+      "payload": {
+        "health": "stable",
+        "distance": 0.0,
+        "consistent": true,
+        "oversell": 0.0,
+        "churn_unstable": false
+      }
+    },
+    {
+      "ts": 1794536772.9847717,
       "kind": "reflect",
       "payload": {
-        "findings": 4,
-        "suggestions": 2,
-        "narrative": "第 2 轮自我回看：窗口 30 天内 36 次事件，沉淀 1 次、遗忘 20 条、风格固化 3 次 / 撤销 0 次；当前 19 个节点中 7 个为高层记忆。发现 4 项待核查信号，提出 2 条参数建议（不自动执行）。｜第 3 次自述：19 条记忆里，我留下 9 条、放下 10 条。线索是 起源「硬规则」4条 → 转折「其他」2条 → 转折「复盘」1条 → 当下「偏好」2条。连续性 0.91，可靠度 0.90，单主题占比 0.48。"
-      }
-    },
-    {
-      "ts": 1794533014.0116167,
-      "kind": "selfcorrect_pending",
-      "payload": {
-        "pid": "p1",
-        "param": "importance_forget",
-        "before": 0.12,
-        "after": 0.084,
-        "code": "mass_forgetting",
-        "observed": null,
-        "metric": "forget_pressure"
+        "findings": 2,
+        "suggestions": 1,
+        "narrative": "第 1 轮自我回看：窗口 30 天内 25 次事件，沉淀 1 次、遗忘 2 条、风格固化 3 次 / 撤销 0 次；当前 17 个节点中 9 个为高层记忆。发现 2 项待核查信号，提出 1 条参数建议（不自动执行）。｜第 1 次自述：17 条记忆里，我留下 8 条、放下 9 条。线索是 起源「硬规则」4条 → 转折「复盘」1条 → 转折「踩坑」1条 → 当下「偏好」2条。连续性 0.94，可靠度 0.91，单主题占比 0.53。"
       }
     }
   ],
   "tombstone": [
-    {
-      "name": "pref:cn-comment",
-      "content": "注释写中文，变量名用英文",
-      "tier": "fact",
-      "tags": [
-        "偏好",
-        "工程"
-      ],
-      "created_at": 1789349014.0116167,
-      "last_accessed": 1789349014.0116167,
-      "base_weight": 1.0,
-      "access_count": 1,
-      "pinned": false,
-      "origin": "external",
-      "consolidated_from": [],
-      "consolidated_into": null,
-      "fingerprint": null,
-      "revision": 0,
-      "affect": {
-        "valence": 0.0,
-        "arousal": 0.0,
-        "peak_arousal": 0.0,
-        "felt_at": 1789349014.0116167,
-        "arousal_half_life": 3.0,
-        "valence_half_life": 10.0,
-        "source": "neutral",
-        "drivers": []
-      },
-      "speech": {
-        "act": "statement",
-        "force": 0.5,
-        "register": "chat",
-        "motive": "",
-        "hedged": false,
-        "confidence": 0.3,
-        "evidence": []
-      },
-      "narrative_hits": 0,
-      "narrative_heat": 0.0,
-      "narrated_at": 0.0,
-      "kind": "semantic",
-      "scope": "proj:Y5H1ggs/memory-palace",
-      "valid_from": 0.0,
-      "valid_to": null,
-      "superseded_by": "",
-      "supersedes": []
-    },
-    {
-      "name": "pref:no-flattery",
-      "content": "不要奉承式开场",
-      "tier": "fact",
-      "tags": [
-        "偏好",
-        "语气"
-      ],
-      "created_at": 1789349014.0116167,
-      "last_accessed": 1789349014.0116167,
-      "base_weight": 1.0,
-      "access_count": 1,
-      "pinned": false,
-      "origin": "external",
-      "consolidated_from": [],
-      "consolidated_into": null,
-      "fingerprint": null,
-      "revision": 0,
-      "affect": {
-        "valence": 0.0,
-        "arousal": 0.0,
-        "peak_arousal": 0.0,
-        "felt_at": 1789349014.0116167,
-        "arousal_half_life": 3.0,
-        "valence_half_life": 10.0,
-        "source": "neutral",
-        "drivers": []
-      },
-      "speech": {
-        "act": "prohibition",
-        "force": 0.9,
-        "register": "chat",
-        "motive": "",
-        "hedged": false,
-        "confidence": 0.55,
-        "evidence": [
-          "不要"
-        ]
-      },
-      "narrative_hits": 0,
-      "narrative_heat": 0.0,
-      "narrated_at": 0.0,
-      "kind": "semantic",
-      "scope": "proj:Y5H1ggs/memory-palace",
-      "valid_from": 0.0,
-      "valid_to": null,
-      "superseded_by": "",
-      "supersedes": []
-    },
     {
       "name": "d000:1",
       "content": "写了一个把 JSON 拆成树的小工具，比想象中好用",
@@ -3242,8 +2043,8 @@
       "tags": [
         "工具"
       ],
-      "created_at": 1789349014.0116167,
-      "last_accessed": 1789349014.0116167,
+      "created_at": 1792808772.9847717,
+      "last_accessed": 1792808772.9847717,
       "base_weight": 1.0,
       "access_count": 1,
       "pinned": false,
@@ -3256,7 +2057,7 @@
         "valence": 0.06,
         "arousal": 0.2,
         "peak_arousal": 0.2,
-        "felt_at": 1789349014.0116167,
+        "felt_at": 1792808772.9847717,
         "arousal_half_life": 3.0,
         "valence_half_life": 10.0,
         "source": "explicit",
@@ -3289,8 +2090,8 @@
         "踩坑",
         "工程"
       ],
-      "created_at": 1789694614.0116167,
-      "last_accessed": 1789694614.0116167,
+      "created_at": 1793154372.9847717,
+      "last_accessed": 1793154372.9847717,
       "base_weight": 1.0,
       "access_count": 1,
       "pinned": false,
@@ -3303,7 +2104,7 @@
         "valence": -0.3,
         "arousal": 0.6,
         "peak_arousal": 0.6,
-        "felt_at": 1789694614.0116167,
+        "felt_at": 1793154372.9847717,
         "arousal_half_life": 3.0,
         "valence_half_life": 10.0,
         "source": "explicit",
@@ -3313,753 +2114,6 @@
         "act": "statement",
         "force": 0.5,
         "register": "coding",
-        "motive": "",
-        "hedged": false,
-        "confidence": 0.3,
-        "evidence": []
-      },
-      "narrative_hits": 0,
-      "narrative_heat": 0.0,
-      "narrated_at": 0.0,
-      "kind": "episodic",
-      "scope": "proj:Y5H1ggs/memory-palace",
-      "valid_from": 0.0,
-      "valid_to": null,
-      "superseded_by": "",
-      "supersedes": []
-    },
-    {
-      "name": "d008:5",
-      "content": "日志里打了完整凭据，被安全扫描抓出来",
-      "tier": "event",
-      "tags": [
-        "踩坑",
-        "安全"
-      ],
-      "created_at": 1790040214.0116167,
-      "last_accessed": 1790040214.0116167,
-      "base_weight": 1.0,
-      "access_count": 1,
-      "pinned": false,
-      "origin": "external",
-      "consolidated_from": [],
-      "consolidated_into": null,
-      "fingerprint": null,
-      "revision": 0,
-      "affect": {
-        "valence": -0.425,
-        "arousal": 0.85,
-        "peak_arousal": 0.85,
-        "felt_at": 1790040214.0116167,
-        "arousal_half_life": 3.0,
-        "valence_half_life": 10.0,
-        "source": "explicit",
-        "drivers": []
-      },
-      "speech": {
-        "act": "statement",
-        "force": 0.5,
-        "register": "chat",
-        "motive": "",
-        "hedged": false,
-        "confidence": 0.3,
-        "evidence": []
-      },
-      "narrative_hits": 0,
-      "narrative_heat": 0.0,
-      "narrated_at": 0.0,
-      "kind": "episodic",
-      "scope": "proj:Y5H1ggs/memory-palace",
-      "valid_from": 0.0,
-      "valid_to": null,
-      "superseded_by": "",
-      "supersedes": []
-    },
-    {
-      "name": "d002:2",
-      "content": "把长函数拆开之后可读性明显变好",
-      "tier": "event",
-      "tags": [
-        "重构",
-        "习惯"
-      ],
-      "created_at": 1789521814.0116167,
-      "last_accessed": 1789521814.0116167,
-      "base_weight": 1.0,
-      "access_count": 1,
-      "pinned": false,
-      "origin": "external",
-      "consolidated_from": [],
-      "consolidated_into": null,
-      "fingerprint": null,
-      "revision": 0,
-      "affect": {
-        "valence": 0.09,
-        "arousal": 0.3,
-        "peak_arousal": 0.3,
-        "felt_at": 1789521814.0116167,
-        "arousal_half_life": 3.0,
-        "valence_half_life": 10.0,
-        "source": "explicit",
-        "drivers": []
-      },
-      "speech": {
-        "act": "statement",
-        "force": 0.5,
-        "register": "coding",
-        "motive": "",
-        "hedged": false,
-        "confidence": 0.3,
-        "evidence": []
-      },
-      "narrative_hits": 0,
-      "narrative_heat": 0.0,
-      "narrated_at": 0.0,
-      "kind": "procedural",
-      "scope": "proj:Y5H1ggs/memory-palace",
-      "valid_from": 0.0,
-      "valid_to": null,
-      "superseded_by": "",
-      "supersedes": []
-    },
-    {
-      "name": "d006:4",
-      "content": "缓存键忘了带用户名，两个账号互相串数据",
-      "tier": "event",
-      "tags": [
-        "踩坑",
-        "教训"
-      ],
-      "created_at": 1789867414.0116167,
-      "last_accessed": 1790645014.0116167,
-      "base_weight": 0.8890827746802459,
-      "access_count": 3,
-      "pinned": false,
-      "origin": "external",
-      "consolidated_from": [],
-      "consolidated_into": null,
-      "fingerprint": null,
-      "revision": 0,
-      "affect": {
-        "valence": -0.375,
-        "arousal": 0.75,
-        "peak_arousal": 0.75,
-        "felt_at": 1789867414.0116167,
-        "arousal_half_life": 3.0,
-        "valence_half_life": 10.0,
-        "source": "explicit",
-        "drivers": []
-      },
-      "speech": {
-        "act": "statement",
-        "force": 0.5,
-        "register": "chat",
-        "motive": "",
-        "hedged": false,
-        "confidence": 0.3,
-        "evidence": []
-      },
-      "narrative_hits": 0,
-      "narrative_heat": 0.0,
-      "narrated_at": 0.0,
-      "kind": "episodic",
-      "scope": "proj:Y5H1ggs/memory-palace",
-      "valid_from": 0.0,
-      "valid_to": null,
-      "superseded_by": "",
-      "supersedes": []
-    },
-    {
-      "name": "d010:6",
-      "content": "线上回滚了一次，原因是迁移脚本没在测试库跑过，很痛",
-      "tier": "event",
-      "tags": [
-        "复盘",
-        "教训"
-      ],
-      "created_at": 1790213014.0116167,
-      "last_accessed": 1790645014.0116167,
-      "base_weight": 1.092323011347294,
-      "access_count": 3,
-      "pinned": false,
-      "origin": "external",
-      "consolidated_from": [],
-      "consolidated_into": null,
-      "fingerprint": null,
-      "revision": 0,
-      "affect": {
-        "valence": -0.45,
-        "arousal": 0.9,
-        "peak_arousal": 0.9,
-        "felt_at": 1790213014.0116167,
-        "arousal_half_life": 3.0,
-        "valence_half_life": 10.0,
-        "source": "explicit",
-        "drivers": []
-      },
-      "speech": {
-        "act": "statement",
-        "force": 0.5,
-        "register": "coding",
-        "motive": "",
-        "hedged": false,
-        "confidence": 0.3,
-        "evidence": []
-      },
-      "narrative_hits": 0,
-      "narrative_heat": 0.0,
-      "narrated_at": 0.0,
-      "kind": "episodic",
-      "scope": "proj:Y5H1ggs/memory-palace",
-      "valid_from": 0.0,
-      "valid_to": null,
-      "superseded_by": "",
-      "supersedes": []
-    },
-    {
-      "name": "d012:7",
-      "content": "CI 在 Windows 上因为控制台编码炸了，排查两小时",
-      "tier": "trace",
-      "tags": [
-        "复盘",
-        "教训"
-      ],
-      "created_at": 1790385814.0116167,
-      "last_accessed": 1791941014.0116167,
-      "base_weight": 1.0246912424361143,
-      "access_count": 5,
-      "pinned": false,
-      "origin": "external",
-      "consolidated_from": [],
-      "consolidated_into": "core:e90f9cad",
-      "fingerprint": null,
-      "revision": 0,
-      "affect": {
-        "valence": -0.4,
-        "arousal": 0.8,
-        "peak_arousal": 0.8,
-        "felt_at": 1790385814.0116167,
-        "arousal_half_life": 3.0,
-        "valence_half_life": 10.0,
-        "source": "explicit",
-        "drivers": []
-      },
-      "speech": {
-        "act": "statement",
-        "force": 0.5,
-        "register": "chat",
-        "motive": "",
-        "hedged": false,
-        "confidence": 0.3,
-        "evidence": []
-      },
-      "narrative_hits": 0,
-      "narrative_heat": 0.0,
-      "narrated_at": 0.0,
-      "kind": "episodic",
-      "scope": "proj:Y5H1ggs/memory-palace",
-      "valid_from": 0.0,
-      "valid_to": null,
-      "superseded_by": "",
-      "supersedes": []
-    },
-    {
-      "name": "d014:8",
-      "content": "把并发测试的断言写成「没报错」，等于没测",
-      "tier": "trace",
-      "tags": [
-        "复盘",
-        "教训"
-      ],
-      "created_at": 1790558614.0116167,
-      "last_accessed": 1792373014.0116167,
-      "base_weight": 0.6992978929439618,
-      "access_count": 6,
-      "pinned": false,
-      "origin": "external",
-      "consolidated_from": [],
-      "consolidated_into": "core:e90f9cad",
-      "fingerprint": null,
-      "revision": 0,
-      "affect": {
-        "valence": -0.35,
-        "arousal": 0.7,
-        "peak_arousal": 0.7,
-        "felt_at": 1790558614.0116167,
-        "arousal_half_life": 3.0,
-        "valence_half_life": 10.0,
-        "source": "explicit",
-        "drivers": []
-      },
-      "speech": {
-        "act": "statement",
-        "force": 0.5,
-        "register": "coding",
-        "motive": "",
-        "hedged": false,
-        "confidence": 0.3,
-        "evidence": []
-      },
-      "narrative_hits": 0,
-      "narrative_heat": 0.0,
-      "narrated_at": 0.0,
-      "kind": "episodic",
-      "scope": "proj:Y5H1ggs/memory-palace",
-      "valid_from": 0.0,
-      "valid_to": null,
-      "superseded_by": "",
-      "supersedes": []
-    },
-    {
-      "name": "d016:9",
-      "content": "测试用例自己写错了：用常数学习率制造「无惯性」，结果测不出来",
-      "tier": "trace",
-      "tags": [
-        "复盘",
-        "教训"
-      ],
-      "created_at": 1790731414.0116167,
-      "last_accessed": 1792805014.0116167,
-      "base_weight": 0.6295326948749249,
-      "access_count": 6,
-      "pinned": false,
-      "origin": "external",
-      "consolidated_from": [],
-      "consolidated_into": "core:e90f9cad",
-      "fingerprint": null,
-      "revision": 0,
-      "affect": {
-        "valence": -0.325,
-        "arousal": 0.65,
-        "peak_arousal": 0.65,
-        "felt_at": 1790731414.0116167,
-        "arousal_half_life": 3.0,
-        "valence_half_life": 10.0,
-        "source": "explicit",
-        "drivers": []
-      },
-      "speech": {
-        "act": "statement",
-        "force": 0.5,
-        "register": "coding",
-        "motive": "",
-        "hedged": false,
-        "confidence": 0.3,
-        "evidence": []
-      },
-      "narrative_hits": 0,
-      "narrative_heat": 0.0,
-      "narrated_at": 0.0,
-      "kind": "episodic",
-      "scope": "proj:Y5H1ggs/memory-palace",
-      "valid_from": 0.0,
-      "valid_to": null,
-      "superseded_by": "",
-      "supersedes": []
-    },
-    {
-      "name": "d026:14",
-      "content": "周三下午例会，同步了一下进度",
-      "tier": "event",
-      "tags": [
-        "琐事"
-      ],
-      "created_at": 1791595414.0116167,
-      "last_accessed": 1791595414.0116167,
-      "base_weight": 1.0,
-      "access_count": 1,
-      "pinned": false,
-      "origin": "external",
-      "consolidated_from": [],
-      "consolidated_into": null,
-      "fingerprint": null,
-      "revision": 0,
-      "affect": {
-        "valence": 0.015,
-        "arousal": 0.05,
-        "peak_arousal": 0.05,
-        "felt_at": 1791595414.0116167,
-        "arousal_half_life": 3.0,
-        "valence_half_life": 10.0,
-        "source": "explicit",
-        "drivers": []
-      },
-      "speech": {
-        "act": "statement",
-        "force": 0.5,
-        "register": "chat",
-        "motive": "",
-        "hedged": false,
-        "confidence": 0.3,
-        "evidence": []
-      },
-      "narrative_hits": 0,
-      "narrative_heat": 0.0,
-      "narrated_at": 0.0,
-      "kind": "episodic",
-      "scope": "proj:Y5H1ggs/memory-palace",
-      "valid_from": 0.0,
-      "valid_to": null,
-      "superseded_by": "",
-      "supersedes": []
-    },
-    {
-      "name": "d028:15",
-      "content": "同事问的那个正则问题其实用不着正则",
-      "tier": "event",
-      "tags": [
-        "琐事"
-      ],
-      "created_at": 1791768214.0116167,
-      "last_accessed": 1791768214.0116167,
-      "base_weight": 1.0,
-      "access_count": 1,
-      "pinned": false,
-      "origin": "external",
-      "consolidated_from": [],
-      "consolidated_into": null,
-      "fingerprint": null,
-      "revision": 0,
-      "affect": {
-        "valence": 0.03,
-        "arousal": 0.1,
-        "peak_arousal": 0.1,
-        "felt_at": 1791768214.0116167,
-        "arousal_half_life": 3.0,
-        "valence_half_life": 10.0,
-        "source": "explicit",
-        "drivers": []
-      },
-      "speech": {
-        "act": "statement",
-        "force": 0.5,
-        "register": "chat",
-        "motive": "缓和语气",
-        "hedged": false,
-        "confidence": 0.3,
-        "evidence": []
-      },
-      "narrative_hits": 0,
-      "narrative_heat": 0.0,
-      "narrated_at": 0.0,
-      "kind": "episodic",
-      "scope": "proj:Y5H1ggs/memory-palace",
-      "valid_from": 0.0,
-      "valid_to": null,
-      "superseded_by": "",
-      "supersedes": []
-    },
-    {
-      "name": "d030:16",
-      "content": "午饭时想到一个更简单的拆包方式",
-      "tier": "event",
-      "tags": [
-        "琐事"
-      ],
-      "created_at": 1791941014.0116167,
-      "last_accessed": 1791941014.0116167,
-      "base_weight": 1.3,
-      "access_count": 2,
-      "pinned": false,
-      "origin": "external",
-      "consolidated_from": [],
-      "consolidated_into": null,
-      "fingerprint": null,
-      "revision": 0,
-      "affect": {
-        "valence": 0.045,
-        "arousal": 0.15,
-        "peak_arousal": 0.15,
-        "felt_at": 1791941014.0116167,
-        "arousal_half_life": 3.0,
-        "valence_half_life": 10.0,
-        "source": "explicit",
-        "drivers": []
-      },
-      "speech": {
-        "act": "statement",
-        "force": 0.5,
-        "register": "chat",
-        "motive": "",
-        "hedged": false,
-        "confidence": 0.3,
-        "evidence": []
-      },
-      "narrative_hits": 1,
-      "narrative_heat": 0.125,
-      "narrated_at": 1791941014.0116167,
-      "kind": "episodic",
-      "scope": "proj:Y5H1ggs/memory-palace",
-      "valid_from": 0.0,
-      "valid_to": null,
-      "superseded_by": "",
-      "supersedes": []
-    },
-    {
-      "name": "d032:17",
-      "content": "客户希望导出 PDF，先确认了字体嵌入",
-      "tier": "event",
-      "tags": [
-        "交付"
-      ],
-      "created_at": 1792113814.0116167,
-      "last_accessed": 1792113814.0116167,
-      "base_weight": 1.0,
-      "access_count": 1,
-      "pinned": false,
-      "origin": "external",
-      "consolidated_from": [],
-      "consolidated_into": null,
-      "fingerprint": null,
-      "revision": 0,
-      "affect": {
-        "valence": 0.09,
-        "arousal": 0.3,
-        "peak_arousal": 0.3,
-        "felt_at": 1792113814.0116167,
-        "arousal_half_life": 3.0,
-        "valence_half_life": 10.0,
-        "source": "explicit",
-        "drivers": []
-      },
-      "speech": {
-        "act": "statement",
-        "force": 0.5,
-        "register": "chat",
-        "motive": "",
-        "hedged": false,
-        "confidence": 0.3,
-        "evidence": []
-      },
-      "narrative_hits": 0,
-      "narrative_heat": 0.0,
-      "narrated_at": 0.0,
-      "kind": "episodic",
-      "scope": "proj:Y5H1ggs/memory-palace",
-      "valid_from": 0.0,
-      "valid_to": null,
-      "superseded_by": "",
-      "supersedes": []
-    },
-    {
-      "name": "d034:18",
-      "content": "把 README 的安装步骤从 9 行压到 3 行",
-      "tier": "event",
-      "tags": [
-        "文档",
-        "交付"
-      ],
-      "created_at": 1792286614.0116167,
-      "last_accessed": 1792286614.0116167,
-      "base_weight": 1.0,
-      "access_count": 1,
-      "pinned": false,
-      "origin": "external",
-      "consolidated_from": [],
-      "consolidated_into": null,
-      "fingerprint": null,
-      "revision": 0,
-      "affect": {
-        "valence": 0.105,
-        "arousal": 0.35,
-        "peak_arousal": 0.35,
-        "felt_at": 1792286614.0116167,
-        "arousal_half_life": 3.0,
-        "valence_half_life": 10.0,
-        "source": "explicit",
-        "drivers": []
-      },
-      "speech": {
-        "act": "statement",
-        "force": 0.5,
-        "register": "chat",
-        "motive": "",
-        "hedged": false,
-        "confidence": 0.3,
-        "evidence": []
-      },
-      "narrative_hits": 0,
-      "narrative_heat": 0.0,
-      "narrated_at": 0.0,
-      "kind": "episodic",
-      "scope": "proj:Y5H1ggs/memory-palace",
-      "valid_from": 0.0,
-      "valid_to": null,
-      "superseded_by": "",
-      "supersedes": []
-    },
-    {
-      "name": "d036:19",
-      "content": "给示例代码加了断言，跑不通就不会静默通过",
-      "tier": "event",
-      "tags": [
-        "文档",
-        "工程"
-      ],
-      "created_at": 1792459414.0116167,
-      "last_accessed": 1792459414.0116167,
-      "base_weight": 1.0,
-      "access_count": 1,
-      "pinned": false,
-      "origin": "external",
-      "consolidated_from": [],
-      "consolidated_into": null,
-      "fingerprint": null,
-      "revision": 0,
-      "affect": {
-        "valence": 0.12,
-        "arousal": 0.4,
-        "peak_arousal": 0.4,
-        "felt_at": 1792459414.0116167,
-        "arousal_half_life": 3.0,
-        "valence_half_life": 10.0,
-        "source": "explicit",
-        "drivers": []
-      },
-      "speech": {
-        "act": "statement",
-        "force": 0.5,
-        "register": "coding",
-        "motive": "",
-        "hedged": false,
-        "confidence": 0.3,
-        "evidence": []
-      },
-      "narrative_hits": 0,
-      "narrative_heat": 0.0,
-      "narrated_at": 0.0,
-      "kind": "episodic",
-      "scope": "proj:Y5H1ggs/memory-palace",
-      "valid_from": 0.0,
-      "valid_to": null,
-      "superseded_by": "",
-      "supersedes": []
-    },
-    {
-      "name": "d038:20",
-      "content": "把错误信息从「失败」改成「哪一行、为什么、怎么改」",
-      "tier": "event",
-      "tags": [
-        "体验",
-        "工程"
-      ],
-      "created_at": 1792632214.0116167,
-      "last_accessed": 1792632214.0116167,
-      "base_weight": 1.0,
-      "access_count": 1,
-      "pinned": false,
-      "origin": "external",
-      "consolidated_from": [],
-      "consolidated_into": null,
-      "fingerprint": null,
-      "revision": 0,
-      "affect": {
-        "valence": 0.15,
-        "arousal": 0.5,
-        "peak_arousal": 0.5,
-        "felt_at": 1792632214.0116167,
-        "arousal_half_life": 3.0,
-        "valence_half_life": 10.0,
-        "source": "explicit",
-        "drivers": []
-      },
-      "speech": {
-        "act": "statement",
-        "force": 0.5,
-        "register": "chat",
-        "motive": "",
-        "hedged": false,
-        "confidence": 0.3,
-        "evidence": []
-      },
-      "narrative_hits": 0,
-      "narrative_heat": 0.0,
-      "narrated_at": 0.0,
-      "kind": "episodic",
-      "scope": "proj:Y5H1ggs/memory-palace",
-      "valid_from": 0.0,
-      "valid_to": null,
-      "superseded_by": "",
-      "supersedes": []
-    },
-    {
-      "name": "d042:22",
-      "content": "把重复的三段脚本合并成一个，少了两处不一致",
-      "tier": "event",
-      "tags": [
-        "重构",
-        "工程"
-      ],
-      "created_at": 1792977814.0116167,
-      "last_accessed": 1792977814.0116167,
-      "base_weight": 1.0,
-      "access_count": 1,
-      "pinned": false,
-      "origin": "external",
-      "consolidated_from": [],
-      "consolidated_into": null,
-      "fingerprint": null,
-      "revision": 0,
-      "affect": {
-        "valence": 0.12,
-        "arousal": 0.4,
-        "peak_arousal": 0.4,
-        "felt_at": 1792977814.0116167,
-        "arousal_half_life": 3.0,
-        "valence_half_life": 10.0,
-        "source": "explicit",
-        "drivers": []
-      },
-      "speech": {
-        "act": "statement",
-        "force": 0.5,
-        "register": "chat",
-        "motive": "",
-        "hedged": false,
-        "confidence": 0.3,
-        "evidence": []
-      },
-      "narrative_hits": 0,
-      "narrative_heat": 0.0,
-      "narrated_at": 0.0,
-      "kind": "episodic",
-      "scope": "proj:Y5H1ggs/memory-palace",
-      "valid_from": 0.0,
-      "valid_to": null,
-      "superseded_by": "",
-      "supersedes": []
-    },
-    {
-      "name": "d048:25",
-      "content": "把 300 行的单文件拆成四个模块，编译时间没变但好读多了",
-      "tier": "event",
-      "tags": [
-        "重构"
-      ],
-      "created_at": 1793496214.0116167,
-      "last_accessed": 1793496214.0116167,
-      "base_weight": 1.0,
-      "access_count": 1,
-      "pinned": false,
-      "origin": "external",
-      "consolidated_from": [],
-      "consolidated_into": null,
-      "fingerprint": null,
-      "revision": 0,
-      "affect": {
-        "valence": 0.105,
-        "arousal": 0.35,
-        "peak_arousal": 0.35,
-        "felt_at": 1793496214.0116167,
-        "arousal_half_life": 3.0,
-        "valence_half_life": 10.0,
-        "source": "explicit",
-        "drivers": []
-      },
-      "speech": {
-        "act": "statement",
-        "force": 0.5,
-        "register": "chat",
         "motive": "",
         "hedged": false,
         "confidence": 0.3,
@@ -4076,70 +2130,8 @@
       "supersedes": []
     }
   ],
-  "last_report": {
-    "generated_at": 1794533014.0116167,
-    "window_days": 30.0,
-    "metrics": {
-      "events_in_window": 36.0,
-      "retrieval_coverage": 1.0,
-      "retrieval_attempts": 17.0,
-      "consolidation_yield": 0.3684,
-      "core_hit_ratio": 0.7564,
-      "forget_pressure": 0.5128,
-      "gc_deletes": 20.0,
-      "consolidations": 1.0,
-      "crystallizations": 3.0,
-      "decrystallizations": 0.0,
-      "restores": 0.0,
-      "style_conflict_pairs": 1.0,
-      "active_style_conflicts": 0.0,
-      "unresolved_style_conflicts": 2.0,
-      "avg_style_confidence": 0.8345,
-      "loose_fragments": 11.0,
-      "tombstone_size": 20.0,
-      "semantic_recalls": 0.0,
-      "semantic_only_hits": 0.0,
-      "avg_top_score": 0.0,
-      "logic_edges": 4.0,
-      "contested": 0.0,
-      "entropy": 0.919168,
-      "attention_top_share": 0.121097,
-      "attention_top3_share": 0.329833,
-      "structure_isolated": 0.473684,
-      "structure_fragmentation": 0.578947,
-      "structure_degree_entropy": 0.69463,
-      "structure_giant_share": 0.315789,
-      "grasp_coverage": 0.2857,
-      "ungrabbed_share": 0.714286,
-      "narrative_coherence": 0.91,
-      "narrative_reliability": 0.902778,
-      "narrative_monopoly": 0.477415,
-      "foundation_version": 1.0,
-      "persona_drift": 0.0,
-      "persona_oversell": 0.0,
-      "persona_switches": 0.0,
-      "persona_unjustified": 0.0
-    },
-    "findings": [
-      "遗忘压力 51% 过高，单轮清理占节点总量比重偏大。",
-      "2 条风格因对立证据不足被停用，未参与输出：concise(ambiguous), verbose(ambiguous) —— 需要更多证据或人工裁决。",
-      "重要性分布几乎无梯度（前三条合计只占 33%），什么都一样重要，等于没有取舍。",
-      "记忆碎成 11 个互不相连的块（最大一块只占 32%）：这不是「主题丰富」，是彼此推不出对方。"
-    ],
-    "suggestions": [
-      {
-        "param": "forget_w",
-        "current": 0.02,
-        "suggested": 0.01,
-        "reason": "降低遗忘阈值，让弱记忆多留一个观察窗口。"
-      },
-      {
-        "param": "importance_w_support",
-        "current": 0.8,
-        "suggested": 0.9,
-        "reason": "让有凭据的记忆在价值判断里拉开差距，避免一切等价。"
-      }
-    ],
-    "narrative": "第 2 轮自我回看：窗口 30 天内 36 次事件，沉淀 1 次、遗忘 20 条、风格固化 3 次 / 撤销 0 次；当前 19 个节点中 7 个为高层记忆。发现 4 项待核查信号，提出 2 条参数建议（不自动执行）。｜第 3 次自述：19 条记忆里，我留下 9 条、放下 10 条。线索是 起源「硬规则」4条 → 转折「其他」2条 → 转折「复盘」1条 → 当下「偏好」2条。连续性 0.91，可靠度 0.90，单主题占比 0.48。"
-  }
+  "state_id": "9df0dc7b-9d37-40a0-8607-06b141362913",
+  "written_at": 1794623172.996,
+  "writer": "25272@DESKTOP-GTPHNB5",
+  "checksum": "73bf97701d3b859915124063d98a1dbe22eb7055ac713960cf76f2807d36cce9"
 }

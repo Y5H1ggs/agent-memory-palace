@@ -29,7 +29,7 @@ def check(label: str, condition: bool, detail: str = "") -> None:
     print(f"  [PASS] {label}" + (f"  · {detail}" if detail else ""))
 
 
-def test_mcp(store: str) -> None:
+def _check_mcp(store: str) -> None:
     env = dict(os.environ)
     env["MEMORY_PALACE_STORE"] = store
     env["PYTHONPATH"] = ROOT + os.pathsep + env.get("PYTHONPATH", "")
@@ -105,7 +105,7 @@ def test_mcp(store: str) -> None:
     check("stdin 关闭后进程正常退出", proc.returncode == 0, str(proc.returncode))
 
 
-def test_mcp_slim(store: str) -> None:
+def _check_mcp_slim(store: str) -> None:
     """DSH 这类宿主会把工具定义常驻上下文，slim 档只留三个动词。"""
     env = dict(os.environ)
     env["MEMORY_PALACE_STORE"] = store
@@ -142,7 +142,7 @@ def test_mcp_slim(store: str) -> None:
         proc.wait(timeout=15)
 
 
-def test_http(store: str) -> None:
+def _check_http(store: str) -> None:
     os.environ["MEMORY_PALACE_STORE"] = store
     server = ThreadingHTTPServer(("127.0.0.1", 0), http_api.Handler)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
@@ -200,23 +200,23 @@ def test_http(store: str) -> None:
 def main() -> None:
     with tempfile.TemporaryDirectory(prefix="mp-int-") as tmp:
         print("MCP（stdio）")
-        test_mcp(os.path.join(tmp, "mcp.json"))
+        _check_mcp(os.path.join(tmp, "mcp.json"))
         print("MCP（slim 档）")
-        test_mcp_slim(os.path.join(tmp, "mcp-slim.json"))
+        _check_mcp_slim(os.path.join(tmp, "mcp-slim.json"))
         print("HTTP + OpenAPI")
-        test_http(os.path.join(tmp, "http.json"))
+        _check_http(os.path.join(tmp, "http.json"))
     print("\n接入层契约自测通过 ✅")
 
 
 def test_mcp_contract() -> None:
     with tempfile.TemporaryDirectory(prefix="mp-mcp-") as tmp:
-        test_mcp(os.path.join(tmp, "mcp.json"))
-        test_mcp_slim(os.path.join(tmp, "mcp-slim.json"))
+        _check_mcp(os.path.join(tmp, "mcp.json"))
+        _check_mcp_slim(os.path.join(tmp, "mcp-slim.json"))
 
 
 def test_http_contract() -> None:
     with tempfile.TemporaryDirectory(prefix="mp-http-") as tmp:
-        test_http(os.path.join(tmp, "http.json"))
+        _check_http(os.path.join(tmp, "http.json"))
 
 
 if __name__ == "__main__":

@@ -28,6 +28,7 @@ from collections import Counter, defaultdict
 from typing import Any, Callable, Iterable
 
 from .core import MemoryGraph, MemoryNode
+from .embedding import DenseIndex, Embedder, EmbeddingError, make_embedder
 from .lexicon import NEGATION_BOOST, NEGATIONS, IdfModel, cached_tokens
 
 DEFAULT_CONCEPTS: dict[str, tuple[str, ...]] = {
@@ -417,10 +418,21 @@ class SemanticIndex:
     因此索引状态是「图内容的纯函数」，跨进程恢复后与原先逐条一致。
     """
 
-    def __init__(self, encoder: Encoder | None = None, config: Any = None) -> None:
+    def __init__(
+        self, encoder: Encoder | None = None, config: Any = None, embedder: Embedder | None = None
+    ) -> None:
         self.config = config
         self._custom = encoder is not None
         self.encoder: Encoder = encoder or ConceptEncoder()
+        # 稠密通道：不配就是 None，行为与 0.9.x 逐位一致（默认不改变任何既有结果）。
+        self.embedder: Embedder | None = (
+            embedder if embedder is not None else (make_embedder(config) if config else None)
+        )
+        self._dense: DenseIndex | None = None
+        if self.embedder is not None:
+            self._dense = DenseIndex(getattr(self.embedder, "dim", 0) or 0)
+        self._hybrid = float(getattr(config, "hybrid_weight", 0.0)) if config else 0.0
+        self.dense_failures = 0
         self._seed_concepts: dict[str, tuple[str, ...]] = (
             dict(self.encoder.concepts) if isinstance(self.encoder, ConceptEncoder) else {}
         )
@@ -523,16 +535,51 @@ class SemanticIndex:
             return self._validate(encoder.encode_with(self._idf, text))
         return self._validate(encoder.encode(text))
 
+    def _embed(self, text: str) -> list[float] | None:
+        """稠密编码失败不炸主流程：降级为「这一条没有稠密分量」，并记账。
+
+        一个远程嵌入服务抖一下，不该让整个检索不可用 —— 但也不能静默：
+        `dense_failures` 与 `explain()` 会把它报出来。
+        """
+        if self.embedder is None:
+            return None
+        try:
+            vec = list(self.embedder.embed(text))
+        except (EmbeddingError, OSError, ValueError):
+            self.dense_failures += 1
+            return None
+        if self._dense is not None:
+            if not self._dense.dim:
+                self._dense.dim = len(vec)
+            if len(vec) != self._dense.dim:
+                self.dense_failures += 1
+                return None
+        return vec
+
+    def _index_dense(self, name: str, text: str) -> None:
+        if self._dense is None:
+            return
+        vec = self._embed(text)
+        if vec is None:
+            return
+        try:
+            self._dense.add(name, vec)
+        except ValueError:
+            self.dense_failures += 1
+
     def upsert(self, node: MemoryNode) -> None:
         # 这里用的是「上一次重建时的 IDF」；随后置脏，下次检索会用全语料重算，
         # 所以短暂的不一致不会留在最终索引里。
         self._vectors[node.name] = self._encode(node.content)
+        self._index_dense(node.name, node.content)
         self._dirty = True  # 语料变了，概念词典可能要重学
 
     def forget(self, name: str) -> None:
         self._failed.discard(name)
         if self._vectors.pop(name, None) is not None:
             self._dirty = True
+        if self._dense is not None:
+            self._dense.remove(name)
 
     def sparse(self, name: str) -> SparseVector | None:
         """热路径取用：点积、聚类、去重都走这个，避免每条向量摊开成 263 维数组。"""
@@ -553,8 +600,11 @@ class SemanticIndex:
         self._idf = IdfModel(docs)
         self._vectors.clear()
         self._failed.clear()
+        if self._dense is not None:
+            self._dense.clear()
         for node in graph.all_nodes():
             self._vectors[node.name] = self._encode(node.content)
+            self._index_dense(node.name, node.content)
         self._dirty = False
 
     def _fill_missing(self, graph: MemoryGraph) -> int:
@@ -573,11 +623,14 @@ class SemanticIndex:
         filled = 0
         for name in [k for k in self._vectors if k not in live]:
             del self._vectors[name]           # 幽灵向量：图里已经没有了
+            if self._dense is not None:
+                self._dense.remove(name)
         for node in graph.all_nodes():
             if node.name in self._vectors or node.name in self._failed:
                 continue
             try:
                 self._vectors[node.name] = self._encode(node.content)
+                self._index_dense(node.name, node.content)
                 filled += 1
             except ValueError:
                 # 坏内容不进索引，但不阻断其他节点。
@@ -618,6 +671,27 @@ class SemanticIndex:
         return self._encode(text)
 
     def scores(self, query: str, min_score: float = 0.0) -> dict[str, float]:
+        lex = self.lexical_scores(query, 0.0)
+        if self._dense is None or self._hybrid <= 0 or self.embedder is None:
+            return {k: v for k, v in lex.items() if v >= min_score}
+        q = self._embed(query)
+        if q is None:
+            return {k: v for k, v in lex.items() if v >= min_score}
+        dense = self._dense.scores(q, 0.0)
+        w = self._hybrid
+        out: dict[str, float] = {}
+        for name in lex.keys() | dense.keys():
+            score = (1.0 - w) * lex.get(name, 0.0) + w * dense.get(name, 0.0)
+            if score < 0.0:
+                score = 0.0
+            elif score > 1.0:
+                score = 1.0
+            if score >= min_score:
+                out[name] = round(score, 6)
+        return out
+
+    def lexical_scores(self, query: str, min_score: float = 0.0) -> dict[str, float]:
+        """纯词法通道（0.9.x 的行为）：调参与对照都靠它。"""
         q = self._encode(query)
         if not q:
             return {}
@@ -633,6 +707,31 @@ class SemanticIndex:
             if score >= min_score:
                 out[name] = round(score, 6)
         return out
+
+    def dense_scores(self, query: str, min_score: float = 0.0) -> dict[str, float]:
+        """纯稠密通道：用于评估「换一条通道到底值不值」。"""
+        if self._dense is None:
+            return {}
+        q = self._embed(query)
+        if q is None:
+            return {}
+        return self._dense.scores(q, min_score)
+
+    def pair_score(self, left: str, right: str) -> float:
+        """两段任意文本的相似度（不要求它们已在索引里）。
+
+        去重、沉淀候选、评测都要「比较两段话」，而不是「拿一段话查库」。
+        两条通道的融合方式必须与 `scores()` 一致，否则评估出来的阈值
+        跟线上行为对不上 —— 那种评估比没有更糟。
+        """
+        lex = max(0.0, min(1.0, self._encode(left).dot(self._encode(right))))
+        if self._dense is None or self._hybrid <= 0:
+            return lex
+        va, vb = self._embed(left), self._embed(right)
+        if va is None or vb is None:
+            return lex
+        dense = max(0.0, min(1.0, math.fsum(a * b for a, b in zip(va, vb))))
+        return (1.0 - self._hybrid) * lex + self._hybrid * dense
 
     def scores_dense(self, query: str, min_score: float = 0.0) -> dict[str, float]:
         """同上的稠密实现，只作对照用（测试里拿它验证稀疏分支没算错）。"""
@@ -665,7 +764,17 @@ class SemanticIndex:
     def explain(self, text: str) -> dict[str, Any]:
         encoder = self.encoder
         if not isinstance(encoder, ConceptEncoder):
-            return {"concepts": {}, "ambiguous": {}, "learned": {}}
-        detail = encoder.explain(text)
-        detail["learned"] = {k: list(v) for k, v in self.learned.items()}
+            detail: dict[str, Any] = {"concepts": {}, "ambiguous": {}, "learned": {}}
+        else:
+            detail = encoder.explain(text)
+            detail["learned"] = {k: list(v) for k, v in self.learned.items()}
+        # 通道状态必须能查到：否则「为什么这条没召回」会变成猜谜
+        detail["channels"] = {
+            "lexical": True,
+            "dense": self._dense is not None,
+            "embedder": getattr(self.embedder, "name", "") if self.embedder else "",
+            "hybrid_weight": self._hybrid,
+            "dense_vectors": len(self._dense) if self._dense is not None else 0,
+            "dense_failures": self.dense_failures,
+        }
         return detail

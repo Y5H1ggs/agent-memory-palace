@@ -14,6 +14,109 @@ SemVer 里 `1.0.0` 的含义是「公开 API 已稳定，可以放心依赖」�
 
 ---
 
+## [0.10.0] - 2026-11-14
+
+把「不适用」的四个场景逐条变成可验证的能力：**生产级记忆后端 / 向量检索替代品 /
+存不可再生数据 / 多进程并发写同一份记忆**，外加把「规则监控」升级成「LLM 反思」。
+
+这一版的重点不是加功能，而是**把「我觉得」换成「测出来」**：
+每个新能力都配了一条能失败的测试或一份带标注的数据。
+
+### 存储：默认换成 SQLite（WAL 模式）
+
+- 新增 `sqlite_store.py`：`nodes` / `edges` / `tombstones` / `blobs` / `events` /
+  `commits` / `snapshots` 七张表，四个索引；`sqlite3` 是标准库，零依赖没破。
+- **行级增量写**：节点带 `_dirty` 标记（`__setattr__` 置位、读库后清零），提交时只 upsert 变动的行。
+  1000 条时单次 `remember` **p50 47.1 ms → 1.2 ms**（p95 53.2 → 1.5 ms），改一条 1.1 ms。
+- **提交账本 `commits`**：每次提交一行（revision / 时间 / 原因 / 写者 / 写入行数 / 摘要），
+  只增不改；`events` 表只追加（内存里会 trim，库里不会）。
+- **快照**：每 `snapshot_every`（默认 50）次提交留一份完整快照，只保留最近 3 份，
+  `state_at(rev)` 用它对账。
+- `store.py` 变成门面：`open_store()` 按扩展名/参数选后端，两个后端遵守同一份 8 方法契约。
+- JSON 后端保留（`--backend json`）：单文件可移植、可进 git、可当冷备。
+
+### 并发：多进程写同一份记忆
+
+- `locking.py`：跨进程字节锁（POSIX `flock` / Windows `msvcrt.locking` / 哨兵文件兜底），
+  可重入、总超时、持有者信息写旁路文件（Windows 字节锁下写锁文件本身会失败）。
+- `palace._txn()`：所有写操作（25 个入口，`@_mutating` 标注）走「`BEGIN IMMEDIATE`
+  → 若磁盘更新先重载 → 修改 → 提交」；重载发生在**修改之前**，这是不丢更新的关键。
+- 冲突记账：`SaveResult.rebased` / `store.stats["conflicts"]`。
+- 修掉三个真实缺陷：
+  - 同名 `remember` 静默丢弃新内容（`add_node` 遇到同名原样返回）→ 现在就地更新并记 `replace`；
+  - `--replace` 实际什么都没做，却打印「已记住」→ 现在先 `drop` 再写；
+  - `save(other_path)` 会把当前库的写入路径切到副本 → 改成「复制一份」，不切换。
+- 新增 `tests/test_store.py`：4 进程 × 15 次 merge 同一条记忆，`access_count` 恰好 60；
+  `tests/test_locking.py`：真子进程争用、重入、总超时。
+
+### 耐久：不可再生数据
+
+- 快照带 `sha256`（v7 起；老快照按版本门控跳过校验，否则历史迁移会被误判成损坏）。
+- JSON 后端额外带追加日志（CRC32 + zlib + 内容 sha256），快照丢失/损坏时前滚，
+  断电写了半条则丢弃尾条 —— `journal.py`。
+- 新增运维命令：`fsck`（完整性/悬空边/账本一致性/锁持有者）、`fsck --repair`、
+  `journal`（提交账本）、`lock`（谁占着）、`export` / `import`（带 sha256 的可搬档案）、
+  `stats`。
+- `remove_store_files()`：删库要连 journal/rev/lock 一起删。只删快照会留下日志，
+  下次打开会被「正确地」前滚回上一次的全部内容 —— demo 里踩过。
+
+### 向量通道：真的 embedding，可换模型
+
+- 新增 `embedding.py`：`Embedder` 协议 + `HashingEmbedder`（有符号特征哈希 +
+  字符 n-gram + 子线性 TF，512 维，跨进程确定性）+ `HttpEmbedder`
+  （任何 OpenAI 兼容 `/v1/embeddings`，批量 + 磁盘缓存 + 超时）+ `DenseIndex`。
+- `SemanticIndex` 支持混合打分（`hybrid_weight`）、`lexical_scores()` /
+  `dense_scores()` 分通道对照、`pair_score()`（两段任意文本，融合方式与检索一致）。
+- 嵌入服务失败降级到词法通道并记 `dense_failures`，不会让检索整体不可用。
+
+### 评测：组件级、带标注、两个领域
+
+- 新增 `evaluation.py`：A 股复盘 / 工程运维两套数据（80 条记忆、42 条查询），
+  四类标注（检索 gold / 弃答 / 去重对 / 沉淀簇），指标 recall@k、MRR、nDCG、P@1、
+  弃答 F1、去重 F1、沉淀成对 F1。
+- `memory-palace eval [--channel lexical|hybrid|dense] [--scale N...]`、
+  `memory-palace calibrate [--apply]`（扫阈值 + 平台区间，不只给尖峰）。
+- 实测（k=5）：混合通道把换说法召回从 **0.591 → 0.727**（finance），exact 上无增益；
+  弃答默认阈值 **0.30 → 0.20**（F1 0.5 → 0.857，0.18~0.21 是平台区）；
+  去重 F1 0.667（长度比保护挡掉了「百分之五 vs 5%」，保守是刻意的）；
+  沉淀默认阈值 0.5 在「标签不共享」的语料上一条簇都出不来，扫描显示 0.25~0.30 才合适。
+  **不利数字原样保留在 README 里** —— 不藏坏数才叫评测。
+
+### 自修正：从单指标到多目标
+
+- `Patch` 增加 `guards`（应用那一刻的护栏基线）与 `guard_hits`（判决时的越界幅度）。
+- 判决要求：主指标改善 ≥ `selfcorrect_effect_min`，**且**没有护栏指标相对恶化超过
+  `selfcorrect_guard_margin`（默认 15%）；越界即回滚并留下证据。
+- `GUARD_DIRECTIONS` 显式声明每个指标的方向（越低越好 / 越高越好）——
+  方向弄反会得到「越改越差才留下」的系统，有专门测试守着。
+- `status()["guardrail_reverts"]` 可查哪些修正被护栏拦下。
+
+### LLM 反思：模型提假设，代码管边界
+
+- 新增 `llm.py`：`LLMProvider` 协议 + `HttpChatProvider`（OpenAI 兼容
+  `/v1/chat/completions`）+ `LLMReflector`（证据拼装、预算截断、JSON 解析、白名单校验）。
+- 反思证据从「只有条数」升级为「指标 + 事件 + 记忆样本（含内容）+ 自述健康度」——
+  只给数字的模型只能复述数字。预算截断先丢样本、再丢事件，**指标与参数清单永不截断**
+  （踩过：总文本直接截断把参数清单砍了一半，模型照着半份清单提建议）。
+- 输出非法 JSON → 退回规则引擎并记 `degraded` + 原因；白名单外的参数一律丢弃并记
+  `rejected_params`；**模型永远不改配置**，只产出待验证提案（走 `SelfCorrector` 的护栏）。
+- 新命令 `memory-palace reflect`；`config --set` 支持改库内参数并写回快照。
+
+### 其他
+
+- `PalaceConfig` 新增 `backend` / `concurrency` / `journal_enabled` / `journal_keep` /
+  `snapshot_every` / `lock_timeout` / `verify_checksum` / `embedding_*` / `hybrid_weight` /
+  `llm_*` / `selfcorrect_guard_margin`，共 20 项；快照版本 **v6 → v7**（v4~v6 可直接读）。
+- 默认存储位置 `~/.memory-palace/store.sqlite`；首次运行自动把旧的 `store.json`
+  导入 SQLite，原文件保留为 `store.json.migrated`。
+- CLI 新增 `--backend`，以及 `fsck` / `journal` / `lock` / `export` / `import` /
+  `embed` / `eval` / `calibrate` / `reflect` / `stats` 十个子命令。
+- 修掉 `tests/test_integrations.py` 被 pytest 误收集的三个 helper（`store` 参数被当成 fixture）。
+- 新增 6 个测试文件（store / locking / embedding / eval / llm / guardrails），
+  测试总数 43 → 97。
+
+---
+
 ## [0.9.3] - 2026-11-14
 
 第二轮：响应速度（端到端）与一份技术批评的核查。0.9.2 的进程内优化在上面，这里补的是

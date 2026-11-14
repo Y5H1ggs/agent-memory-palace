@@ -80,6 +80,25 @@ PARAM_BOUNDS: dict[str, tuple[float, float]] = {
 
 # 明令禁止：写在这里不是为了执行，是为了**能被测试读到**。
 # 这些参数一动，改的就不是「表现」而是「身份 / 记忆的物理常数」。
+# 护栏指标：主指标改善不够，还要看这些没有被牺牲。
+# 单指标优化一定会挤占别的指标（把召回门槛压低，噪声就上来了），
+# 而账面上只看到好的一面 —— 这就是「自修正的变好仍是单指标」这条批评的根。
+# 方向写清楚很重要：`forget_pressure` 是「越低越好」，`retrieval_coverage` 是「越高越好」，
+# 弄反了会得到一个「越改越差才留下」的系统。
+GUARD_DIRECTIONS: dict[str, str] = {
+    "retrieval_coverage": "higher",
+    "consolidations": "higher",
+    "recalls": "higher",
+    "loose_fragments": "lower",
+    "forget_pressure": "lower",
+    "narrative_monopoly": "lower",
+    "narrative_reliability": "higher",
+    "persona_drift": "lower",
+    "persona_oversell": "lower",
+    "structure_isolated": "lower",
+    "gc_deletes": "lower",
+}
+
 FORBIDDEN_PARAMS: frozenset[str] = frozenset(
     {
         "persona_learning_rate",
@@ -113,6 +132,10 @@ class Patch:
     applied_at: float = 0.0
     observed_at: float = 0.0
     samples: list[list[float]] = field(default_factory=list)
+    # 护栏基线与判决时的越界情况：只记「当时是多少」，不记「应该多少」——
+    # 阈值属于配置，不属于凭据。
+    guards: dict[str, float] = field(default_factory=dict)
+    guard_hits: dict[str, float] = field(default_factory=dict)
     deferred: int = 0
     evidence: str = "pending"  # pending / window_samples / baseline_only / stale
 
@@ -359,6 +382,11 @@ class SelfCorrector:
                     metric=cand.metric,
                     baseline=float(metrics.get(cand.metric, 0.0) or 0.0),
                     better=cand.better,
+                    guards={
+                        key: float(metrics[key] or 0.0)
+                        for key in GUARD_DIRECTIONS
+                        if key in metrics and metrics[key] is not None
+                    },
                 )
             )
         return out
@@ -416,8 +444,47 @@ class SelfCorrector:
         patch.reason = f"{patch.reason}｜{reason}"
         return True
 
-    def _judge(self, patch: Patch, value: float, evidence: str, now: float) -> str:
-        """统一判决：要变好，且变化幅度跑赢噪声，才留；否则回滚。"""
+    def _guard_hits(
+        self, patch: Patch, metrics: dict[str, Any] | None
+    ) -> dict[str, float]:
+        """护栏越界检测：主指标可以变好，但不许拿别的指标去换。
+
+        `margin` 是相对变化：0.15 表示「掉了 15% 以上才算牺牲」。
+        设 0 会让噪声频繁触发回滚；设太大等于没有护栏。
+        """
+        if not metrics or not patch.guards:
+            return {}
+        margin = self.config.selfcorrect_guard_margin
+        hits: dict[str, float] = {}
+        for key, base in patch.guards.items():
+            direction = GUARD_DIRECTIONS.get(key)
+            if direction is None or key not in metrics or metrics[key] is None:
+                continue
+            try:
+                current = float(metrics[key])
+            except (TypeError, ValueError):
+                continue
+            if abs(base) < 1e-9:
+                continue
+            delta = (current - base) / abs(base)
+            worse = delta < -margin if direction == "higher" else delta > margin
+            if worse:
+                hits[key] = round(delta, 4)
+        return hits
+
+    def _judge(
+        self,
+        patch: Patch,
+        value: float,
+        evidence: str,
+        now: float,
+        metrics: dict[str, Any] | None = None,
+    ) -> str:
+        """统一判决：主指标要变好、幅度跑赢噪声，**且**没有牺牲护栏指标，才留。
+
+        三个 v0.9 时代就有的纪律不变（样本新鲜度、窗口后样本、幅度门槛），
+        这里新增的是第四道：多目标。
+        """
         patch.observed = value
         patch.observed_at = now
         patch.evidence = evidence
@@ -425,8 +492,14 @@ class SelfCorrector:
             self.config.selfcorrect_effect_min
         )
         if improved:
-            patch.status = "kept"
-            return "kept"
+            hits = self._guard_hits(patch, metrics)
+            if not hits:
+                patch.status = "kept"
+                return "kept"
+            # 主指标好了，但代价是别的指标崩了 —— 不算「变好」
+            patch.guard_hits = hits
+            patch.evidence = f"{evidence}+guardrail"
+            patch.reason = f"{patch.reason}｜护栏越界 {sorted(hits)}"
         patch.status = "reverted"
         setattr(self.config, patch.param, patch.before)
         self.reverted_count[patch.param] = self.reverted_count.get(patch.param, 0) + 1
@@ -462,6 +535,7 @@ class SelfCorrector:
                     float(metrics.get(patch.metric, 0.0) or 0.0),
                     "stale",
                     now,
+                    metrics,
                 )
                 settled.append(patch)
                 continue
@@ -475,7 +549,7 @@ class SelfCorrector:
             else:
                 value = float(metrics.get(patch.metric, 0.0) or 0.0)
                 evidence = "baseline_only"
-            self._judge(patch, value, evidence, now)
+            self._judge(patch, value, evidence, now, metrics)
             settled.append(patch)
         return settled
 
@@ -512,6 +586,14 @@ class SelfCorrector:
             "bounds": {k: list(v) for k, v in sorted(PARAM_BOUNDS.items())},
             "forbidden_params": sorted(FORBIDDEN_PARAMS),
             "with_samples": sum(1 for p in self.patches if p.samples),
+            # 多目标证据：哪些修正因为牺牲了别的指标而被退回
+            "guardrail_reverts": [
+                {"pid": p.pid, "param": p.param, "hits": p.guard_hits}
+                for p in self.patches
+                if p.guard_hits
+            ],
+            "guard_directions": dict(GUARD_DIRECTIONS),
+            "guard_margin": self.config.selfcorrect_guard_margin,
         }
 
     def to_dict(self) -> dict[str, Any]:

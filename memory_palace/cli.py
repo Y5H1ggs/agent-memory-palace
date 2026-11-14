@@ -29,7 +29,11 @@ from .palace import MemoryPalace
 from .scope import GLOBAL, SCOPE_MODES, label as scope_label, scopes_for
 from .tree import build_tree, render_tree, tree_stats
 
-DEFAULT_STORE = os.path.join(os.path.expanduser("~"), ".memory-palace", "store.json")
+DEFAULT_STORE = os.path.join(os.path.expanduser("~"), ".memory-palace", "store.sqlite")
+# 0.9.x 的默认存储。第一次跑 0.10+ 时会被自动导入到 SQLite，原文件保留为 .migrated。
+LEGACY_STORE = os.path.join(os.path.expanduser("~"), ".memory-palace", "store.json")
+# `--backend` 是全局开关，所有子命令都用同一个值；用模块级变量避免每个调用点都传一遍。
+_DEFAULT_BACKEND = "auto"
 SCOPE_VIEW_ZH = {
     "auto": "全局+本项目",
     "global": "仅全局",
@@ -74,15 +78,53 @@ OUTCOME_ALIASES = {
 
 
 def resolve_store(explicit: str | None) -> str:
-    path = explicit or os.environ.get("MEMORY_PALACE_STORE") or DEFAULT_STORE
-    return os.path.abspath(os.path.expanduser(path))
+    path = explicit or os.environ.get("MEMORY_PALACE_STORE")
+    if path:
+        return os.path.abspath(os.path.expanduser(path))
+    # 没有任何显式指定时的默认位置。0.9.x 的老库在这里，自动搬一次。
+    if os.path.exists(DEFAULT_STORE) or not os.path.exists(LEGACY_STORE):
+        return DEFAULT_STORE
+    return _migrate_legacy(LEGACY_STORE, DEFAULT_STORE)
+
+
+def _migrate_legacy(legacy: str, target: str) -> str:
+    """把 0.9.x 的 JSON 库导入 SQLite，原文件改名保留（不删）。
+
+    自动做而不是问，是因为「升级后记忆还在」不该是个需要用户回答的问题；
+    但必须**保留原件**，因为迁移一旦有 bug，那份 JSON 是唯一的退路。
+    """
+    from .store import open_store
+
+    try:
+        src = open_store(legacy, backend="json")
+        dst = open_store(target, backend="sqlite")
+        loaded = src.load()
+        saved = dst.save(loaded.payload, reason="migrate")
+        os.replace(legacy, legacy + ".migrated")
+        print(
+            f"已把旧库迁移到 SQLite：{target}（revision {saved.revision}）\n"
+            f"原文件保留为 {legacy}.migrated",
+            file=sys.stderr,
+        )
+        return target
+    except Exception as exc:  # noqa: BLE001 - 迁移失败就继续用老库，绝不吞掉用户数据
+        print(f"旧库迁移失败（继续使用 {legacy}）：{exc}", file=sys.stderr)
+        return legacy
 
 
 def open_palace(
-    path: str, project: str | None = None, autosave: bool = False
+    path: str,
+    project: str | None = None,
+    autosave: bool = False,
+    backend: str | None = None,
 ) -> MemoryPalace:
     """打开记忆库，并带上「当前是哪个项目」——它决定默认写哪里、默认读哪些。"""
-    return MemoryPalace(path=path, autosave=autosave, project=project)
+    return MemoryPalace(
+        path=path,
+        autosave=autosave,
+        project=project,
+        backend=backend or _DEFAULT_BACKEND,
+    )
 
 
 def parse_tags(raw: str | None) -> tuple[str, ...]:
@@ -127,6 +169,8 @@ def build_context(
 
     预算按字符算；钉死条目超预算时仍然保留，并在提示里说明超了多少。
     """
+    # 长驻进程（MCP/HTTP）里，别的进程可能刚写过：先对齐再取上下文
+    palace.refresh()
     now = palace.now()
     cfg = palace._config
     # 视窗：auto = 全局 + 当前项目。这是「跨项目但不串味」的那条线。
@@ -371,9 +415,14 @@ def cmd_remember(args) -> int:
     path = resolve_store(args.store)
     palace = open_palace(path, getattr(args, "project", None))
     name = args.name or auto_name(content)
-    if name in palace.graph and not args.replace:
-        print(f"已存在同名记忆 {name}，未覆盖（要覆盖加 --replace）")
-        return 0
+    if name in palace.graph:
+        if not args.replace:
+            print(f"已存在同名记忆 {name}，未覆盖（要覆盖加 --replace）")
+            return 0
+        # 覆盖 = 旧的进墓碑、新的同名写入。以前这里只是把 supersedes 里塞了同名，
+        # 而 supersedes 会跳过「取代自己」，于是 add_node 发现同名就原地返回 ——
+        # --replace 实际什么都没做，却打印了「已记住」。
+        palace.drop(name, reason="replaced")
     supersedes = list(args.supersedes or [])
     node = palace.remember(
         name,
@@ -666,7 +715,7 @@ def _paths() -> tuple[str, str, str]:
     return sys.executable, repo, resolve_store(None)
 
 
-def cmd_config(args) -> int:
+def _print_host_config(args) -> int:
     """打印可直接粘贴的宿主配置。绝对路径都算好了，不用手改。"""
     python, repo, store = _paths()
     if args.for_ == "dsh":
@@ -746,12 +795,255 @@ def cmd_style(args) -> int:
     return 0
 
 
+# ---------------------------------------------------------------- 运维命令
+
+
+def _store_or_die(path: str):
+    from .store import open_store
+
+    store = open_store(path, backend=_DEFAULT_BACKEND)
+    return store
+
+
+def cmd_fsck(args) -> int:
+    path = resolve_store(args.store)
+    store = _store_or_die(path)
+    report = store.fsck()
+    if args.repair and not report.get("ok"):
+        repaired = store.repair()
+        report["repair"] = repaired
+        report = store.fsck() if repaired.get("ok") else report
+    if args.json:
+        print(json.dumps(report, ensure_ascii=False, indent=2))
+        return 0 if report.get("ok") else 1
+    print(f"库: {path}")
+    print(f"后端: {report.get('backend')}  ok={report.get('ok')}")
+    for key in (
+        "revision", "nodes", "edges", "events", "commits", "snapshots",
+        "journal_mode", "integrity", "orphan_edges", "wal_bytes", "bytes",
+    ):
+        if key in report:
+            print(f"  {key:<12} {report[key]}")
+    journal = report.get("journal") or {}
+    if journal and journal.get("records") is not None:
+        print(f"  日志记录     {journal['records']}（尾部残缺 {journal.get('tail_bytes', 0)} 字节）")
+    lock = report.get("lock") or {}
+    if lock:
+        print(f"  当前锁持有者  pid={lock.get('pid')} {lock.get('label', '')}")
+    if report.get("error"):
+        print(f"  问题: {report['error']}")
+    if report.get("repair"):
+        print(f"  已修复: {report['repair']}")
+    return 0 if report.get("ok") else 1
+
+
+def cmd_journal(args) -> int:
+    path = resolve_store(args.store)
+    store = _store_or_die(path)
+    rows = store.history(limit=args.limit)
+    if args.json:
+        print(json.dumps(rows, ensure_ascii=False, indent=2))
+        return 0
+    if not rows:
+        print("还没有提交记录（空库）")
+        return 0
+    print(f"{'rev':>6}  {'时间':<19}  {'节点':>4}  {'原因':<12} 写者")
+    for row in rows:
+        when = datetime.fromtimestamp(row.get("ts") or 0).strftime("%Y-%m-%d %H:%M:%S")
+        print(
+            f"{row.get('rev', 0):>6}  {when:<19}  {row.get('nodes_written', 0):>4}  "
+            f"{str(row.get('reason') or ''):<12} {row.get('writer') or ''}"
+        )
+    return 0
+
+
+def cmd_lock(args) -> int:
+    from .locking import holder_of
+
+    path = resolve_store(args.store)
+    info = holder_of(path + ".lock") or holder_of(path)
+    if not info:
+        print("没有进程持有写锁（或后端不使用锁文件，例如 SQLite 用自身事务锁）")
+        return 0
+    print(json.dumps(info, ensure_ascii=False, indent=2))
+    return 0
+
+
+def cmd_export(args) -> int:
+    path = resolve_store(args.store)
+    store = _store_or_die(path)
+    result = store.export(args.dest)
+    print(f"已导出 {result['bytes']} 字节 → {result['dest']}")
+    print(f"revision {result['revision']} · sha256 {result['sha256'][:16]}…")
+    return 0
+
+
+def cmd_import(args) -> int:
+    path = resolve_store(args.store)
+    store = _store_or_die(path)
+    result = store.import_(args.src)
+    print(f"已导入 → {path}（revision {result['revision']}）")
+    if result.get("backup"):
+        print(f"导入前的库已备份为 {result['backup']}")
+    return 0
+
+
+def cmd_embed(args) -> int:
+    path = resolve_store(args.store)
+    palace = open_palace(path, getattr(args, "project", None))
+    cfg = palace._config
+    if args.reindex:
+        palace.semantics.mark_dirty()
+    # 状态要如实反映「现在」：没有 sync 之前索引是脏的，报出来的向量数会是 0
+    palace.semantics.sync(palace.graph)
+    detail = palace.semantics.explain(args.query or "仓位与资金接力")
+    channels = detail.get("channels", {})
+    print(f"后端存储: {palace._store.describe().get('backend') if palace._store else '内存'}")
+    print(f"词法通道: 启用（{len(palace.semantics)} 条向量）")
+    print(f"稠密通道: {'启用' if channels.get('dense') else '未启用'}"
+          f"  嵌入器={channels.get('embedder') or '（无）'}")
+    print(f"  稠密向量数 {channels.get('dense_vectors', 0)} · 失败 {channels.get('dense_failures', 0)}")
+    print(f"  混合权重 {channels.get('hybrid_weight')}")
+    print(f"配置: provider={cfg.embedding_provider or '(空)'} dim={cfg.embedding_dim}")
+    if not channels.get("dense"):
+        print("\n启用方式：memory-palace config --set embedding_provider=hashing（零依赖）")
+        print("        或 embedding_provider=http + embedding_endpoint=...（接 BGE/vLLM/云端）")
+    return 0
+
+
+def cmd_eval(args) -> int:
+    from . import evaluation as ev
+
+    names = [args.dataset] if args.dataset else None
+    embedder = None
+    if args.channel in ("hybrid", "dense"):
+        from .embedding import HashingEmbedder
+
+        embedder = HashingEmbedder(512)
+    report = ev.run_suite(names, k=args.k, embedder=embedder, chunk=args.channel)
+    if args.json:
+        print(json.dumps(report, ensure_ascii=False, indent=2))
+    else:
+        print(ev.format_report(report))
+    if args.scale:
+        print("\n规模测试（合成语料）")
+        print(f"{'节点':>7}  {'重建ms':>8}  {'p50查询ms':>9}  {'p95查询ms':>9}  recall@5")
+        for row in ev.scale_benchmark(tuple(args.scale)):
+            print(
+                f"{row['nodes']:>7}  {row['rebuild_ms']:>8}  {row['p50_query_ms']:>9}  "
+                f"{row['p95_query_ms']:>9}  {row['recall_at_5']}"
+            )
+    return 0
+
+
+def cmd_calibrate(args) -> int:
+    from . import evaluation as ev
+
+    names = [args.dataset] if args.dataset else None
+    result = ev.calibrate(names)
+    print(json.dumps({k: v for k, v in result.items() if k != "curves"}, ensure_ascii=False, indent=2))
+    if args.apply:
+        target = os.path.join(os.path.dirname(resolve_store(args.store)), "calibration.json")
+        payload = {
+            "generated_at": datetime.now().isoformat(timespec="seconds"),
+            "datasets": result["datasets"],
+            "dedupe_similarity": result["dedupe"]["recommended"],
+            "abstain_semantic_floor": result["abstain"]["recommended"],
+        }
+        with open(target, "w", encoding="utf-8") as f:
+            json.dump(payload, f, ensure_ascii=False, indent=2)
+        print(f"\n已写入 {target}")
+        print("用法：memory-palace config --calibration 或在代码里 PalaceConfig.from_calibration(path)")
+    return 0
+
+
+def cmd_reflect(args) -> int:
+    path = resolve_store(args.store)
+    palace = open_palace(path, getattr(args, "project", None))
+    report = palace.reflect()
+    if args.json:
+        print(json.dumps(report.to_dict(), ensure_ascii=False, indent=2))
+        return 0
+    for finding in report.findings:
+        print(f"- {finding}")
+    print()
+    print(report.narrative)
+    if palace.reflection.reflector_error:
+        print(f"\n外部反思失败（已降级为规则反思）：{palace.reflection.reflector_error}")
+    if palace.llm is not None and palace.llm.last is not None:
+        print(f"\nLLM 反思：provider={palace.llm.last.provider} "
+              f"confidence={palace.llm.last.confidence:.2f} "
+              f"耗时={palace.llm.last.elapsed_ms:.0f}ms")
+        for item in palace.llm.last.suggested_params:
+            print(f"  建议 {item['param']} 向 {item['direction']}（未生效，需过护栏）")
+    return 0
+
+
+def cmd_stats(args) -> int:
+    from .core import WRITE_STATS
+
+    path = resolve_store(args.store)
+    store = _store_or_die(path)
+    if hasattr(store, "stats_report"):
+        data = store.stats_report()
+    else:
+        data = store.describe()
+        data["history"] = store.history(limit=5)
+    data["write_stats"] = dict(WRITE_STATS)
+    print(json.dumps(data, ensure_ascii=False, indent=2))
+    return 0
+
+
+def cmd_config(args) -> int:
+    """config 有两个职责：打印宿主配置（--for），以及改库里的参数（--set）。
+
+    改参数必须落到快照里才有意义 —— 只改内存等于「这次运行有效」，
+    而用户说的是「以后都这样」。所以这里强制 save 一次。
+    """
+    if getattr(args, "set", None):
+        path = resolve_store(args.store)
+        key, _, raw = args.set.partition("=")
+        if not _:
+            print("用法：--set key=value", file=sys.stderr)
+            return 2
+        palace = open_palace(path, getattr(args, "project", None), autosave=False)
+        cfg = palace._config
+        if not hasattr(cfg, key):
+            print(f"没有这个配置项: {key}", file=sys.stderr)
+            return 2
+        current = getattr(cfg, key)
+        try:
+            if isinstance(current, bool):
+                value: Any = raw.lower() in ("1", "true", "yes", "on")
+            elif isinstance(current, int):
+                value = int(raw)
+            elif isinstance(current, float):
+                value = float(raw)
+            else:
+                value = raw
+        except ValueError:
+            print(f"值类型不对: {key}={raw!r}", file=sys.stderr)
+            return 2
+        setattr(cfg, key, value)
+        cfg.validate()
+        palace.save(reason="config")
+        print(f"已设置 {key} = {value!r}（写入快照）")
+        return 0
+    return _print_host_config(args)
+
+
 # ---------------------------------------------------------------- 入口
 
 
 def build_parser() -> argparse.ArgumentParser:
     common = argparse.ArgumentParser(add_help=False)
     common.add_argument("--store", help=f"记忆库路径（默认 {DEFAULT_STORE}）")
+    common.add_argument(
+        "--backend",
+        default="auto",
+        choices=["auto", "sqlite", "json"],
+        help="存储后端：sqlite（默认，WAL 并发）/ json（单文件可移植）/ auto（按扩展名）",
+    )
     common.add_argument(
         "--project",
         help="当前项目标识（默认按 git remote / 目录名自动推断；决定默认写哪里、读哪些）",
@@ -871,6 +1163,7 @@ def build_parser() -> argparse.ArgumentParser:
                    choices=["dsh", "claude", "codex", "cursor", "http"])
     p.add_argument("--profile", default="slim", choices=["slim", "full"],
                    help="工具档位：slim 三个工具（省 token）/ full 八个")
+    p.add_argument("--set", metavar="KEY=VALUE", help="改库里的参数并写回快照，例如 --set hybrid_weight=0.5")
     p.set_defaults(func=cmd_config)
 
     p = sub.add_parser("style", parents=[common], help="风格证据与生效状态")
@@ -881,13 +1174,63 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--opposes", help="与哪些风格键对立（逗号分隔）")
     p.set_defaults(func=cmd_style)
 
+    p = sub.add_parser("fsck", parents=[common], help="体检：校验和 / 完整性 / 悬空边 / 锁持有者")
+    p.add_argument("--repair", action="store_true", help="尝试修复（先备份，不删数据）")
+    p.add_argument("--json", action="store_true")
+    p.set_defaults(func=cmd_fsck)
+
+    p = sub.add_parser("journal", parents=[common], help="提交账本：每次写入的时间、原因、写者")
+    p.add_argument("--limit", type=int, default=20)
+    p.add_argument("--json", action="store_true")
+    p.set_defaults(func=cmd_journal)
+
+    p = sub.add_parser("lock", parents=[common], help="谁持有写锁")
+    p.set_defaults(func=cmd_lock)
+
+    p = sub.add_parser("export", parents=[common], help="导出一份可搬走的完整档案")
+    p.add_argument("dest", help="输出文件路径")
+    p.set_defaults(func=cmd_export)
+
+    p = sub.add_parser("import", parents=[common], help="从档案导入（导入前自动备份现有库）")
+    p.add_argument("src", help="档案文件路径")
+    p.set_defaults(func=cmd_import)
+
+    p = sub.add_parser("embed", parents=[common], help="嵌入通道状态（词法 / 稠密 / 混合权重）")
+    p.add_argument("--query", help="用这条查询看通道解释")
+    p.add_argument("--reindex", action="store_true", help="强制重建语义索引")
+    p.set_defaults(func=cmd_embed)
+
+    p = sub.add_parser("eval", parents=[common], help="组件级评测：检索 / 弃答 / 去重 / 沉淀")
+    p.add_argument("--dataset", choices=["zh-finance", "zh-tech"], help="只跑一个数据集")
+    p.add_argument("--channel", default="lexical", choices=["lexical", "hybrid", "dense"])
+    p.add_argument("-k", type=int, default=5)
+    p.add_argument("--json", action="store_true")
+    p.add_argument("--scale", nargs="*", type=int, metavar="N",
+                   help="额外跑规模测试，例如 --scale 1000 5000")
+    p.set_defaults(func=cmd_eval)
+
+    p = sub.add_parser("calibrate", parents=[common], help="在标注集上扫阈值，给推荐值与平台区间")
+    p.add_argument("--dataset", choices=["zh-finance", "zh-tech"])
+    p.add_argument("--apply", action="store_true", help="把推荐值写成 calibration.json")
+    p.set_defaults(func=cmd_calibrate)
+
+    p = sub.add_parser("reflect", parents=[common], help="跑一次反思（配了 LLM 就用 LLM）")
+    p.add_argument("--json", action="store_true")
+    p.set_defaults(func=cmd_reflect)
+
+    p = sub.add_parser("stats", parents=[common], help="存储与写入统计（JSON）")
+    p.set_defaults(func=cmd_stats)
+
     return parser
+
 
 
 def main(argv: list[str] | None = None) -> int:
     ensure_utf8_console()
     parser = build_parser()
     args = parser.parse_args(argv)
+    global _DEFAULT_BACKEND
+    _DEFAULT_BACKEND = getattr(args, "backend", "auto")
     if args.command == "style" and args.action == "observe" and not (args.key and args.statement):
         parser.error("style observe 需要 key 与 statement")
     return int(args.func(args) or 0)

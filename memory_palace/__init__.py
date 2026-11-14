@@ -12,7 +12,13 @@
     style         风格固化与对立裁决
     reflection    自我回看（只提建议，不自动执行）
     selfcorrect   自修正（12 个白名单参数 + 值域 + 抗滞后验证 + 可回滚）
-    semantics     语义检索（多义词按上下文归属；概念词典从语料里长）
+    semantics     语义检索（词法通道 + 稠密通道 + 混合打分）
+    embedding     嵌入器（内置哈希 / 任意 OpenAI 兼容端点 / 磁盘缓存）
+    store         持久化门面（SQLite WAL / JSON）+ 导出导入
+    journal       追加日志（CRC32 + 前滚），JSON 后端的崩溃恢复
+    locking       跨进程字节锁
+    evaluation    组件级评测（检索 / 弃答 / 去重 / 沉淀）与阈值标定
+    llm           LLM 反思（结构化输出、白名单、降级）
 """
 from .affect import (
     OUTCOMES,
@@ -62,10 +68,58 @@ from .selfcorrect import (
     SelfCorrector,
 )
 from .semantics import ConceptEncoder, SemanticIndex, SparseVector, cosine
+from .embedding import (
+    DenseIndex,
+    Embedder,
+    EmbeddingError,
+    HashingEmbedder,
+    HttpEmbedder,
+    make_embedder,
+)
+from .store import (
+    JsonStore,
+    LoadResult,
+    SaveResult,
+    Store,
+    StoreCorrupt,
+    StoreEmpty,
+    StoreError,
+    open_store,
+    remove_store_files,
+)
+from .journal import Journal
+from .locking import FileLock, LockBusy
+from .llm import CallableProvider, HttpChatProvider, LLMReflector, LLMError, make_reflector
 from .style import Adjudication, StyleEngine, StyleRule
 from .value import ValueModel
 
+__version__ = "0.10.0"
+
 __all__ = [
+    "__version__",
+    "Store",
+    "JsonStore",
+    "open_store",
+    "remove_store_files",
+    "SaveResult",
+    "LoadResult",
+    "StoreError",
+    "StoreCorrupt",
+    "StoreEmpty",
+    "Journal",
+    "FileLock",
+    "LockBusy",
+    "Embedder",
+    "HashingEmbedder",
+    "HttpEmbedder",
+    "DenseIndex",
+    "EmbeddingError",
+    "make_embedder",
+    "LLMReflector",
+    "LLMError",
+    "HttpChatProvider",
+    "CallableProvider",
+    "make_reflector",
     "MemoryPalace",
     "PalaceConfig",
     "MemoryNode",

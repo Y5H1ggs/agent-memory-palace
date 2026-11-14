@@ -38,6 +38,7 @@ from .narrative import NarrativeEngine
 from .palace import MemoryPalace
 from .persona import PersonaEngine, PersonalityEngine, TraitSpec
 from .semantics import ConceptEncoder
+from .store import StoreError, remove_store_files
 from .style import StyleEngine
 from .value import ValueModel
 from . import affect as affect_mod
@@ -90,8 +91,7 @@ def main() -> None:
     auto_path = os.path.join(tmp, "memory_palace_autosave.json")
     twin_path = os.path.join(tmp, "memory_palace_twin.json")
     for f in (path, bad_path, fault_path, auto_path, twin_path):
-        if os.path.exists(f):
-            os.unlink(f)
+        remove_store_files(f)
 
     cfg = PalaceConfig(
         consolidate_min_group=3,
@@ -150,6 +150,7 @@ def main() -> None:
             f"{len(series[-1])} 个节点逐位相同",
         )
         moving = [n for n in series[-1] if n not in pinned_names]
+
         check(
             "时间确实在推进：非钉死节点权重严格下降",
             bool(moving) and all(series[-1][n] < series[0][n] for n in moving),
@@ -489,7 +490,7 @@ def main() -> None:
         try:
             MemoryPalace(path=bad_path, clock=clock)
             rejected = False
-        except (ValueError, TypeError, KeyError):
+        except (ValueError, TypeError, KeyError, StoreError):
             rejected = True
         rejected_count += int(rejected)
         check(f"坏快照被响亮拒绝 · {label}", rejected)
@@ -583,9 +584,15 @@ def main() -> None:
     )
 
     print("\n=== 第 9 幕：原子性故障注入 —— 旧快照必须完好、临时文件必须清干净 ===")
+    # 故障注入要一个**独占**目录：放在公共临时目录里的话，
+    # 别人（或上一次运行）留下的 .palace-*.tmp 会被算到自己头上，测出来的是噪声。
+    fault_dir = os.path.join(tmp, "memory_palace_faults")
+    os.makedirs(fault_dir, exist_ok=True)
+    for stale in os.listdir(fault_dir):
+        os.unlink(os.path.join(fault_dir, stale))
+    fault_path = os.path.join(fault_dir, "memory_palace_fault.json")
     p2.save(fault_path)
     good_bytes = open(fault_path, "rb").read()
-    fault_dir = os.path.dirname(os.path.abspath(fault_path))
 
     def leftovers() -> list[str]:
         return [
@@ -593,12 +600,33 @@ def main() -> None:
             if f.startswith(".palace-") and f.endswith(".tmp")
         ]
 
-    def partial_dump(_obj, f, **_kw):
-        f.write('{"version": 99, "graph":')
-        raise OSError("模拟写入中途断电")
+    class _Torn:
+        """写一半就断电的假文件对象：验证「临时文件坏了也不许污染旧快照」。"""
+
+        def __init__(self, real) -> None:
+            self._real = real
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc) -> bool:
+            self._real.close()
+            return False
+
+        def __getattr__(self, name):
+            return getattr(self._real, name)
+
+        def write(self, data: str) -> int:
+            self._real.write(data[: max(1, len(data) // 2)])
+            raise OSError("模拟写入中途断电")
+
+    _real_fdopen = os.fdopen  # 先抓住真身：patch 之后模块里的 os.fdopen 就是它自己了
+
+    def torn_fdopen(fd, *a, **kw):
+        return _Torn(_real_fdopen(fd, *a, **kw))
 
     injections: list[tuple[str, str | None, object, object]] = [
-        ("序列化写一半断电", "memory_palace.core.json.dump", partial_dump, {"version": 99}),
+        ("序列化写一半断电", "memory_palace.core.os.fdopen", torn_fdopen, {"version": 99}),
         ("文件 fsync 失败", "memory_palace.core.os.fsync", OSError("fsync 失败"), {"version": 99}),
         ("原子 replace 失败", "memory_palace.core.os.replace", OSError("磁盘满"), {"version": 99}),
         ("不可序列化对象", None, None, {"bad": object()}),
@@ -2145,6 +2173,7 @@ def main() -> None:
     legacy_path = os.path.join(tmp, "memory_palace_v4.json")
     legacy_state = json.loads(open(path, "rb").read())
     legacy_state["version"] = 4
+    legacy_state.pop("checksum", None)  # v4 从来没有校验和字段
     for node in legacy_state["graph"]["nodes"]:
         node.pop("narrative_heat", None)
         node.pop("narrated_at", None)

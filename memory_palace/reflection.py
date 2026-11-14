@@ -371,10 +371,26 @@ class ReflectionEngine:
         # 但要留下可观测的痕迹（reflector_error 进 snapshot）。
         self.reflector_error = None
         if self.reflector is not None:
+            # 证据要给到**内容**，不能只给条数：只给「你有 47 条记忆」的模型
+            # 除了复述数字什么也做不了，那种反思必然是空话。
+            sample = sorted(
+                nodes,
+                key=lambda n: (-(n.narrative_heat or 0.0), -n.effective_weight(now)),
+            )[:12]
             payload = {
                 "metrics": dict(metrics),
                 "recent_events": [e.to_dict() for e in window[-40:]],
                 "nodes": len(nodes),
+                "sample_nodes": [
+                    {
+                        "tier": n.tier,
+                        "scope": n.scope,
+                        "kind": n.kind,
+                        "tags": list(n.tags),
+                        "content": n.content,
+                    }
+                    for n in sample
+                ],
                 "narrative": {
                     "coherence": context.get("narrative_coherence"),
                     "reliability": context.get("narrative_reliability"),

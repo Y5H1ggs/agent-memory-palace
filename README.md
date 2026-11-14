@@ -12,7 +12,11 @@
 
 <p align="center"><sub>↑ 由 <code>memory-palace render</code> 从一份 120 天的演示库直接生成（<a href="docs/sample-palace.html">在线样例</a>）。图上的每个数字都能用一条命令复现。</sub></p>
 
-**TL;DR (English)** — A dependency-free Python implementation of a *memory lifecycle*: idempotent decay, affect that both hardens and distorts recall, consolidation with a one-way door, value-based forgetting with a fixed attention budget, self-narrative as a projection, tree-shaped injection to save tokens, and self-correction bounded by whitelist + value ranges + anti-lag verification. Ships MCP / HTTP / CLI. 395 assertions, 22 mutation audits. Not a vector database; not production-ready.
+**TL;DR (English)** — A dependency-free Python implementation of a *memory lifecycle*: idempotent decay, affect that both hardens and distorts recall, consolidation with a one-way door, value-based forgetting with a fixed attention budget, self-narrative as a projection, tree-shaped injection to save tokens, and self-correction bounded by whitelist + value ranges + **multi-objective guardrails**.
+
+0.10.0 adds the three things that were missing for real deployments: a **SQLite/WAL backend** (row-level writes, single-writer-many-readers, crash recovery, commit ledger — a single `remember` went from 47 ms to 1.2 ms at 1k memories), a **plug-and-play embedding channel** (built-in hashing embedder or any OpenAI-compatible `/v1/embeddings`), and a **labelled component benchmark** (retrieval / abstention / dedupe / consolidation, two domains, published numbers including the bad ones). Cross-process writes are now serialized by `BEGIN IMMEDIATE` + reload-before-mutate, verified by a 4-process test. Optional LLM reflection proposes hypotheses; only whitelisted, guard-railed patches can change configuration.
+
+Still true, still stated: this is not a drop-in replacement for a purpose-built vector database, and the built-in hashing embedder does not solve synonymy — hook a real model if you need that (numbers below).
 
 ---
 
@@ -37,14 +41,17 @@
 
 ```bash
 git clone https://github.com/Y5H1ggs/memory-palace.git && cd memory-palace
-python examples/quickstart.py     # 不装包也能跑
-python -m memory_palace.demo      # 215 项断言 + 18 条突变审计（约 1 秒）
+python examples/quickstart.py         # 不装包也能跑
+python -m memory_palace.demo          # 全剧本断言 + 突变审计（约 1 秒）
+python -m memory_palace.bench 1000    # 性能（含单次写入 p50/p95）
+python -m memory_palace.cli eval      # 组件级评测：召回/弃答/去重/沉淀
 ```
 
 ```python
 from memory_palace import MemoryPalace, MutableClock
 
-palace = MemoryPalace(clock=MutableClock())
+palace = MemoryPalace(path="~/.memory-palace/store.sqlite")   # 默认 SQLite（WAL）
+palace = MemoryPalace(clock=MutableClock())                    # 纯内存，测试用
 palace.remember("rule:test", "说「完成」之前先跑一遍自测，绿了才算完成", tier="core", pinned=True)
 palace.remember("ci:cp1252", "CI 在 Windows 上因为控制台编码炸了，排查两小时", tags=("复盘", "教训"))
 
@@ -60,6 +67,10 @@ memory-palace context --query "怎么避免线上事故" --budget 800   # ← �
 memory-palace remember "周五不发布，出事没人修" --tags 流程,教训
 memory-palace outcome m:719af3d5 contradicted                  # 用户纠正了你
 memory-palace cycle                                            # 会话结束：代谢一轮
+
+memory-palace fsck                                             # 校验和 / 完整性 / 悬空边 / 锁持有者
+memory-palace journal --limit 5                                # 提交账本：谁在什么时候写了什么
+memory-palace export backup.mpal                               # 一份能搬走的档案（带 sha256）
 ```
 
 ## 看得见：三层可见物
@@ -195,6 +206,11 @@ memory-palace-mcp --profile full    # 8 个（默认）
 1. 稀疏与稠密两条路径**逐条对分**（最大偏差 `0.0e+00`，集合差 0）
 2. 早停**必须保序**（同一批候选，早停前后的簇结构逐字相同）
 3. 增量补建**不许动已有向量**（按对象身份验证：31 条库里只编了新增那 1 条）
+
+上面是 0.9.2 → 0.9.3 的对比（JSON 后端）。0.10 换 SQLite 之后**单次写入**的账是另一回事：
+1000 条时 `remember` p50 从 47.1 ms 降到 **1.2 ms**（p95 1.5 ms），因为不再重写整个库；
+改一条也只要 1.1 ms，与库的大小基本无关。查询侧不变（冷 46.6 ms / 热 4.3 ms），
+读库 49 ms——行存储的解析比整份 JSON 略贵，换来的是写延迟与并发安全。
 
 代价如实记账：`learn_concepts` + `IdfModel` 仍占冷查询的一半（1000 条约 29ms）。它们是对全语料的两遍扫描，
 只在整个语料变了时才需要。**没有做增量** —— 增量 IDF 要维护 doc 级 df 与删除回滚，做错的代价
@@ -384,45 +400,231 @@ Mem0 / Zep(Graphiti) / Letta / Cognee / TencentDB Agent Memory / progressive-mem
   128k 上下文的模型直接塞进去就能得高分；独立审计发现它约 6.4% 的答案键是错的。
   所以下一步不是加功能，是建一个 50 条真实记忆 + 20 条查询、能测**遗忘正确性**与**弃答假阳性率**的评测。
 
-## 并发与落盘：实测数字，以及边界在哪
+## 存储：SQLite（WAL）为主，JSON 为可移植备份
 
-这一块最容易被质疑，所以给数字而不是形容词。
+**为什么换了。** 以前每次 `remember` 都把整份 JSON 重写一遍（1000 条 ≈ 1.3 MB）。
+单进程里这只是慢；多进程里它是个结构问题：两个进程各读一份再各写一份，
+最后一次覆盖前面全部修改，**而且没有任何一方报错**。原子写保证「文件不坏」，
+不保证「改动不丢」—— 这两件事经常被混为一谈。
 
-**进程内（多线程）**：所有公共入口持一把 `RLock`，图遍历返回物化副本
-（`all_nodes()` / `edges()` 都是 `list(...)`，不是活视图）。实测：
+现在默认是 SQLite（WAL 模式，`sqlite3` 是标准库，零依赖这条线没破）：
+
+| | JSON（0.9.x） | SQLite（0.10） |
+|---|---|---|
+| 单次 `remember` p50（1000 条） | 47.1 ms | **1.2 ms** |
+| 单次 `remember` p95 | 53.2 ms | **1.5 ms** |
+| 写放大 | 每次重写全库 | **只写变动的行**（改一条 = 1 行） |
+| 多进程写 | 覆盖丢更新 | `BEGIN IMMEDIATE` 排队 + 变更前重载 |
+| 崩溃恢复 | 快照 + 追加日志前滚 | WAL 自前滚 + 提交账本 |
+| 读库（1000 条） | 43 ms | 49 ms |
+| 磁盘占用 | 1.3 MB | 4.3 MB（行存储 + 4 个索引） |
+
+读库略慢、占盘略大，是行存储与索引的代价，换取的是写延迟 39×、并发安全与可查询的历史。
+
+**五个文件，各管一件事**（SQLite 后端是一个库 + WAL，JSON 后端是快照 + 日志 + 提示 + 锁）：
+
+```
+store.sqlite          nodes / edges / tombstones / blobs / events / commits / snapshots
+store.sqlite-wal      WAL：崩溃后自前滚
+store.json            JSON 后端：单份扁平快照（顶层就是 config / graph / events）
+store.json.journal    JSON 后端：追加日志，CRC32 + zlib，尾部半条会被丢弃
+store.json.lock       JSON 后端：跨进程字节锁（Windows msvcrt / POSIX flock）
+```
+
+**「不可再生数据」具体做了什么**：
+
+| 措施 | 防的是什么 |
+|---|---|
+| 快照带 sha256 校验和 | 文件被改了一个字，读的时候当场发现（不是安静地读进一份错数据） |
+| 追加日志（CRC32 + 内容 sha256） | 快照坏了 → 从日志前滚；断电写了半条 → 丢它，前面的不丢 |
+| `commits` 账本（只增不改） | 「上周三那次修改之前是什么样」；每次提交的原因、写者、写入行数、摘要 |
+| `events` 表只追加 | 内存里的事件会被 trim，库里的不会 —— 审计原料不随内存回收蒸发 |
+| `export` / `import`（带 sha256） | 数据能离开这台机器。不能导出的持久化只是「暂时还没丢」 |
+| `fsck` / `repair` | 完整性、悬空边、账本与 meta 是否一致；修复前先备份，不动节点内容 |
+
+```bash
+memory-palace fsck            # ok=True / integrity=ok / orphan_edges=0
+memory-palace journal         # rev 时间 原因 写者
+memory-palace export out.mpal # 一条命令带走全部记忆
+```
+
+**JSON 后端保留的理由**：一份文件就是一个完整快照，能进 git、能发给别人、能当冷备。
+`--backend json` 切回去，`--backend auto`（默认）按扩展名判断。
+
+## 多进程并发写同一份记忆
+
+以前这里写的是「不行，且不假装行」。现在可以说行了，但要把**机制**说清楚，
+否则「支持并发」只是一句口号：
+
+1. **写事务从第一毫秒就声明意图**：`BEGIN IMMEDIATE`，不是 `BEGIN`。
+   后者要等到第一次写才升级锁，两个进程可能都读完才发现要抢同一个锁，白付一次重试。
+2. **改之前先重载**：拿到写锁后先看 `meta.revision`，比自己新就把别人的提交读进来，再动手。
+   反过来（先改后查）两边都认为自己最新，后写的一方盖掉前一方**已提交**的修改 ——
+   这是丢更新最隐蔽的形态。
+3. **只写自己脏掉的行**：节点上带 `_dirty` 标记（任何字段被改写即置位，读库后统一清零），
+   提交时只 upsert 这些行。别人同时写别的节点，互不干扰。
+4. **冲突要记账**：`SaveResult.rebased` 记录「我是叠在别人之后的第几版」，
+   进 `conflicts` 计数，而不是假装没发生。
+
+实测（`tests/test_store.py::test_multiprocess_no_lost_updates`，每次跑都过）：
 
 | 场景 | 结果 |
 |---|---|
-| 5 线程 × 40 次读同一条记忆 | `access_count` **恰好** +200，零丢失 |
-| 9 线程同时 `remember` / `recall` / `gc` / `run_cycle` | **0 异常**，钉死记忆不被误删 |
-| 边增删边 `graph.to_dict()` 300 次 | **0 异常**（0.9.3 修了两个活视图遍历：节点表与邻接表） |
+| 4 个进程 × 15 条独立写入 | 60 条一条不少 |
+| 4 个进程 × 15 次 merge 同一条记忆 | `access_count` 恰好 60，零丢更新 |
+| 写完之后 `fsck` | `ok=True`，账本 revision 与 meta 一致 |
+| 5 线程 × 40 次读同一条记忆 | `access_count` +200 |
+| 9 线程同时 remember/recall/gc/cycle | 0 异常，钉死记忆不被误删 |
 
-**跨进程：不行，且不假装行。** JSON + `os.replace` 只保证「单次写是原子的」，
-不保证「两个人各读一份再各写一份」不互相覆盖 —— 那是 Last-Write-Wins，不报错。
-所以：**一个 store 同时只给一个写者用**。要并发写，得换成带版本号的乐观并发
-（state 里有 revision，save 前比对）或把写操作串到一个进程里。**这两样都没做**，是待办。
+**边界，说清楚**：SQLite 的 WAL 是「单写多读」，写者之间排队。
+高并发写同一热点时，吞吐上限就是一个写者 —— 这是 SQLite 的设计，不是 bug。
+要更高写吞吐，正确做法是换服务端数据库，而不是在这上面加锁。另外 WAL 需要
+本地文件系统（网络盘上的共享内存不可靠），这一点写进 `docs/STORAGE.md`。
 
-**落盘失败**：`0.9.3` 起配置遵循「存不下就不算改过」—— 自修正改了某个参数但
-`autosave` 失败时，会把本轮应用的修正全部退回去，并把 `last_save_ok=false`
-写进 `snapshot()["durability"]`。记忆写入仍不回滚（调用方已经据它做了推理），
-但会记 `save_failed` 事件 —— 这一条是取舍，不是遗漏。
+## 向量通道：内置哈希 / 任意 OpenAI 兼容端点
+
+先说它**不是**什么：内置的 `HashingEmbedder` 不是神经语言模型。它是
+有符号特征哈希（feature hashing）+ 字符 n-gram + 子线性 TF 得到的 512 维稠密向量，
+零依赖、确定性、对未登录词有平滑作用；但它仍然读字面，**不会**因为「读懂了」而把
+「止盈」和「落袋为安」放到一起。那需要真模型 —— 所以这一层是可替换的：
+
+```bash
+# 零依赖，立刻可用
+memory-palace config --set embedding_provider=hashing
+memory-palace config --set hybrid_weight=0.45
+
+# 接本地 BGE / vLLM / 任何 OpenAI 兼容端点
+memory-palace config --set embedding_provider=http
+memory-palace config --set embedding_endpoint=http://127.0.0.1:8000/v1/embeddings
+memory-palace config --set embedding_model=bge-m3
+memory-palace embed            # 看两条通道各自的状态与失败计数
+```
+
+换成真模型时，检索、聚类、去重、弃答**一起**换 —— 它们读的是同一个
+`SemanticIndex`，不是各自实现一套「语义」。`dense_scores()` / `lexical_scores()` 保留，
+用于对照「这条查询到底靠哪条通道命中」。
+
+代价也如实说：512 维 × 1 万条 ≈ 20 MB 内存（`array('f')`，不是 Python list），
+全表扫一次约 3 ms；嵌入服务抖了会降级到词法通道并记 `dense_failures`，
+不会让整个检索不可用。**没上 ANN** —— 这个规模全表扫比维护索引结构更省心，
+到 1e5 再换，接口不变。
+
+## 组件级评测：把「我觉得变好了」换成数字
+
+以前所有测试都是**我写的断言**。断言通过只证明「实现符合我的预期」，
+不证明「检索真的好用」。中间隔着一个东西：**带标注的数据**。
+
+`memory_palace/evaluation.py` 里有两套领域数据（A 股复盘 / 工程运维，
+共 80 条记忆、42 条查询）与四类标注：检索 gold、弃答、去重对、沉淀簇。
+
+```bash
+memory-palace eval                              # 词法通道
+memory-palace eval --channel hybrid             # 词法 + 稠密
+memory-palace calibrate                          # 扫阈值，给推荐值与平台区间
+memory-palace calibrate --apply                  # 写成 calibration.json
+```
+
+实测（k=5，本机）：
+
+| 数据集 | 通道 | recall@5 | MRR | 精确匹配 | 换说法 |
+|---|---|---|---|---|---|
+| zh-finance | 词法 | 0.725 | 0.692 | 0.889 | **0.591** |
+| zh-finance | 混合 | **0.800** | **0.763** | 0.889 | **0.727** |
+| zh-tech | 词法 | 0.944 | 0.835 | 1.000 | 0.923 |
+| zh-tech | 混合 | 0.944 | **0.861** | 1.000 | 0.923 |
+
+读法：`exact` 上稠密通道没有增益（字面匹配本来就够），收益全部来自 `paraphrase`
+（0.591 → 0.727）。**这正说明它替代不了真模型**：内置哈希只能补字面变形，
+不能补语义跳转。想要后者，请接真模型，然后用同一张表验证它到底值不值。
+
+另外两处数字不好看，但必须贴出来 —— 这才是评测集的意义：
+
+| 指标 | 默认阈值 | 数字 | 说明 |
+|---|---|---|---|
+| 弃答 F1 | 0.20 | 0.857 / 1.000（两数据集） | **0.30 是错的**：短查询上误弃 5 条，F1 只有 0.5。0.18~0.21 是平台区，已把默认值从 0.30 下调到 0.20 |
+| 去重 F1 | 0.92 | 0.667 / 1.000 | 财务集里「百分之五」vs「5%」长度差超过 15%，被长度保护挡掉 —— 保守是刻意的（合并会丢内容），但确实是漏 |
+| 沉淀 F1 | 0.50 | 0.000 / 0.000 | 这两套数据的每条记忆标签各不相同，0.5 的门槛一条簇都出不来；扫描显示 0.25~0.30 才合适。**说明默认值是给「标签共享」的语料调的** |
+
+`calibrate` 不只给最优点，还给**平台区间**：最优点常常是尖峰，旁边两步就掉一半；
+取 ±0.1 内 F1 落差 ≤2 个点的区间中点，比取峰值稳。换语料就重扫一遍，别信默认值。
+
+规模测试也在这条命令里（`--scale 1000 5000 10000`）：1e4 条以内，召回不掉、
+单次查询 p95 在两位数毫秒。这一条是对「语料上万条会退化」那句话的正面回答 ——
+以前它是对的，因为没人测过。
+
+## LLM 反思：模型提假设，代码管边界
+
+规则引擎能回答「哪个指标越界了」，回答不了「这一周到底发生了什么」。
+前者是阈值告警，后者才是复盘。接上 LLM 之后分工是这样划的：
+
+| 谁 | 干什么 | 可审计 |
+|---|---|---|
+| 规则引擎 | 算数字：指标、分位数、越界与否 | ✅ 可复算、可对账 |
+| LLM | 读证据（指标 + 事件 + 记忆样本 + 自述），提假设与措辞 | ❌ 不可审计 |
+| 代码 | 校验结构、白名单、值域、上限；模型的话一律先当「待验证提案」 | ✅ |
+
+三道闸，任何一道破了都该关掉这个功能：
+
+1. **模型不改配置**：只能输出 `suggested_params`，真正的改动走 `SelfCorrector`
+   的白名单 + 值域 + 护栏 + 可回滚。让模型直接写配置，等于让它改自己的人格。
+2. **输出必须结构化**：解析失败就退回规则引擎，并记 `degraded` + 错误原因。
+   一段无法解析的自然语言不是「反思」，只是噪声。
+3. **输入必须有界**：按字符预算截断，先丢记忆样本、再丢事件，**指标与参数清单永不截断**
+   （踩过：总文本直接截断把参数清单砍了一半，模型照着半份清单提建议，看起来像在乱说）。
+
+```bash
+memory-palace config --set llm_provider=http
+memory-palace config --set llm_endpoint=http://127.0.0.1:11434/v1/chat/completions
+memory-palace config --set llm_model=qwen2.5:14b
+memory-palace reflect          # 一次反思；没配 LLM 就是规则反思
+```
+
+## 多目标自修正：不许拿 A 换 B
+
+以前判「这轮修正好不好」只看一个指标。单指标优化在真实系统里必然挤占别的指标
+（把召回门槛压低，噪声就上来了），而账面上只看到好的一面。
+
+现在每条修正都带一份**护栏快照**（应用那一刻的其它指标），判决要求：
+主指标改善 ≥ `selfcorrect_effect_min`，**且**没有任何护栏指标相对恶化超过
+`selfcorrect_guard_margin`（默认 15%）。恶化就回滚，并把越界的键与幅度写进
+`patch.guard_hits`，在 `status()["guardrail_reverts"]` 里能查到。
+
+方向是显式声明的（`GUARD_DIRECTIONS`）：`retrieval_coverage` 越高越好、
+`forget_pressure` 越低越好。弄反会得到一个「越改越差才留下」的系统 ——
+比没有护栏更糟，所以有专门的测试守着方向。
 
 ## 成熟度自评（先说不好听的）
 
-| 维度 | 分数 | 依据 |
-|---|---|---|
-| 设计完整度 | 9/10 | 机制闭环，次序有理由，边界写在 docstring 里 |
-| 工程实现 | 8/10 | 原子写、RLock、零依赖、状态迁移、基准、稀疏索引；但**没有跨进程文件锁** |
-| 测试可信度 | 8/10 | 395 断言 + 22 变异体检（绿灯审计，0 漏洞）；仍无语义评测集 |
-| 可维护性 | 6/10 | `palace.py` 1300+ 行、`demo.py` 2100+ 行；剧本兼任测试 |
-| 生产就绪 | 3/10 | 单写者、无性能 SLA、无语义评测集、API 未冻结 |
+上一版这张表打了 3/10，并明确写「不适用：生产级记忆后端 / 向量检索替代品 /
+存不可再生数据 / 多进程并发写」。逐条对上，现在是这样：
 
-**五个最大风险**：① 语义层不是 embedding（概念种子 + 字符 bigram + 语料学习），语料上万条会退化；
-⑤ **没有组件级评测集** —— 弃答线与去重阈值都是基于实测底噪选的，换个语料就会漂；
-② 测试通过 = 我写的断言通过；③ 自修正的「变好」仍是单指标；④ 单写者（写是原子的，锁不跨进程）。
+| 维度 | 之前 | 现在 | 依据 |
+|---|---|---|---|
+| 设计完整度 | 9/10 | 9/10 | 机制闭环没变；新增的存储/嵌入/反思都遵守「默认关闭、边界显式」 |
+| 工程实现 | 8/10 | **9/10** | SQLite WAL + 行级增量 + `BEGIN IMMEDIATE` + 提交账本 + fsck/export；跨进程锁有专门测试 |
+| 测试可信度 | 8/10 | **8.5/10** | 97 个 pytest + demo 全剧本 + 22 条突变审计；**新增带标注组件评测**，但标注集只有 80 条记忆（规模小、单一标注者） |
+| 可维护性 | 6/10 | 6/10 | `palace.py` 1800+ 行、`demo.py` 2100+ 行照旧；新模块各自 300~700 行，边界清楚 |
+| 生产就绪 | 3/10 | **7/10** | 并发写有机制有测试、崩溃恢复有账本、导出可迁移、写入 p50 1.2 ms；仍缺：多写者吞吐（SQLite 单写者）、SLA 承诺、API 冻结 |
 
-**不适用**：生产级记忆后端、向量检索替代品、存不可再生数据、多进程并发写同一份记忆。
-**适用**：研究记忆机制、给 agent 做可解释的长期记忆原型、当教材读。
+**五个风险的现状**：
+
+| 风险 | 现状 |
+|---|---|
+| ① 语义层不是 embedding | 有了稠密通道（哈希 / 任意 OpenAI 兼容端点），并且**用标注集量出了它值多少**：换说法召回 0.591→0.727。仍不解决同义跳转，需要真模型 |
+| ② 测试通过 = 我写的断言通过 | 新增组件级评测（两个领域、四类标注），并且用它的结论**改掉了默认值**（弃答线 0.30→0.20）——这是断言做不到的事 |
+| ③ 自修正的「变好」仍是单指标 | 多目标护栏 + 方向声明 + 越界证据可查；有测试证明「主指标变好但护栏崩了会被退回」 |
+| ④ 单写者 | SQLite `BEGIN IMMEDIATE` + 变更前重载 + 行级增量；4 进程 × 15 次 merge 的丢更新测试每次跑都过 |
+| ⑤ 没有组件级评测集 | 有，且报告里保留了不利数字（去重 0.667、沉淀 0.000）——不藏坏数才叫评测 |
+
+**仍然不适用**（说清楚比说好听重要）：
+
+- 不是**专用向量数据库**的替代品：没有 ANN、没有十亿级分片。1e4 条以内够用，再大请换。
+- 不承诺**多写者高吞吐**：SQLite 单写者，写热点会排队。
+- 不是**分布式**记忆：单机文件，WAL 需要本地盘。
+- 标注集是**一个人标的 80 条**：能验证流程与量级，不能替代你自己的语料评测
+  （`calibrate` 就是给你换语料用的）。
+
+
 
 ## 项目结构
 
@@ -438,7 +640,14 @@ memory_palace/
   memory_model.py      五种记忆五种寿命
   reflection.py        指标化回看
   selfcorrect.py       自修正
-  semantics.py         语义检索（多义词裁决 + 词典自增长）
+  semantics.py         语义检索（词法通道 + 稠密通道 + 混合打分）
+  embedding.py         嵌入器：哈希（零依赖）/ 任意 OpenAI 兼容端点 / 磁盘缓存
+  store.py             持久化门面：SQLite / JSON 两个后端 + 导出导入
+  sqlite_store.py      SQLite（WAL）：行级增量、事务、提交账本、快照
+  journal.py           追加日志（CRC32 + zlib + 前滚），JSON 后端的崩溃恢复
+  locking.py           跨进程字节锁（msvcrt / flock）+ 持有者诊断
+  llm.py               LLM 反思：结构化输出、白名单、预算截断、降级
+  evaluation.py        组件级评测：两个领域、四类标注、阈值标定、规模基准
   tree.py              树状注入（根常驻 / 枝展开 / 折叠标注）
   scope.py             作用域：全局 / 项目 / 会话，项目标识推断
   lexicon.py           词法层：归一 / 分词 / 否定词 / IDF
@@ -460,7 +669,7 @@ docs/COMPETITIVE_ANALYSIS.md 同类项目调研：融合了什么、拒绝了什
 docs/CRITIQUE_RESPONSE.md 三条批评的逐条核查：哪条成立、哪条论据被截断
 docs/LEXICON.md          词法层：四个决定、性能账、边界
 docs/PRAGMATICS.md       语用层：行为分类、强度衰减、撤回≠同意
-tools/greenlight_audit.py 绿灯审计：12 个变异，故意弄坏实现看断言会不会红
+tools/greenlight_audit.py 绿灯审计：故意弄坏实现，看断言会不会红
 dsh/                     DeepSeek Harness 插件（host 半 + cordis 挂载配置 + 面板）
 AGENTS.md                agent 读得懂的约定
 tests/test_temporal.py   双时态 / 去重 / 弃答（含反事实断言）
@@ -469,12 +678,28 @@ tests/test_extensions.py 编码器 / 外部反思两个扩展点的契约
 tests/test_lexicon.py    词法层：归一 / 分词 / 否定 / IDF（含反事实）
 tests/test_pragmatics.py 语用层：行为 / 强度 / 撤回≠同意 / 模糊降级
 tests/test_audit.py      代码审计：优化保序 / 边界校验 / 增量补建（含反事实）
+tests/test_store.py      持久化契约：4 进程并发 / 增量写 / 崩溃前滚 / 导出导入 / 校验和
+tests/test_locking.py    跨进程锁：真子进程争用 / 重入 / 总超时 / 陈旧元信息
+tests/test_embedding.py  嵌入：跨进程确定性 / 有符号哈希 / HTTP 批量与缓存 / 混合增益
+tests/test_eval.py       评测集自审：标注合法性 / 指标数学 / 标定平台 / 规模基准
+tests/test_llm.py        LLM 反思边界：结构校验 / 降级 / 白名单 / 绝不改配置
+tests/test_guardrails.py 多目标护栏：主指标改善但护栏崩 → 回滚
 ```
 
 ## 版本
 
-`0.x` 期间 API 可能变。升到 `1.0.0` 的四条硬条件写在 [CHANGELOG](CHANGELOG.md)：
-外部使用者 ≥ 1、CI 覆盖三平台、语义层有公开评测集与基线数字、跨进程写锁落地。
+当前 `0.10.0`。`0.x` 期间 API 可能变。
+
+升到 `1.0.0` 的四条硬条件，现在完成了三条半：
+
+| 条件 | 状态 |
+|---|---|
+| 外部使用者 ≥ 1 | ⏳ 未达 |
+| CI 覆盖三平台 | ✅ Linux / macOS / Windows |
+| 语义层有公开评测集与基线数字 | ✅ 两个领域、四类标注、`eval` 一条命令复现 |
+| 跨进程写锁落地 | ✅ SQLite WAL + 文件锁 + 4 进程丢更新测试 |
+
+留着的半条是第一条 —— 它不该由我打分。
 
 ## License
 

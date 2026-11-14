@@ -106,10 +106,12 @@ class PalaceConfig:
     # 但后者补了新约束，合并就把约束吃掉了。长度差超过 15% 一律不合并。
     dedupe_length_ratio: float = 0.85
     # —— 弃答线：低于它就不硬凑，宁可说「没有相关记忆」——
-    # 这个数不是拍出来的：本库用字符 bigram 编码，实测无关查询的语义分底噪在 0.13 以内，
-    # 真匹配在 0.5 以上（相差一个量级）。0.30 落在两者中间的空档里。
-    # 它随语料规模与语言漂移，所以是**配置**而不是常数，且调用方可用 --no-abstain 关掉。
-    abstain_semantic_floor: float = 0.30
+    # 这个数以前是「实测底噪 0.13、真匹配 0.5，取中间 0.30」。标注集一测就露馅：
+    # 0.30 在短查询上误弃 5 条（zh-finance），F1 只有 0.5；0.18~0.21 是平台区，F1 0.93。
+    # 原因是「真匹配」在短句上根本到不了 0.5 —— 那句话是拿长记忆当查询测出来的。
+    # 现值 0.20 取自标定平台中段，仍然随语料漂移，所以它还是**配置**，
+    # 换语料请用 `memory-palace calibrate --apply` 重扫，别信默认值。
+    abstain_semantic_floor: float = 0.20
 
     # —— 情感权重：潮水（唤醒）、河床（刻痕）、失真代价 ——
     affect_arousal_half_life_days: float = 3.0
@@ -168,6 +170,50 @@ class PalaceConfig:
     # 观测样本比观察窗还旧时不许判 —— 这就是「用上一轮的指标判这一轮的修正」的漏洞。
     selfcorrect_max_extensions: int = 2
     selfcorrect_settle_ratio: float = 0.5
+    # 多目标自修正的护栏：主指标改善了，但别的指标掉超过这个比例，就不算「变好」。
+    # 单指标优化必然会挤占别的指标（把召回门槛压低，噪声就上来了），
+    # 不设护栏等于允许它用一个指标换掉另一个指标，而账面上只看到好的一面。
+    selfcorrect_guard_margin: float = 0.15
+
+    # —— 持久化与并发（0.10.0 起）：把「写下去了」变成可证明的事 ——
+    # auto = 按扩展名判断（.sqlite/.db → SQLite，.json → JSON）
+    backend: str = "auto"
+    # process = 跨进程事务（SQLite BEGIN IMMEDIATE / JSON 文件锁）
+    concurrency: str = "process"
+    # 追加日志默认开：它换来的是「快照坏了还能回到上一次提交」，
+    # 代价是每次写多一次压缩 + fsync。关掉它只该出现在压测里。
+    journal_enabled: bool = True
+    journal_keep: int = 32
+    lock_timeout: float = 10.0
+    # 每 N 次提交留一份完整快照（SQLite 后端的时间旅行精度）。
+    # 0 = 不留快照，只留提交账本。
+    snapshot_every: int = 50
+    # 读库时校验 sha256（JSON 后端）。关掉能省几毫秒，代价是「坏数据被当成好数据」。
+    verify_checksum: bool = True
+
+    # —— 嵌入通道：真正的固定维度稠密向量，可换成本地模型或远程 API ——
+    # "" = 只用词法通道（零依赖默认）；hashing = 内置哈希嵌入；http = OpenAI 兼容 /embeddings
+    embedding_provider: str = ""
+    embedding_dim: int = 512
+    embedding_endpoint: str = ""
+    embedding_model: str = ""
+    embedding_key_env: str = "MEMORY_PALACE_EMBED_KEY"
+    # 混合权重：0 = 纯词法，1 = 纯稠密。默认偏词法 —— 中文专有名词上
+    # 字面匹配仍然更准，稠密的用处是补「换了个说法」的召回，不是取代字面。
+    hybrid_weight: float = 0.45
+
+    # —— LLM 反思：模型提假设，代码管边界（默认关闭，规则反思照常工作）——
+    # "" = 不启用；"http" = 任何 OpenAI 兼容的 /chat/completions
+    llm_provider: str = ""
+    llm_endpoint: str = ""
+    llm_model: str = ""
+    llm_key_env: str = "MEMORY_PALACE_LLM_KEY"
+    llm_timeout: float = 30.0
+    llm_temperature: float = 0.2
+    # 证据预算：喂进去的记忆条数与总字符上限。
+    # 不设上限等于把成本和延迟交给语料规模决定 —— 库越大越慢越贵，还更容易编。
+    llm_evidence_nodes: int = 10
+    llm_max_chars: int = 6000
 
     INT_FIELDS: ClassVar[tuple[str, ...]] = (
         "consolidate_min_group",
@@ -187,6 +233,29 @@ class PalaceConfig:
         "selfcorrect_max_per_cycle",
         "selfcorrect_max_reverts",
         "selfcorrect_max_extensions",
+        "journal_keep",
+        "snapshot_every",
+        "embedding_dim",
+        "llm_evidence_nodes",
+        "llm_max_chars",
+    )
+
+    STR_FIELDS: ClassVar[tuple[str, ...]] = (
+        "backend",
+        "concurrency",
+        "embedding_provider",
+        "embedding_endpoint",
+        "embedding_model",
+        "embedding_key_env",
+        "llm_provider",
+        "llm_endpoint",
+        "llm_model",
+        "llm_key_env",
+    )
+
+    BOOL_FIELDS: ClassVar[tuple[str, ...]] = (
+        "journal_enabled",
+        "verify_checksum",
     )
 
     def to_dict(self) -> dict[str, Any]:
@@ -195,6 +264,14 @@ class PalaceConfig:
     def validate(self) -> None:
         """坏参数必须响亮地失败，不能安静地跑出一个错的系统。"""
         for key, value in self.to_dict().items():
+            if key in self.BOOL_FIELDS:
+                if not isinstance(value, bool):
+                    raise ValueError(f"config.{key} 必须是布尔值，实际为 {value!r}")
+                continue
+            if key in self.STR_FIELDS:
+                if not isinstance(value, str):
+                    raise ValueError(f"config.{key} 必须是字符串，实际为 {value!r}")
+                continue
             if isinstance(value, bool) or not isinstance(value, (int, float)):
                 raise ValueError(
                     f"config.{key} 必须是数值，实际为 {type(value).__name__}: {value!r}"
@@ -356,6 +433,43 @@ class PalaceConfig:
             raise ValueError("config.selfcorrect_max_extensions 不能为负")
         if not 0 < self.selfcorrect_settle_ratio <= 1:
             raise ValueError("config.selfcorrect_settle_ratio 必须落在 (0, 1]")
+        if not 0 <= self.selfcorrect_guard_margin <= 1:
+            raise ValueError("config.selfcorrect_guard_margin 必须落在 [0, 1]")
+        # —— 持久化与并发 ——
+        if self.backend not in ("auto", "sqlite", "json"):
+            raise ValueError(f"config.backend 只能是 auto/sqlite/json，实际 {self.backend!r}")
+        if self.concurrency not in ("process", "thread"):
+            raise ValueError(f"config.concurrency 只能是 process/thread，实际 {self.concurrency!r}")
+        if self.journal_keep < 2:
+            raise ValueError("config.journal_keep 至少为 2（留一条等于没有历史）")
+        if self.lock_timeout <= 0:
+            raise ValueError("config.lock_timeout 必须为正")
+        if self.snapshot_every < 0:
+            raise ValueError("config.snapshot_every 不能为负（0 = 不留快照）")
+        # —— 嵌入 ——
+        if self.embedding_provider not in ("", "hashing", "http"):
+            raise ValueError(
+                f"config.embedding_provider 只能是 ''/hashing/http，实际 {self.embedding_provider!r}"
+            )
+        if not 32 <= self.embedding_dim <= 8192:
+            raise ValueError("config.embedding_dim 必须落在 [32, 8192]")
+        if not 0 <= self.hybrid_weight <= 1:
+            raise ValueError("config.hybrid_weight 必须落在 [0, 1]")
+        if self.embedding_provider == "http" and not self.embedding_endpoint:
+            raise ValueError("embedding_provider=http 时必须提供 embedding_endpoint")
+        # —— LLM 反思 ——
+        if self.llm_provider not in ("", "http"):
+            raise ValueError(f"config.llm_provider 只能是 ''/http，实际 {self.llm_provider!r}")
+        if self.llm_provider == "http" and not self.llm_endpoint:
+            raise ValueError("llm_provider=http 时必须提供 llm_endpoint")
+        if self.llm_timeout <= 0:
+            raise ValueError("config.llm_timeout 必须为正")
+        if not 0 <= self.llm_temperature <= 2:
+            raise ValueError("config.llm_temperature 必须落在 [0, 2]")
+        if not 1 <= self.llm_evidence_nodes <= 100:
+            raise ValueError("config.llm_evidence_nodes 必须落在 [1, 100]")
+        if not 800 <= self.llm_max_chars <= 100000:
+            raise ValueError("config.llm_max_chars 必须落在 [800, 100000]")
 
     @classmethod
     def from_dict(cls, d: dict[str, Any], strict: bool = True) -> "PalaceConfig":
@@ -411,6 +525,18 @@ class MemoryNode:
 
     MAX_W: ClassVar[float] = 10.0
     AFFECT_GAIN: ClassVar[float] = 1.8
+
+    # 脏标记：任何字段被改写，就把 `_dirty` 置真。它不是 dataclass 字段
+    # （不进 to_dict / 不进快照 / 不参与相等比较），只是「这条要不要重写一行」的提示。
+    #
+    # 为什么不用「每次保存都全量重写」：1000 条记忆全量序列化 63ms，
+    # 改一条也付这个代价，写放大与库大小成正比。有了这个标记，
+    # 保存代价只跟**改动量**有关 —— 这是 SQLite 后端「行级写」能真正落地的前提。
+    # 读上来的节点在 `_restore_state` 里统一清标记，所以不会第一次保存就全量重写。
+    def __setattr__(self, key: str, value: Any) -> None:
+        object.__setattr__(self, key, value)
+        if key != "_dirty":
+            object.__setattr__(self, "_dirty", True)
 
     def effective_valid_from(self) -> float:
         return self.valid_from if self.valid_from > 0 else self.created_at
@@ -639,6 +765,9 @@ class MemoryGraph:
     def __init__(self) -> None:
         self._nodes: dict[str, MemoryNode] = {}
         self._adj: dict[str, dict[str, Edge]] = {}
+        # 边的变更不体现在任何单个节点上，单独记一个标记：
+        # 没有它，共现关系的强化永远等不到落盘（节点没变 → 不写）。
+        self._edge_dirty = True
 
     def __len__(self) -> int:
         return len(self._nodes)
@@ -672,7 +801,8 @@ class MemoryGraph:
             self._nodes.pop(name)
             for nb in list(self._adj.get(name, {})):
                 self._adj.get(nb, {}).pop(name, None)
-            self._adj.pop(name, None)
+            if self._adj.pop(name, None):
+                self._edge_dirty = True
             removed.append(name)
         return removed
 
@@ -690,6 +820,7 @@ class MemoryGraph:
             e.weight += gain
             e.coactivations += 1
             e.last_coactivated = now
+        self._edge_dirty = True
         return e
 
     def edge(self, a: str, b: str) -> Edge | None:
@@ -882,20 +1013,19 @@ def _cleanup_temp(tmp: str, attempts: int = 3) -> bool:
     return False
 
 
-def atomic_write_json(path: str, obj: Any) -> bool:
-    """临时文件 + 文件 fsync + 原子 replace + 目录 fsync（含 Windows 路径）。
+def atomic_write_text(path: str, text: str) -> bool:
+    """原子写文本：临时文件 + fsync + replace + 目录 fsync。
 
-    返回「目录项是否持久化」：False 表示内容已写入但断电后可能回滚到旧快照，
-    调用方可据此告警。任何一步失败都不得污染旧快照；临时文件由重试清理兜底，
-    彻底删不掉时记账并留待下次写盘回收 —— 泄漏有界，而不是每次多一个。
+    与 `atomic_write_json` 同一套保证，只是调用方已经把 JSON 序列化好了 ——
+    store 需要「先算出字节、算校验和、再落盘」，不能让它序列化两遍。
     """
     parent = os.path.dirname(os.path.abspath(path)) or "."
     os.makedirs(parent, exist_ok=True)
     _sweep_stale_temps(parent)
     fd, tmp = tempfile.mkstemp(prefix=TEMP_PREFIX, suffix=TEMP_SUFFIX, dir=parent)
     try:
-        with os.fdopen(fd, "w", encoding="utf-8") as f:
-            json.dump(obj, f, ensure_ascii=False, indent=2)
+        with os.fdopen(fd, "w", encoding="utf-8", newline="") as f:
+            f.write(text)
             f.flush()
             os.fsync(f.fileno())
         os.replace(tmp, path)
@@ -905,6 +1035,16 @@ def atomic_write_json(path: str, obj: Any) -> bool:
     WRITE_STATS["writes"] += 1
     WRITE_STATS["dir_fsync_ok" if durable else "dir_fsync_degraded"] += 1
     return durable
+
+
+def atomic_write_json(path: str, obj: Any) -> bool:
+    """临时文件 + 文件 fsync + 原子 replace + 目录 fsync（含 Windows 路径）。
+
+    返回「目录项是否持久化」：False 表示内容已写入但断电后可能回滚到旧快照，
+    调用方可据此告警。任何一步失败都不得污染旧快照；临时文件由重试清理兜底，
+    彻底删不掉时记账并留待下次写盘回收 —— 泄漏有界，而不是每次多一个。
+    """
+    return atomic_write_text(path, json.dumps(obj, ensure_ascii=False, indent=2))
 
 
 def read_json(path: str) -> dict[str, Any]:

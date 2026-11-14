@@ -41,6 +41,46 @@ class Mutant:
 
 MUTANTS: tuple[Mutant, ...] = (
     Mutant(
+        "storage-rewrite-all",
+        "memory_palace/palace.py",
+        'if getattr(node, "_dirty", True) or node.name not in self._persisted_nodes:',
+        "if True:",
+        "每次提交都把全部节点序列化一遍（增量写退化成全量）",
+        ("tests/test_store.py",),
+    ),
+    Mutant(
+        "lock-noop",
+        "memory_palace/locking.py",
+        "            if slot.depth == 0:",
+        "            if False:",
+        "文件锁永远不真正获取（多进程互斥失效）",
+        ("tests/test_locking.py",),
+    ),
+    Mutant(
+        "checksum-off",
+        "memory_palace/store.py",
+        'if checksum and self.verify and int(state.get("version") or 0) >= 7:',
+        "if False:",
+        "读快照时跳过校验和（被改过的文件也能读进来）",
+        ("tests/test_store.py",),
+    ),
+    Mutant(
+        "llm-whitelist-off",
+        "memory_palace/llm.py",
+        "            if param not in ALLOWED_PARAMS:",
+        "            if False:",
+        "LLM 建议不再过白名单（模型可以提任何参数）",
+        ("tests/test_llm.py",),
+    ),
+    Mutant(
+        "guard-off",
+        "memory_palace/selfcorrect.py",
+        "            if not hits:",
+        "            if True:",
+        "忽略护栏指标（主指标变好就留下，不管牺牲了什么）",
+        ("tests/test_guardrails.py",),
+    ),
+    Mutant(
         "decay-flat",
         "memory_palace/core.py",
         "return self.base_weight * math.exp(-days / self.stability(now, affect_gain))",
