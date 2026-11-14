@@ -332,6 +332,35 @@ def test_apply_suggestion_rolls_back_when_save_fails() -> None:
         reloaded.close()
 
 
+def test_apply_suggestion_rolls_back_on_any_exception() -> None:
+    """回滚不能只认 ValueError。
+
+    `validate()` 现在只抛 ValueError，但那是实现细节不是契约。若将来某个
+    校验分支漏出 TypeError，内存里就会留下一个「没校验过、也没落盘」的参数 ——
+    重启后静默变回去，调参的人会以为是自己记错了。
+    """
+    with tempfile.TemporaryDirectory(prefix="mp-apply2-") as tmp:
+        palace = MemoryPalace(path=os.path.join(tmp, "store.sqlite"), autosave=True)
+        palace.remember("a", "仓位按半凯利", tags=("仓位",))
+        before = palace._config.semantic_min_score
+        original = palace._config.validate
+
+        def boom() -> None:
+            raise TypeError("模拟校验实现 bug")
+
+        palace._config.validate = boom  # type: ignore[method-assign]
+        try:
+            palace.apply_suggestion("semantic_min_score", 0.42)
+        except TypeError:
+            pass
+        else:
+            raise AssertionError("异常必须原样抛出，不能被吞")
+        finally:
+            palace._config.validate = original  # type: ignore[method-assign]
+        assert palace._config.semantic_min_score == before, "非 ValueError 也必须回滚"
+        palace.close()
+
+
 def test_sqlite_fsck_and_repair() -> None:
     with tempfile.TemporaryDirectory(prefix="mp-fsck-") as tmp:
         path = os.path.join(tmp, "store.sqlite")

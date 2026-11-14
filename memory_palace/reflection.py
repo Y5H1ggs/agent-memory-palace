@@ -61,46 +61,47 @@ class ReflectionEngine:
     ) -> ReflectionReport:
         cfg = self.config
         start = now - cfg.reflection_window_days * DAY
-        window = [e for e in events if e.ts >= start]
         context = context or {}
 
-        def count(kind: str) -> int:
-            return sum(1 for e in window if e.kind == kind)
+        # 一次遍历同时做「窗口过滤」与「统计」。
+        # 原来是：先建窗口列表，再用 count(kind) 扫 6 遍、payload 求和再扫 4 遍。
+        # 5000 条事件时这些加起来只有 ~2ms，但它是每轮 cycle 都付的常数，
+        # 而且写法本身在暗示「遍历很便宜」—— 不便宜，只是还没到痛的时候。
+        counts: dict[str, int] = {}
+        total_hits = core_hits = semantic_recalls = 0
+        semantic_only_total = gc_deletes = 0
+        scores: list[float] = []
+        window: list[Event] = []
+        for event in events:
+            if event.ts < start:
+                continue
+            window.append(event)
+            kind = event.kind
+            counts[kind] = counts.get(kind, 0) + 1
+            if kind == "recall":
+                payload = event.payload
+                total_hits += len(payload.get("names", ()))
+                core_hits += len(payload.get("core_hits", ()))
+                semantic_only_total += len(payload.get("semantic_only", ()))
+                if payload.get("retrieval") == "semantic":
+                    semantic_recalls += 1
+                if "top_score" in payload:
+                    scores.append(float(payload["top_score"]))
+            elif kind == "gc":
+                gc_deletes += len(event.payload.get("deleted", ()))
 
-        recalls, misses = count("recall"), count("miss")
+        recalls = counts.get("recall", 0)
+        misses = counts.get("miss", 0)
         attempts = recalls + misses
         # 一次都没检索过 ≠ 覆盖率 0%。没有证据时说「未知」而不是「很窄」，
         # 否则刚建的库第一轮就会去下调语义门槛 —— 为了一个不存在的症状改参数。
         retrieval_coverage = recalls / attempts if attempts else 1.0
-        gc_deletes = sum(
-            len(e.payload.get("deleted", [])) for e in window if e.kind == "gc"
-        )
-        consolidations = count("consolidate")
-        crystallizations = count("crystallize")
-        decrystallizations = count("decrystallize")
-        restores = count("restore")
-        reflections = count("reflect")
-        total_hits = sum(
-            len(e.payload.get("names", [])) for e in window if e.kind == "recall"
-        )
-        core_hits = sum(
-            len(e.payload.get("core_hits", []))
-            for e in window
-            if e.kind == "recall"
-        )
-        semantic_recalls = sum(
-            1 for e in window if e.kind == "recall" and e.payload.get("retrieval") == "semantic"
-        )
-        semantic_only = sum(
-            len(e.payload.get("semantic_only", []))
-            for e in window
-            if e.kind == "recall"
-        )
-        scores = [
-            float(e.payload["top_score"])
-            for e in window
-            if e.kind == "recall" and "top_score" in e.payload
-        ]
+        consolidations = counts.get("consolidate", 0)
+        crystallizations = counts.get("crystallize", 0)
+        decrystallizations = counts.get("decrystallize", 0)
+        restores = counts.get("restore", 0)
+        reflections = counts.get("reflect", 0)
+        semantic_only = semantic_only_total
 
         nodes = graph.all_nodes()
         core_nodes = [n for n in nodes if n.tier in ("core", "fact")]

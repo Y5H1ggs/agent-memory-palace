@@ -218,13 +218,47 @@ def test_reflector() -> None:
 
 
 def main() -> int:
-    test_default_encoder()
-    test_injected_encoder()
-    test_encoder_robustness()
-    test_reflector()
+    """**自动发现**所有 test_ 函数，不维护手写清单。
+
+    手写清单出过一次事故：新加的用例忘了写进 main()，脚本模式跑完全绿，
+    于是突变审计显示「改坏了也没人红」—— 而真相是那条用例根本没执行。
+    自动发现没有这个失败模式。
+    """
+    for name, fn in sorted(globals().items()):
+        if name.startswith("test_") and callable(fn) and fn.__module__ == __name__:
+            fn()
     total = PASS + FAIL
     print(f"\n{'=' * 60}\n{total} 项断言：{PASS} 通过 / {FAIL} 失败\n{'=' * 60}")
     return 0 if FAIL == 0 else 1
+
+
+def test_style_suppression_after_adjudication() -> None:
+    """裁决之后，输家必须真的从输出里消失。
+
+    这条以前只在 demo 里演过；demo 重写后没人管它，突变审计立刻掉了一个
+    （`style-no-suppress`：把 `if rule.suppressed_by is not None: return False`
+    改成 `if False` 仍然全绿）。所以把它钉在测试里，而不是留在演示脚本里。
+    """
+    from memory_palace.palace import MemoryPalace
+
+    palace = MemoryPalace()
+    for _ in range(10):
+        palace.observe_style("terse", "回答要短，先给结论", +1.0, 1.0, opposes=("verbose",))
+    for _ in range(3):
+        palace.observe_style("verbose", "回答要详尽，给全背景", +0.2, 1.0, opposes=("terse",))
+    # 真实系统里由 age()/settle() 把它们推到固化态；这里直接置位，只测裁决与压制的因果关系
+    for rule in palace.style.rules.values():
+        rule.crystallized = True
+
+    palace.style.adjudicate(palace.now(), emit=True)
+
+    assert palace.style.rules["terse"].suppressed_by is None
+    assert palace.style.rules["verbose"].suppressed_by == "terse", "输家没有被压制"
+    active = palace.style.active_statements(palace.now())
+    assert "回答要短，先给结论" in active
+    assert "回答要详尽，给全背景" not in active, f"输家仍进了输出: {active}"
+    # 被压制不等于「冲突消失」：报表上仍要看得见这场对立
+    assert palace.style.conflicts(palace.now()) == [("terse", "verbose")]
 
 
 if __name__ == "__main__":

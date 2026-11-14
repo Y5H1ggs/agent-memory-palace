@@ -117,7 +117,7 @@ def test_llms_full_lists_storage_layer() -> None:
 def test_readme_numbers_have_a_source() -> None:
     """README 里出现的性能数字必须能对上一条命令，否则就是「传说」。"""
     text = _read("README.md")
-    for command in ("bench 1000", "cli eval", "calibrate"):
+    for command in ("bench 1000", "memory-palace eval", "calibrate"):
         assert command in text, f"README 缺少复现命令 {command}"
 
 

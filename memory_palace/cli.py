@@ -26,7 +26,6 @@ from datetime import datetime
 from typing import Any
 
 from ._console import ensure_utf8_console
-from .evaluation import DATASETS as EVAL_DATASETS
 from .palace import MemoryPalace
 from .scope import GLOBAL, SCOPE_MODES, label as scope_label, scopes_for
 from .tree import build_tree, render_tree, tree_stats
@@ -955,6 +954,24 @@ def _embed_check(cfg) -> int:
 def cmd_eval(args) -> int:
     from . import evaluation as ev
 
+    if args.list:
+        from .evaluation_domains import LABELS
+
+        deep = set(ev.DEEP_DATASETS)
+        print(f"共 {len(ev.DATASETS)} 个领域（★ = 深标注：含去重与沉淀）\n")
+        for name in sorted(ev.DATASETS):
+            mark = "★" if name in deep else " "
+            print(f" {mark} {name:<22} {LABELS.get(name, '')}")
+        return 0
+
+    if args.dataset and args.dataset not in ev.DATASETS:
+        close = [n for n in ev.DATASETS if args.dataset.split("-")[-1][:3] in n][:5]
+        print(f"没有这个领域：{args.dataset}")
+        if close:
+            print("你是不是想要：" + "、".join(close))
+        print("用 `memory-palace eval --list` 看全部。")
+        return 2
+
     names = [args.dataset] if args.dataset else None
     embedder = None
     if args.channel in ("hybrid", "dense"):
@@ -1243,7 +1260,9 @@ def build_parser() -> argparse.ArgumentParser:
     p.set_defaults(func=cmd_embed)
 
     p = sub.add_parser("eval", parents=[common], help="组件级评测：检索 / 弃答 / 去重 / 沉淀")
-    p.add_argument("--dataset", choices=sorted(EVAL_DATASETS), help="只跑一个领域")
+    p.add_argument("--dataset", metavar="NAME", help="只跑一个领域（如 zh-finance）；--list 看全部")
+    p.add_argument("--list", action="store_true", help="列出全部领域名")
+    p.add_argument("--verbose", action="store_true", help="逐个领域打印（默认只印汇总与最差 5 个）")
     p.add_argument("--channel", default="lexical", choices=["lexical", "hybrid", "dense"])
     p.add_argument("-k", type=int, default=5)
     p.add_argument("--json", action="store_true")
@@ -1252,7 +1271,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.set_defaults(func=cmd_eval)
 
     p = sub.add_parser("calibrate", parents=[common], help="在标注集上扫阈值，给推荐值与平台区间")
-    p.add_argument("--dataset", choices=sorted(EVAL_DATASETS))
+    p.add_argument("--dataset", metavar="NAME")
     p.add_argument("--apply", action="store_true", help="把推荐值写成 calibration.json")
     p.set_defaults(func=cmd_calibrate)
 

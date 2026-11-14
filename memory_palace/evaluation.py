@@ -35,6 +35,13 @@ from .core import MemoryGraph, MemoryNode, MutableClock, PalaceConfig
 from .semantics import SemanticIndex
 
 
+def _build_wide() -> dict[str, Dataset]:
+    """100 个广覆盖领域。放在函数里，导入时不付构造开销。"""
+    from .evaluation_domains import build_datasets
+
+    return build_datasets()
+
+
 # ---------------------------------------------------------------- 数据模型
 
 
@@ -443,9 +450,58 @@ PERSONAL = Dataset(
 )
 
 
-DATASETS: dict[str, Dataset] = {
+# 6 个深标注领域（检索 + 弃答 + 去重 + 沉淀）与 100 个广覆盖领域（检索 + 弃答）。
+# 分开是有意的：去重与沉淀要在「同义改写 / 同主题碎片」上标，手工做 100 套成本过高，
+# 也不会比 6 套更可信。广覆盖用来**推翻阈值**，深标注用来**测组件**。
+DEEP_DATASETS: dict[str, Dataset] = {
     ds.name: ds for ds in (FINANCE, TECH, MEDICAL, LEGAL, SUPPORT, PERSONAL)
 }
+class _LazyDatasets(dict):
+    """第一次访问时才构造 100 个广覆盖领域。
+
+    `memory_palace.evaluation` 会被 CLI 在启动时导入；如果模块级就把 100 个 Dataset
+    全建出来，每条命令都要多付 ~160ms —— 这个项目的启动成本是刻意压过的。
+    """
+
+    def _ensure(self) -> None:
+        if not super().__len__():
+            dict.update(self, DEEP_DATASETS)
+            dict.update(self, _build_wide())
+
+    def __getitem__(self, key):  # type: ignore[override]
+        self._ensure()
+        return super().__getitem__(key)
+
+    def __iter__(self):  # type: ignore[override]
+        self._ensure()
+        return super().__iter__()
+
+    def __len__(self) -> int:
+        self._ensure()
+        return super().__len__()
+
+    def __contains__(self, key) -> bool:  # type: ignore[override]
+        self._ensure()
+        return super().__contains__(key)
+
+    def items(self):  # type: ignore[override]
+        self._ensure()
+        return super().items()
+
+    def keys(self):  # type: ignore[override]
+        self._ensure()
+        return super().keys()
+
+    def values(self):  # type: ignore[override]
+        self._ensure()
+        return super().values()
+
+    def get(self, key, default=None):  # type: ignore[override]
+        self._ensure()
+        return super().get(key, default)
+
+
+DATASETS: dict[str, Dataset] = _LazyDatasets()
 
 
 # ---------------------------------------------------------------- 指标
@@ -606,6 +662,9 @@ def run_dedupe(
     config: PalaceConfig | None = None,
     embedder: Any = None,
 ) -> dict[str, Any]:
+    if not dataset.dedupe_pairs:
+        # 广覆盖领域不标去重对。报 0 分是撒谎（它没有被测过），跳过才是实话。
+        return {"dataset": dataset.name, "skipped": True}
     cfg = config or PalaceConfig()
     if threshold is None:
         threshold = cfg.dedupe_similarity
@@ -718,6 +777,8 @@ def run_consolidation(
 
 def sweep_consolidation(dataset: Dataset) -> dict[str, Any]:
     """沉淀阈值扫描：默认 0.5 在「标签不共享」的语料上几乎不出簇，这一扫就能看见。"""
+    if not dataset.clusters:
+        return {"skipped": True}
     curve = []
     for step in range(15, 61, 5):
         t = step / 100
@@ -776,6 +837,16 @@ def summarize(entries: Sequence[dict[str, Any]]) -> dict[str, Any]:
             if isinstance(node, (int, float)) and not isinstance(node, bool):
                 values.append(float(node))
         return round(_mean(values), 4) if values else 0.0
+    def covered(path: tuple[str, ...]) -> int:
+        count = 0
+        for entry in entries:
+            node: Any = entry
+            for key in path:
+                node = (node or {}).get(key) if isinstance(node, dict) else None
+            if isinstance(node, (int, float)):
+                count += 1
+        return count
+
     return {
         "domains": len(entries),
         "recall@k": mean_of(("retrieval", "overall", "recall@k")),
@@ -783,24 +854,58 @@ def summarize(entries: Sequence[dict[str, Any]]) -> dict[str, Any]:
         "abstain_f1": mean_of(("abstain", "abstain_f1")),
         "dedupe_f1": mean_of(("dedupe", "f1")),
         "queries": sum(int((e.get("retrieval") or {}).get("overall", {}).get("n", 0)) for e in entries),
+        # 覆盖数要单独报：106 个领域里只有 6 个测了去重与沉淀，
+        # 把 6 个的数字说成「106 个领域的去重 F1」是另一种撒谎。
+        "covered": {
+            "retrieval": covered(("retrieval", "overall", "recall@k")),
+            "abstain": covered(("abstain", "abstain_f1")),
+            "dedupe": covered(("dedupe", "f1")),
+        },
     }
 
 
-def format_report(report: dict[str, Any]) -> str:
-    """人读版：每个数据集一张小表，拒绝把数字埋在 JSON 里。"""
+def format_report(report: dict[str, Any], verbose: bool = False) -> str:
+    """人读版。领域少时逐个印；领域多时印汇总 + 最差/最好，避免刷屏。
+
+    故意把「最差的那几个」排在前面：只看平均值，永远发现不了「某个领域已经废了」。
+    """
+    summary = report.get("summary") or {}
     lines = [
         f"通道 {report['channel']} · k={report['k']} · 用时 {report['elapsed_ms']}ms",
         "",
     ]
-    summary = report.get("summary") or {}
-    if summary and summary.get("domains", 0) > 1:
+    if summary:
+        covered = summary.get("covered") or {}
         lines.append(
             f"跨 {summary['domains']} 领域（{summary['queries']} 条可答查询）平均："
             f" recall@k={summary['recall@k']} mrr={summary['mrr']}"
-            f" 弃答F1={summary['abstain_f1']} 去重F1={summary['dedupe_f1']}"
+            f" 弃答F1={summary['abstain_f1']}"
         )
+        if covered:
+            lines.append(
+                f"覆盖：检索 {covered.get('retrieval', 0)} · 弃答 {covered.get('abstain', 0)}"
+                f" · 去重/沉淀 {covered.get('dedupe', 0)}（后两者只在深标注领域上测）"
+            )
         lines.append("")
-    for entry in report["datasets"]:
+
+    entries = list(report["datasets"])
+    show_all = verbose or len(entries) <= 12
+    ranked = sorted(entries, key=lambda e: (e["retrieval"]["overall"]["recall@k"], e["dataset"]))
+    if len(entries) > 12:
+        lines.append("最差 5 个领域（平均值会掩盖它们）：")
+        for entry in ranked[:5]:
+            ret = entry["retrieval"]["overall"]
+            ab = entry.get("abstain") or {}
+            lines.append(
+                f"  {entry['dataset']:<22} recall={ret['recall@k']:<7} mrr={ret['mrr']:<7}"
+                f" 弃答={ab.get('abstain_f1', '-')}"
+            )
+        lines.append("")
+        if not show_all:
+            lines.append("（加 --verbose 打印全部领域）")
+            lines.append("")
+
+    for entry in (entries if show_all else []):
         ret = entry["retrieval"]
         lines.append(f"[{entry['dataset']}] 检索")
         lines.append("  子集        n    recall   mrr    ndcg   p@1")
@@ -811,13 +916,15 @@ def format_report(report: dict[str, Any]) -> str:
                     f"  {key:<10} {m['n']:>3}   {m['recall@k']:<7} {m['mrr']:<6} "
                     f"{m['ndcg@k']:<6} {m['p@1']}"
                 )
-        ab = entry["abstain"]
-        lines.append(
-            f"  弃答 F1={ab['abstain_f1']} 误弃={ab['false_abstain']} "
-            f"漏弃={ab['missed_abstain']}（阈值 {ab['threshold']}）"
-        )
-        dd = entry["dedupe"]
-        lines.append(f"  去重 P={dd['precision']} R={dd['recall']} F1={dd['f1']}")
+        ab = entry.get("abstain") or {}
+        if not ab.get("skipped"):
+            lines.append(
+                f"  弃答 F1={ab['abstain_f1']} 误弃={ab['false_abstain']} "
+                f"漏弃={ab['missed_abstain']}（阈值 {ab['threshold']}）"
+            )
+        dd = entry.get("dedupe") or {}
+        if not dd.get("skipped"):
+            lines.append(f"  去重 P={dd['precision']} R={dd['recall']} F1={dd['f1']}")
         cs = entry.get("consolidation") or {}
         if not cs.get("skipped"):
             lines.append(
@@ -825,8 +932,8 @@ def format_report(report: dict[str, Any]) -> str:
                 f"（阈值 {cs['threshold']}，出簇 {cs['groups']}）"
             )
             swept = entry.get("consolidation_swept") or {}
-            if swept:
-                best = swept["best"]
+            best = (swept or {}).get("best")
+            if best:
                 lines.append(
                     f"  沉淀最优 阈值={best['threshold']} F1={best['f1']}"
                     "（默认阈值在你的语料上可能过高，用 calibrate 扫）"
@@ -846,10 +953,12 @@ def calibrate(
     取区间中点比取峰值稳。
     """
     chosen = [DATASETS[n] for n in (names or DATASETS)]
+    # 去重只在标了去重对的领域上扫：拿「没标注」的领域算 F1 等于给 0 分投票。
+    dedupe_pool = [ds for ds in chosen if ds.dedupe_pairs]
     dedupe_curve: list[dict[str, float]] = []
     abstain_curve: list[dict[str, float]] = []
     for t in [i / 100 for i in range(70, 100)]:
-        f1s = [run_dedupe(ds, threshold=t, config=config)["f1"] for ds in chosen]
+        f1s = [run_dedupe(ds, threshold=t, config=config)["f1"] for ds in dedupe_pool]
         dedupe_curve.append({"threshold": t, "f1": round(_mean(f1s), 4)})
     # 下界不能压着「当前的默认值」：扫描区间贴边时，推荐值一定落在边界上，
     # 那是个假的最优点（第一版从 0.15 起扫，于是「推荐 0.15」其实只是边界）。

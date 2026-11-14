@@ -878,7 +878,10 @@ class MemoryPalace:
             if names is not None:
                 # 同一节点在名单里出现多次，只能强化一次。
                 hits = [self.graph.get(n) for n in dict.fromkeys(names)]
-                hits = [n for n in hits if n is not None]
+                # 名字入口也要服从时态：`recall(names=[...], as_of=...)` 若不筛有效期，
+                # 被取代的旧事实会和新事实一起返回 —— docstring 写着「默认只返回现在有效的」，
+                # 那就必须真的做到，不能只在语义入口做。
+                hits = [n for n in hits if n is not None and n.is_valid_at(moment)]
             else:
                 text = (query or "").strip()
                 gate = self._config.semantic_min_score if min_score is None else min_score
@@ -1711,11 +1714,16 @@ class MemoryPalace:
             if param not in fields:
                 raise KeyError(f"未知参数: {param}")
             old = getattr(self._config, param)
-            setattr(self._config, param, value)
             try:
+                setattr(self._config, param, value)
                 self._config.validate()
-            except ValueError:
-                setattr(self._config, param, old)  # 拒绝非法值并回滚，不留半坏配置
+            except Exception:
+                # 回滚要覆盖**任何**异常，而不只是 ValueError。
+                # validate() 现在只会抛 ValueError，但「现在的实现」不是契约：
+                # 一个 TypeError 或 AttributeError 漏出来，内存里就会留下一个
+                # 没校验过、也没落盘的参数 —— 这是最难查的一类状态。
+                # 捕获后原样抛出，不吞异常，只是保证状态一致。
+                setattr(self._config, param, old)
                 raise
             self._log("config_change", {"param": param, "from": old, "to": value})
             if not self._maybe_save():

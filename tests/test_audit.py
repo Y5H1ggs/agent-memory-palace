@@ -110,12 +110,46 @@ def test_early_exit_is_order_preserving() -> None:
     ]
     engine = ConsolidationEngine(cfg, vector_lookup=palace._vector_of)
 
-    with_exit = engine._clusters(candidates, palace.graph)
-    # 反事实：把阈值传成 None，就走「永远算余弦」的老路径
-    original = engine._similarity
-    engine._similarity = lambda a, b, g, t=None: original(a, b, g, None)  # type: ignore[assignment]
-    without_exit = engine._clusters(candidates, palace.graph)
-    engine._similarity = original  # type: ignore[assignment]
+    # 数一次向量查表次数：用来证明「早停这条路径真的被走过」。
+    # 只比对两次簇结构是不够的 —— 如果把两条路径都改成同一份实现，
+    # 两次跑出来的东西当然一样，测试会在「什么都没测到」的情况下全绿。
+    def count_vectors(engine_obj, call):
+        calls = {"n": 0}
+        original_vec = engine_obj._vector
+
+        def counting(node):
+            calls["n"] += 1
+            return original_vec(node)
+
+        engine_obj._vector = counting  # type: ignore[method-assign]
+        try:
+            result = call()
+        finally:
+            engine_obj._vector = original_vec  # type: ignore[method-assign]
+        return result, calls["n"]
+
+    with_exit, vec_with_exit = count_vectors(
+        engine, lambda: engine._clusters(candidates, palace.graph)
+    )
+    # 反事实：阈值传 None，就走「永远算余弦」的老路径。
+    # 注意要 patch `_similarity_sets` —— `_clusters` 直接调它，
+    # 只 patch `_similarity` 的话，反事实根本没生效（曾经就是这样漏掉的）。
+    original = engine._similarity_sets
+    engine._similarity_sets = (  # type: ignore[assignment]
+        lambda a, b, g, ta, tb, t=None: original(a, b, g, ta, tb, None)
+    )
+    try:
+        without_exit, vec_without_exit = count_vectors(
+            engine, lambda: engine._clusters(candidates, palace.graph)
+        )
+    finally:
+        engine._similarity_sets = original  # type: ignore[assignment]
+
+    check(
+        "早停真的跳过了余弦（向量查表次数更少）",
+        vec_with_exit < vec_without_exit,
+        f"早停 {vec_with_exit} 次 vs 全算 {vec_without_exit} 次",
+    )
 
     as_sets = sorted(sorted(m.name for m in c) for c in with_exit)
     plain_sets = sorted(sorted(m.name for m in c) for c in without_exit)
@@ -573,26 +607,87 @@ def test_graph_serialization_without_lock() -> None:
     )
 
 def main() -> int:
+    """自动发现所有 test_ 函数。手写清单漏过一次用例，见 test_extensions.main 的注释。"""
     print("=" * 62)
     print("代码审计：性能改造的语义中立性 + 边界校验")
     print("=" * 62)
-    test_sparse_matches_dense()
-    test_early_exit_is_order_preserving()
-    test_config_rejected_at_boundary()
-    test_budget_zero_means_nothing()
-    test_pinned_survives_history_retention()
-    test_fill_missing_is_incremental()
-    test_failed_encoding_not_retried()
-    test_sync_is_free_when_clean()
-    test_concurrent_access_count_is_exact()
-    test_concurrent_write_read_gc()
-    test_save_failure_rolls_back_config()
-    test_graph_serialization_without_lock()
+    for name, fn in sorted(globals().items()):
+        if name.startswith("test_") and callable(fn) and fn.__module__ == __name__:
+            fn()
     print()
     print("=" * 62)
     print(f"{PASS + FAIL} 项断言：{PASS} 通过 / {FAIL} 失败")
     print("=" * 62)
     return 1 if FAIL else 0
+
+
+def test_similarity_matches_its_specification() -> None:
+    """相似度必须等于它自己声明的公式：max(结构, 0.85×余弦)，结构过线则早停。
+
+    写成「规范对照」而不是「两个实现互相对拍」是有原因的：`_similarity` 现在
+    委托给 `_similarity_sets`，互相对拍会变成同义反复。这里独立算出期望值，
+    于是两种改坏都会红：
+      · 丢掉余弦通道（只按标签聚合）—— 同义碎片的唯一发现路径被关掉；
+      · 早停返回错误值 —— 结构已过线的对被判成不相似。
+    """
+    import random
+
+    from memory_palace.consolidation import ConsolidationEngine
+    from memory_palace.core import MemoryGraph, MemoryNode, PalaceConfig
+    from memory_palace.semantics import ConceptEncoder, cosine
+
+    rng = random.Random(11)
+    graph = MemoryGraph()
+    topics = ("仓位", "风险", "板块", "复盘", "输出")
+    fillers = ("缩量反弹不追高", "半凯利仓位管理", "板块资金接力看连板基因", "输出优先表格化")
+    for i in range(24):
+        graph.add_node(
+            MemoryNode(
+                name=f"n{i}",
+                # 每 4 条一轮：内容相同、标签不同 —— 逼出「余弦 > 结构」的那条路径
+                content=f"记录 {i // 4}：{fillers[i % len(fillers)]}",
+                tags=tuple(rng.sample(topics, rng.randint(0, 3))),
+                tier="event",
+                created_at=1_800_000_000.0,
+                last_accessed=1_800_000_000.0,
+            )
+        )
+    for _ in range(8):
+        graph.link("n1", "n2", 1_800_000_000.0, gain=1.0)
+
+    encoder = ConceptEncoder()
+    engine = ConsolidationEngine(
+        PalaceConfig(), None, vector_lookup=lambda node: encoder.encode(node.content)
+    )
+    nodes = list(graph.all_nodes())
+    checked = 0
+    for a in nodes:
+        for b in nodes:
+            if a.name >= b.name:
+                continue
+            ta, tb = frozenset(a.tags), frozenset(b.tags)
+            union = ta | tb
+            jaccard = len(ta & tb) / len(union) if union else 0.0
+            edge = graph.edge(a.name, b.name)
+            co = min(5, edge.coactivations if edge else 0) / 5.0
+            structural = 0.75 * jaccard + 0.25 * co
+            cos = cosine(encoder.encode(a.content), encoder.encode(b.content))
+            full = max(structural, 0.85 * cos)
+
+            assert abs(engine._similarity(a, b, graph) - full) < 1e-12, (a.name, b.name)
+            # 早停：阈值 <= 结构分时，返回值必须恰好等于结构分
+            for threshold in (0.0, structural, structural + 1e-6):
+                got = engine._similarity(a, b, graph, threshold)
+                expected = structural if structural >= threshold else full
+                assert abs(got - expected) < 1e-12, (
+                    a.name,
+                    b.name,
+                    threshold,
+                    got,
+                    expected,
+                )
+                checked += 1
+    assert checked > 300, f"对拍样本太少: {checked}"
 
 
 if __name__ == "__main__":

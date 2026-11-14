@@ -102,13 +102,33 @@ class ConsolidationEngine:
         只靠标签会把「同一件事换了说法」拆成两堆；只靠向量又会把模板化的
         空话连成一团。两条通道取较大者，任一路径够近就认。
 
-        `threshold` 是早停开关，只该在「调用方只关心是否过线」时传：
-        结构通道一旦已经过线，余弦再高也改变不了结论（取的是较大者），
-        于是整个语义计算可以跳过。这不是近似 —— 对「过不过线」这个布尔问题，
-        答案完全相同。实测在 1000 条语料上 45262 对里 100% 都是这种对，
-        也就是说原来每一对都在白算 12µs 的余弦。
+        实现委托给 `_similarity_sets`：**只有一份逻辑**。
+        为了省一次 set 构造而复制一遍算术，是这次评审里最该警惕的改法 ——
+        复制出来的那份改了、原来那份没改，突变审计会立刻从「全部抓住」掉到「漏两个」。
         """
-        structural = self._structural(a, b, graph)
+        return self._similarity_sets(
+            a, b, graph, frozenset(a.tags), frozenset(b.tags), threshold
+        )
+
+    def _similarity_sets(
+        self,
+        a: MemoryNode,
+        b: MemoryNode,
+        graph: MemoryGraph,
+        ta: frozenset[str],
+        tb: frozenset[str],
+        threshold: float | None = None,
+    ) -> float:
+        """`_similarity` 的「标签集合已预取」版本。
+
+        语义完全一致（同样的结构通道 + 早停 + 余弦取较大者），
+        只是不再为每一对重建两个 set —— 那是 2.9 万对里的纯重复劳动。
+        """
+        union = len(ta | tb)
+        jaccard = len(ta & tb) / union if union else 0.0
+        edge = graph.edge(a.name, b.name)
+        co = min(5, edge.coactivations if edge else 0) / 5.0
+        structural = 0.75 * jaccard + 0.25 * co
         if threshold is not None and structural >= threshold:
             return structural
         if self.vector_lookup is None:
@@ -118,7 +138,9 @@ class ConsolidationEngine:
             return structural
         return max(structural, 0.85 * cosine(va, vb))
 
-    def _pairs(self, candidates: list[MemoryNode]) -> list[tuple[MemoryNode, MemoryNode]]:
+    def _pairs(
+        self, candidates: list[MemoryNode]
+    ) -> Iterator[tuple[MemoryNode, MemoryNode]]:
         """要比较的候选对。
 
         小规模（≤ block_threshold）全对比较 —— 语义聚类必须能跨标签发现同义碎片，
@@ -131,11 +153,12 @@ class ConsolidationEngine:
         cfg = self.config
         n = len(candidates)
         if n <= cfg.consolidate_block_threshold:
-            return [
-                (a, b)
-                for i, a in enumerate(candidates)
-                for b in candidates[i + 1 :]
-            ]
+            # 生成器而不是列表：600 个候选就是 17.9 万对，先把它们全建成元组，
+            # 只是为了让外面迭代一次 —— 白占十几兆内存，还多一遍构造开销。
+            for i, a in enumerate(candidates):
+                for b in candidates[i + 1 :]:
+                    yield (a, b)
+            return
 
         buckets: dict[str, list[MemoryNode]] = {}
         for node in candidates:
@@ -159,20 +182,21 @@ class ConsolidationEngine:
         # 而且没有任何报错。轮流取的覆盖率与「主题在桶里的顺序」无关。
         budget = cfg.consolidate_max_pairs
         gens = [bucket_pairs(members) for members in buckets.values()]
-        pairs: list[tuple[MemoryNode, MemoryNode]] = []
-        while gens and len(pairs) < budget:
+        emitted = 0
+        while gens and emitted < budget:
             alive = []
             for gen in gens:
-                if len(pairs) >= budget:
+                if emitted >= budget:
                     alive.append(gen)
                     continue
                 try:
-                    pairs.append(next(gen))
+                    pair = next(gen)
                 except StopIteration:
                     continue
+                emitted += 1
                 alive.append(gen)
+                yield pair
             gens = alive
-        return pairs
 
     def _clusters(
         self, candidates: list[MemoryNode], graph: MemoryGraph
@@ -181,12 +205,18 @@ class ConsolidationEngine:
         by_name = {n.name: n for n in candidates}
         adj: dict[str, set[str]] = {n.name: set() for n in candidates}
         threshold = self.config.consolidate_similarity
+        # 每对的 set(a.tags) / set(b.tags) 是纯重复劳动：600 个候选、2.9 万对，
+        # 同一个节点的标签集合会被重建上百次。这里一次建好。
+        tag_sets = {n.name: frozenset(n.tags) for n in candidates}
         for a, b in self._pairs(candidates):
             # 跨项目不聚类：把 A 项目的碎片和 B 项目的碎片沉淀成一条「结论」，
             # 等于制造一条不属于任何项目的记忆 —— 它会被两边都当成自己的。
             if a.scope != b.scope:
                 continue
-            if self._similarity(a, b, graph, threshold) >= threshold:
+            if (
+                self._similarity_sets(a, b, graph, tag_sets[a.name], tag_sets[b.name], threshold)
+                >= threshold
+            ):
                 adj[a.name].add(b.name)
                 adj[b.name].add(a.name)
         seen: set[str] = set()

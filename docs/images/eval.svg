@@ -1,6 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 586" width="1200" height="586" role="img" aria-label="组件级评测">
-<title>组件级评测</title>
-<rect x="0" y="0" width="1200" height="586" fill="#ffffff"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 416" width="1200" height="416" role="img" aria-label="106 个领域的检索评测">
+<title>106 个领域的检索评测</title>
+<rect x="0" y="0" width="1200" height="416" fill="#ffffff"/>
 <defs>
 <marker id="arrowhead" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
   <path d="M0,0 L10,5 L0,10 z" fill="#57606a"/>
@@ -9,51 +9,53 @@
   <path d="M0,0 L10,5 L0,10 z" fill="#1a7f37"/>
 </marker>
 </defs>
-<text x="40" y="44" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif" font-size="20" fill="#1f2328" font-weight="700" text-anchor="start">组件级评测：六个领域的检索召回</text>
-<text x="40" y="70" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif" font-size="13" fill="#57606a" font-weight="400" text-anchor="start">135 条记忆 / 90 条查询，词法通道，k=5。领域多了才有资格说「阈值不是过拟合」。</text>
-<text x="348" y="120" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif" font-size="12.5" fill="#1f2328" font-weight="700" text-anchor="end">zh-finance · A 股复盘</text>
-<text x="348" y="136" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif" font-size="10.5" fill="#57606a" font-weight="400" text-anchor="end">39 条 / 24 问</text>
-<rect x="360" y="106" width="512" height="24" rx="6" fill="#eef1f4" stroke="none" stroke-width="1.2"/>
-<rect x="360" y="106" width="409" height="24" rx="6" fill="#9a6700" stroke="none" stroke-width="1.2"/>
-<text x="882" y="123" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif" font-size="12" fill="#1f2328" font-weight="700" text-anchor="start">0.800</text>
-<text x="348" y="174" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif" font-size="12.5" fill="#1f2328" font-weight="700" text-anchor="end">zh-tech · 工程运维</text>
-<text x="348" y="190" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif" font-size="10.5" fill="#57606a" font-weight="400" text-anchor="end">40 条 / 22 问</text>
-<rect x="360" y="160" width="512" height="24" rx="6" fill="#eef1f4" stroke="none" stroke-width="1.2"/>
-<rect x="360" y="160" width="483" height="24" rx="6" fill="#1a7f37" stroke="none" stroke-width="1.2"/>
-<text x="882" y="177" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif" font-size="12" fill="#1f2328" font-weight="700" text-anchor="start">0.944</text>
-<text x="348" y="228" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif" font-size="12.5" fill="#1f2328" font-weight="700" text-anchor="end">zh-medical · 用药与就医</text>
-<text x="348" y="244" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif" font-size="10.5" fill="#57606a" font-weight="400" text-anchor="end">15 条 / 11 问</text>
-<rect x="360" y="214" width="512" height="24" rx="6" fill="#eef1f4" stroke="none" stroke-width="1.2"/>
-<rect x="360" y="214" width="512" height="24" rx="6" fill="#1a7f37" stroke="none" stroke-width="1.2"/>
-<text x="882" y="231" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif" font-size="12" fill="#1f2328" font-weight="700" text-anchor="start">1.000</text>
-<text x="348" y="282" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif" font-size="12.5" fill="#1f2328" font-weight="700" text-anchor="end">zh-legal · 合同与合规</text>
-<text x="348" y="298" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif" font-size="10.5" fill="#57606a" font-weight="400" text-anchor="end">14 条 / 11 问</text>
-<rect x="360" y="268" width="512" height="24" rx="6" fill="#eef1f4" stroke="none" stroke-width="1.2"/>
-<rect x="360" y="268" width="512" height="24" rx="6" fill="#1a7f37" stroke="none" stroke-width="1.2"/>
-<text x="882" y="285" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif" font-size="12" fill="#1f2328" font-weight="700" text-anchor="start">1.000</text>
-<text x="348" y="336" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif" font-size="12.5" fill="#1f2328" font-weight="700" text-anchor="end">zh-support · 客服工单</text>
-<text x="348" y="352" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif" font-size="10.5" fill="#57606a" font-weight="400" text-anchor="end">13 条 / 11 问</text>
-<rect x="360" y="322" width="512" height="24" rx="6" fill="#eef1f4" stroke="none" stroke-width="1.2"/>
-<rect x="360" y="322" width="398" height="24" rx="6" fill="#9a6700" stroke="none" stroke-width="1.2"/>
-<text x="882" y="339" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif" font-size="12" fill="#1f2328" font-weight="700" text-anchor="start">0.778</text>
-<text x="348" y="390" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif" font-size="12.5" fill="#1f2328" font-weight="700" text-anchor="end">zh-personal · 个人助理</text>
-<text x="348" y="406" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif" font-size="10.5" fill="#57606a" font-weight="400" text-anchor="end">14 条 / 11 问</text>
-<rect x="360" y="376" width="512" height="24" rx="6" fill="#eef1f4" stroke="none" stroke-width="1.2"/>
-<rect x="360" y="376" width="512" height="24" rx="6" fill="#1a7f37" stroke="none" stroke-width="1.2"/>
-<text x="882" y="393" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif" font-size="12" fill="#1f2328" font-weight="700" text-anchor="start">1.000</text>
-<rect x="960" y="96" width="200" height="150" rx="12" fill="#f6f8fa" stroke="#d0d7de" stroke-width="1.2"/>
-<text x="978" y="122" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif" font-size="12.5" fill="#57606a" font-weight="700" text-anchor="start">六领域平均</text>
-<text x="978" y="148" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif" font-size="11.5" fill="#57606a" font-weight="400" text-anchor="start">recall@5</text>
-<text x="1120" y="148" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif" font-size="12" fill="#1f2328" font-weight="700" text-anchor="end">0.920</text>
-<text x="978" y="172" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif" font-size="11.5" fill="#57606a" font-weight="400" text-anchor="start">MRR</text>
-<text x="1120" y="172" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif" font-size="12" fill="#1f2328" font-weight="700" text-anchor="end">0.815</text>
-<text x="978" y="196" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif" font-size="11.5" fill="#57606a" font-weight="400" text-anchor="start">弃答 F1</text>
-<text x="1120" y="196" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif" font-size="12" fill="#1f2328" font-weight="700" text-anchor="end">0.976</text>
-<text x="978" y="220" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif" font-size="11.5" fill="#57606a" font-weight="400" text-anchor="start">去重 F1</text>
-<text x="1120" y="220" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif" font-size="12" fill="#1f2328" font-weight="700" text-anchor="end">0.944</text>
-<rect x="40" y="448" width="1120" height="118" rx="12" fill="#e8f1fd" stroke="#9ec5f7" stroke-width="1.2"/>
-<text x="60" y="474" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif" font-size="13" fill="#1f2328" font-weight="700" text-anchor="start">扩到六个领域，立刻抓出三个真问题（都已修，都有测试守着）</text>
-<text x="60" y="500" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif" font-size="12.3" fill="#57606a" font-weight="400" text-anchor="start">· 标签没进索引：「我有什么忌口」得分 0.000 —— 正文写「不吃香菜」，标签才是「忌口」</text>
-<text x="60" y="522" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif" font-size="12.3" fill="#57606a" font-weight="400" text-anchor="start">· 哈希桶碰撞：无关查询能拿 0.455（零共享词项），桶数 256 → 1024 后只剩真实的 0.219</text>
-<text x="60" y="544" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif" font-size="12.3" fill="#57606a" font-weight="400" text-anchor="start">· 弃答线过拟合：0.20 在两领域好看，六领域里误弃 4 条 → 默认值降到 0.14</text>
+<text x="40" y="44" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif" font-size="20" fill="#1f2328" font-weight="700" text-anchor="start">106 个领域：召回分布与最差的几个</text>
+<text x="40" y="70" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif" font-size="13" fill="#57606a" font-weight="400" text-anchor="start">600 条记忆 / 590 条查询（474 可答 + 116 不可答），词法通道，k=5。</text>
+<text x="40" y="108" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif" font-size="12.5" fill="#1f2328" font-weight="700" text-anchor="start">每个领域的 recall@5 落在哪</text>
+<text x="140" y="137" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif" font-size="11.5" fill="#57606a" font-weight="400" text-anchor="end">&lt; 0.5</text>
+<rect x="150" y="122" width="300" height="22" rx="5" fill="#eef1f4" stroke="none" stroke-width="1.2"/>
+<rect x="150" y="122" width="4" height="22" rx="5" fill="#9a6700" stroke="none" stroke-width="1.2"/>
+<text x="162" y="138" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif" font-size="11.8" fill="#1f2328" font-weight="600" text-anchor="start">1 个</text>
+<text x="140" y="173" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif" font-size="11.5" fill="#57606a" font-weight="400" text-anchor="end">0.5–0.7</text>
+<rect x="150" y="158" width="300" height="22" rx="5" fill="#eef1f4" stroke="none" stroke-width="1.2"/>
+<rect x="150" y="158" width="21" height="22" rx="5" fill="#9a6700" stroke="none" stroke-width="1.2"/>
+<text x="179" y="174" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif" font-size="11.8" fill="#1f2328" font-weight="600" text-anchor="start">5 个</text>
+<text x="140" y="209" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif" font-size="11.5" fill="#57606a" font-weight="400" text-anchor="end">0.7–0.85</text>
+<rect x="150" y="194" width="300" height="22" rx="5" fill="#eef1f4" stroke="none" stroke-width="1.2"/>
+<rect x="150" y="194" width="130" height="22" rx="5" fill="#9a6700" stroke="none" stroke-width="1.2"/>
+<text x="288" y="210" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif" font-size="11.8" fill="#1f2328" font-weight="600" text-anchor="start">30 个</text>
+<text x="140" y="245" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif" font-size="11.5" fill="#57606a" font-weight="400" text-anchor="end">0.85–0.95</text>
+<rect x="150" y="230" width="300" height="22" rx="5" fill="#eef1f4" stroke="none" stroke-width="1.2"/>
+<rect x="150" y="230" width="4" height="22" rx="5" fill="#1a7f37" stroke="none" stroke-width="1.2"/>
+<text x="162" y="246" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif" font-size="11.8" fill="#1f2328" font-weight="600" text-anchor="start">1 个</text>
+<text x="140" y="281" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif" font-size="11.5" fill="#57606a" font-weight="400" text-anchor="end">0.95 以上</text>
+<rect x="150" y="266" width="300" height="22" rx="5" fill="#eef1f4" stroke="none" stroke-width="1.2"/>
+<rect x="150" y="266" width="300" height="22" rx="5" fill="#1a7f37" stroke="none" stroke-width="1.2"/>
+<text x="458" y="282" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif" font-size="11.8" fill="#1f2328" font-weight="600" text-anchor="start">69 个</text>
+<rect x="500" y="100" width="260" height="168" rx="12" fill="#f6f8fa" stroke="#d0d7de" stroke-width="1.2"/>
+<text x="518" y="126" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif" font-size="12.5" fill="#57606a" font-weight="700" text-anchor="start">106 领域平均</text>
+<text x="518" y="152" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif" font-size="11.5" fill="#57606a" font-weight="400" text-anchor="start">recall@5</text>
+<text x="742" y="152" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif" font-size="12" fill="#1f2328" font-weight="700" text-anchor="end">0.899</text>
+<text x="518" y="178" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif" font-size="11.5" fill="#57606a" font-weight="400" text-anchor="start">MRR</text>
+<text x="742" y="178" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif" font-size="12" fill="#1f2328" font-weight="700" text-anchor="end">0.817</text>
+<text x="518" y="204" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif" font-size="11.5" fill="#57606a" font-weight="400" text-anchor="start">弃答 F1</text>
+<text x="742" y="204" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif" font-size="12" fill="#1f2328" font-weight="700" text-anchor="end">0.757</text>
+<text x="518" y="230" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif" font-size="11.5" fill="#57606a" font-weight="400" text-anchor="start">去重 F1</text>
+<text x="742" y="230" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif" font-size="12" fill="#1f2328" font-weight="700" text-anchor="end">0.944</text>
+<rect x="790" y="100" width="370" height="168" rx="12" fill="#ffffff" stroke="#d0d7de" stroke-width="1.2"/>
+<text x="808" y="126" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif" font-size="12.5" fill="#1f2328" font-weight="700" text-anchor="start">最差 5 个领域</text>
+<text x="808" y="152" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif" font-size="11.5" fill="#57606a" font-weight="400" text-anchor="start">zh-language</text>
+<text x="1140" y="152" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif" font-size="11.8" fill="#9a6700" font-weight="700" text-anchor="end">0.25</text>
+<text x="808" y="176" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif" font-size="11.5" fill="#57606a" font-weight="400" text-anchor="start">zh-medication</text>
+<text x="1140" y="176" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif" font-size="11.8" fill="#9a6700" font-weight="700" text-anchor="end">0.50</text>
+<text x="808" y="200" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif" font-size="11.5" fill="#57606a" font-weight="400" text-anchor="start">zh-cat</text>
+<text x="1140" y="200" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif" font-size="11.8" fill="#9a6700" font-weight="700" text-anchor="end">0.50</text>
+<text x="808" y="224" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif" font-size="11.5" fill="#57606a" font-weight="400" text-anchor="start">zh-infant</text>
+<text x="1140" y="224" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif" font-size="11.8" fill="#9a6700" font-weight="700" text-anchor="end">0.50</text>
+<text x="808" y="248" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif" font-size="11.5" fill="#57606a" font-weight="400" text-anchor="start">zh-aquarium</text>
+<text x="1140" y="248" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif" font-size="11.8" fill="#9a6700" font-weight="700" text-anchor="end">0.50</text>
+<rect x="40" y="300" width="1120" height="96" rx="12" fill="#e8f1fd" stroke="#9ec5f7" stroke-width="1.2"/>
+<text x="60" y="326" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif" font-size="13" fill="#1f2328" font-weight="700" text-anchor="start">为什么最差的是它们：词法通道只会「找一样的词」。</text>
+<text x="60" y="350" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif" font-size="12.3" fill="#57606a" font-weight="400" text-anchor="start">「猫不爱喝水」问的是「饮水/缺水」，一个字都不一样；这种题只有真神经模型能救，所以 eval 会把它们点名，而不是藏在平均值里。</text>
+<text x="60" y="374" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif" font-size="12.3" fill="#57606a" font-weight="400" text-anchor="start">报告里同样的道理：默认只印汇总 + 最差 5 个，加 --verbose 才逐个看。</text>
 </svg>

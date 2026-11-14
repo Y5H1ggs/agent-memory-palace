@@ -36,17 +36,35 @@ def test_datasets_are_well_formed() -> None:
 
 
 def test_domain_coverage() -> None:
-    """领域数本身就是指标：两三个领域上标定出来的阈值，换个语料必翻车。
+    """领域数本身就是指标：几个领域上调出来的阈值，换个语料必翻车。
 
-    这条测试守着「不要再退回两领域」—— 0.20 的弃答线正是在两领域上看着很好，
-    扩到六领域后才发现它误弃 4 条、一个也没多抓到。
+    这条守着「不要再退回少数领域」—— 0.20 的弃答线正是在 2 个领域上看着很好，
+    扩到 6 个才发现它误弃 4 条、一条也没多抓到。
     """
-    expected = {"zh-finance", "zh-tech", "zh-medical", "zh-legal", "zh-support", "zh-personal"}
-    assert expected <= set(ev.DATASETS), sorted(set(ev.DATASETS))
+    deep = {"zh-finance", "zh-tech", "zh-medical", "zh-legal", "zh-support", "zh-personal"}
+    assert deep <= set(ev.DATASETS), sorted(set(ev.DATASETS))[:8]
+    assert len(ev.DATASETS) >= 100, f"只有 {len(ev.DATASETS)} 个领域"
     for ds in ev.DATASETS.values():
-        assert len(ds.queries) >= 10, (ds.name, len(ds.queries))
-        assert sum(1 for q in ds.queries if q.kind == "unanswerable") >= 2, ds.name
-        assert ds.memories and ds.clusters, ds.name
+        assert len(ds.memories) >= 6, (ds.name, len(ds.memories))
+        assert len(ds.queries) >= 4, (ds.name, len(ds.queries))
+        assert any(q.kind == "unanswerable" for q in ds.queries), ds.name
+        assert any(q.gold for q in ds.queries), ds.name
+    # 深标注领域必须带去重对与沉淀簇，广覆盖领域不要求 —— 这是覆盖与成本的边界
+    for name in deep:
+        ds = ev.DATASETS[name]
+        assert ds.dedupe_pairs and ds.clusters, name
+
+
+def test_wide_domains_do_not_collide_in_names() -> None:
+    """领域名重复会让两个数据集互相覆盖，而且不会有任何报错。"""
+    names = [m[0] for ds in ev.DATASETS.values() for m in ds.memories]
+    # 记忆名只在领域内唯一，跨领域重复是正常的；这里查的是领域名本身
+    from memory_palace import evaluation_domains as ed
+
+    keys = [spec[0] for spec in ed.SPECS]
+    assert len(keys) == len(set(keys)), "领域 key 有重复"
+    assert not (set(ev.DEEP_DATASETS) & {f"zh-{k}" for k in keys}), "广覆盖领域与深标注领域撞名"
+    assert len(names) > 0
 
 
 def test_metrics_math() -> None:
@@ -68,14 +86,16 @@ def test_suite_shape() -> None:
     assert len(report["datasets"]) == len(ev.DATASETS)
     # 汇总必须存在：单领域数字容易被「挑好看的领域」误导
     assert report["summary"]["domains"] == len(ev.DATASETS)
-    assert report["summary"]["queries"] >= 60
+    assert report["summary"]["queries"] >= 400
     entry = report["datasets"][0]
     for key in ("retrieval", "abstain", "dedupe", "consolidation", "consolidation_swept"):
         assert key in entry, key
     assert entry["retrieval"]["overall"]["n"] > 10
     text = ev.format_report(report)
     assert "recall" in text and "弃答" in text
-    assert "跨 6 领域" in text
+    assert f"跨 {len(ev.DATASETS)} 领域" in text
+    # 领域多时默认不逐个打印，但必须提示怎么看到全部
+    assert "--verbose" in text
 
 
 def test_retrieval_beats_random() -> None:
@@ -126,10 +146,15 @@ def test_abstain_separates_answerable_from_not() -> None:
     from memory_palace.core import PalaceConfig
 
     threshold = PalaceConfig().abstain_semantic_floor
-    for ds in ev.DATASETS.values():
-        report = ev.run_abstain(ds)  # 不传阈值 = 用配置默认值
+    # 逐个领域看：深标注领域（每条记忆更长、更像真实笔记）必须稳；
+    # 广覆盖领域只有 6 条记忆，单个 F1 抖动很大，看**总体**才有意义。
+    for name in ev.DEEP_DATASETS:
+        report = ev.run_abstain(ev.DATASETS[name])
         assert report["threshold"] == threshold
-        assert report["abstain_f1"] >= 0.7, (ds.name, report)
+        assert report["abstain_f1"] >= 0.7, (name, report)
+    f1s = [ev.run_abstain(ds)["abstain_f1"] for ds in ev.DATASETS.values()]
+    overall = sum(f1s) / len(f1s)
+    assert overall >= 0.7, f"106 个领域平均弃答 F1 只有 {overall:.3f}"
 
 
 def test_tag_only_queries_are_indexed() -> None:

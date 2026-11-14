@@ -7,7 +7,7 @@
 > 含本文件 + README + 文件清单（行数与哈希）+ 测试清单 + 最新 CHANGELOG）。
 > 如果仓库里的 docs/ 与你看到的这段冲突，以本文件 + README + CHANGELOG 顶部为准。
 
-- 版本：0.11.1
+- 版本：0.12.0
 - 日期：2026-11-14
 - 许可：MIT
 - Python：>= 3.10
@@ -32,7 +32,7 @@
 | 检索 | 词法通道（概念 + 字符 bigram + IDF）+ 可选稠密通道 + 混合打分 | `semantics.py`、`embedding.py` |
 | 弃答 | 有（阈值是配置，默认 0.14） | `abstain_semantic_floor`，`calibrate` 可重扫 |
 | 去重 | 余弦 + 长度比双门 | `dedupe_similarity=0.92`、`dedupe_length_ratio=0.85` |
-| 评测 | 6 领域、135 条记忆、90 条查询、四类标注 | `memory_palace/evaluation.py`、`memory-palace eval` |
+| 评测 | **106 领域**、600 条记忆、590 条查询 | `memory_palace/evaluation.py` + `evaluation_domains.py` |
 | 反思 | 规则引擎默认；可选 LLM（结构化输出 + 白名单，**模型不改配置**） | `reflection.py`、`llm.py` |
 | 接入 | MCP（stdio，3/8 工具档）、HTTP + OpenAPI、CLI、DSH 插件 | `mcp_server.py`、`http_api.py`、`cli.py`、`dsh/` |
 
@@ -87,51 +87,50 @@ memory-palace embed --check
 
 换模型之后**必须重扫阈值**（余弦分布随模型变化）：`memory-palace calibrate`。
 
-## 评测集：六个领域
+## 评测集：106 个领域
 
-| 领域 | 名称 | 记忆 / 查询 |
-|---|---|---|
-| A 股复盘 | `zh-finance` | 39 / 24 |
-| 工程运维 | `zh-tech` | 40 / 22 |
-| 用药与就医 | `zh-medical` | 15 / 11 |
-| 合同与合规 | `zh-legal` | 14 / 11 |
-| 客服工单 | `zh-support` | 13 / 11 |
-| 个人助理 | `zh-personal` | 14 / 11 |
-
-四类标注：检索 gold、可答/不可答、去重对、沉淀簇。
-指标：recall@k、MRR、nDCG@k、P@1、弃答 F1、去重 F1、沉淀成对 F1。
+- **100 个广覆盖领域**：做饭、烘焙、咖啡、洗衣、育儿、宠物、牙科、签证、数据库、谈判、税务、
+  摄影、剪辑、排版、徒步、露营、天文…… 每个领域 6 条记忆 + 4 条查询，
+  其中 1 条是**从别的领域借来的问题**，专门测「会不会拿 A 领域的记忆硬凑 B 领域的问题」。
+- **6 个深标注领域**（`zh-finance` / `zh-tech` / `zh-medical` / `zh-legal` / `zh-support` /
+  `zh-personal`）：额外标了去重对与沉淀簇，用来测这两个组件。
+- 合计：**600 条记忆 / 590 条查询**（474 可答 + 116 不可答）。
 
 ```bash
-memory-palace eval                    # 六领域全跑
-memory-palace eval --dataset zh-legal # 单领域
-memory-palace calibrate               # 扫阈值，给平台区间
+memory-palace eval              # 汇总 + 最差 5 个领域
+memory-palace eval --verbose    # 逐个领域
+memory-palace eval --list       # 106 个领域都是什么
+memory-palace calibrate         # 在全部领域上重扫阈值
 ```
 
-### 当前数字（词法通道，k=5，本机）
+### 当前数字（词法通道，k=5）
 
-| 指标 | 六领域平均 |
-|---|---|
-| recall@5 | 0.9204 |
-| MRR | 0.8149 |
-| 弃答 F1 | 0.9762 |
-| 去重 F1 | 0.9444 |
+| 指标 | 数值 | 覆盖 |
+|---|---|---|
+| recall@5 | 0.899（中位数 1.000） | 106 个领域 |
+| MRR | 0.817 | 106 个领域 |
+| 弃答 F1 | 0.757 | 106 个领域 |
+| 去重 F1 | 0.944 | 6 个深标注领域 |
+| 沉淀 F1 | 0.000（默认阈值 0.50） | 6 个深标注领域 |
 
 **坏数字也在这里**：沉淀 F1 在默认阈值 0.5 下是 0.000（这批数据标签各不相同），
-扫描显示 0.25–0.30 才合适；金融领域换说法召回 0.727；法务/客服部分查询靠字面重合命中。
+扫描显示 0.25–0.30 才合适；最差的领域是 `zh-language`（0.25）与几个 0.50 的领域 ——
+它们的提问词（「猫不爱喝水」）与正文用词（「缺水 / 饮水」）一个字都不一样，
+词法通道救不了，只有接真模型能救。
 
 ## 明确的边界（不要用于）
 
 - 不是专用向量数据库的替代品：没有 ANN、没有分片，1e4 条以内够用。
 - 不承诺多写者高吞吐：SQLite 单写者，写热点会排队。
 - 不是分布式记忆：单机文件，WAL 需要本地盘。
-- 标注集为单人标注，能验证流程与量级，替代不了你自己的语料评测（用 `calibrate` 换语料）。
+- 标注集为单人标注（106 个领域里只有 6 个标了去重与沉淀），能验证流程与量级，替代不了你自己的语料评测。
 - 内置 `hashing` 嵌入不是神经模型；要语义跳转请接上表的真模型。
 
 ## 复现
 
 ```bash
 python -m pytest tests -q                 # 全部测试
-python -m memory_palace.demo              # 剧本级断言 + 故障注入
+python -m memory_palace.demo              # 六幕演示：20 条断言，约 1 秒
 python -m memory_palace.cli eval          # 六领域评测
 python -m memory_palace.bench 1000        # 性能（含单次写入 p50/p95）
 python tools/greenlight_audit.py          # 绿灯审计：故意改坏实现，看断言会不会红

@@ -97,6 +97,14 @@ MUTANTS: tuple[Mutant, ...] = (
         ("tests/test_embedding.py",),
     ),
     Mutant(
+        "similarity-sets-drops-cosine",
+        "memory_palace/consolidation.py",
+        "        return max(structural, 0.85 * cosine(va, vb))",
+        "        return structural",
+        "预取版相似度丢掉余弦通道（只按标签聚合，同义碎片再也沉淀不到一起）",
+        ("tests/test_audit.py",),
+    ),
+    Mutant(
         "guard-off",
         "memory_palace/selfcorrect.py",
         "            if not hits:",
@@ -142,7 +150,7 @@ MUTANTS: tuple[Mutant, ...] = (
         "        if rule.suppressed_by is not None:\n            return False",
         "        if False:\n            return False",
         "裁决后输家仍生效（对立风格同时进 prompt）",
-        ("memory_palace.demo",),
+        ("tests/test_extensions.py",),
     ),
     Mutant(
         "scope-raw-name",
@@ -290,6 +298,10 @@ def run_suite(name: str, timeout: int = 180) -> tuple[bool, str]:
     用 -m 跑模块，用路径跑脚本 —— 两种入口在仓库里都有，工具都要支持。
     """
     if name.startswith("tests/"):
+        # 这些脚本自带 main() 与 PASS/FAIL 计数，用脚本模式跑。
+        # 注意它们**不能**改用 pytest：里面的断言写在 check() 里（不 raise），
+        # pytest 会认为「没有断言 = 通过」，于是所有变异都会变成「漏洞」。
+        # 手写清单漏用例的问题，由各文件里的自检兜住（见 test_extensions.main）。
         cmd = [sys.executable, str(ROOT / name)]
     else:
         cmd = [sys.executable, "-m", name]
