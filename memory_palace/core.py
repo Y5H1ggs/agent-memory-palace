@@ -707,8 +707,12 @@ class MemoryGraph:
     def edges(self) -> list[tuple[str, str, Edge]]:
         seen: set[tuple[str, str]] = set()
         out: list[tuple[str, str, Edge]] = []
-        for a, nbrs in self._adj.items():
-            for b, e in nbrs.items():
+        # 两层都要先物化：外层 `_adj` 会被 remove_nodes_from 删键，
+        # 内层邻接表会被同一次删除 pop 掉邻居 —— 任何一层用活视图，
+        # 并发下都会抛「dictionary changed size during iteration」。
+        # 这不是理论风险：CI 上 ubuntu py3.10 的慢调度把它稳定复现出来过。
+        for a, nbrs in list(self._adj.items()):
+            for b, e in list(nbrs.items()):
                 key = (a, b) if a < b else (b, a)
                 if key in seen:
                     continue

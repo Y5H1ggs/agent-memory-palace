@@ -186,6 +186,14 @@ MUTANTS: tuple[Mutant, ...] = (
         ("tests/test_audit.py",),
     ),
     Mutant(
+        "edges-live-view",
+        "memory_palace/core.py",
+        "        for a, nbrs in list(self._adj.items()):\n            for b, e in list(nbrs.items()):",
+        "        for a, nbrs in self._adj.items():\n            for b, e in nbrs.items():",
+        "边遍历直接读活邻接表（并发删点时抛 RuntimeError）",
+        ("tests/test_audit.py",),
+    ),
+    Mutant(
         "config-kept-on-save-failure",
         "memory_palace/palace.py",
         "            if not persisted and correction[\"applied\"]:",

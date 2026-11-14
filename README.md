@@ -12,7 +12,7 @@
 
 <p align="center"><sub>↑ 由 <code>memory-palace render</code> 从一份 120 天的演示库直接生成（<a href="docs/sample-palace.html">在线样例</a>）。图上的每个数字都能用一条命令复现。</sub></p>
 
-**TL;DR (English)** — A dependency-free Python implementation of a *memory lifecycle*: idempotent decay, affect that both hardens and distorts recall, consolidation with a one-way door, value-based forgetting with a fixed attention budget, self-narrative as a projection, tree-shaped injection to save tokens, and self-correction bounded by whitelist + value ranges + anti-lag verification. Ships MCP / HTTP / CLI. 395 assertions, 21 mutation audits. Not a vector database; not production-ready.
+**TL;DR (English)** — A dependency-free Python implementation of a *memory lifecycle*: idempotent decay, affect that both hardens and distorts recall, consolidation with a one-way door, value-based forgetting with a fixed attention budget, self-narrative as a projection, tree-shaped injection to save tokens, and self-correction bounded by whitelist + value ranges + anti-lag verification. Ships MCP / HTTP / CLI. 395 assertions, 22 mutation audits. Not a vector database; not production-ready.
 
 ---
 
@@ -273,11 +273,11 @@ python tests/test_extensions.py     # 14 项 编码器 / 外部反思的契约
 python tests/test_lexicon.py        # 16 项 词法层（含 IDF 反事实）
 python tests/test_pragmatics.py     # 26 项 语用层（撤回≠同意 / 模糊降级）
 python tests/test_audit.py          # 29 项 代码审计：优化保序 / 并发 / 边界校验 / 落盘一致
-python tools/greenlight_audit.py    # 绿灯体检：21 个变异，改坏实现看断言会不会红
+python tools/greenlight_audit.py    # 绿灯体检：22 个变异，改坏实现看断言会不会红
 python -m memory_palace.bench       # 性能与 token 基准
 ```
 
-自测里最有价值的不是「全绿」，是那 21 条**突变审计**：故意把实现弄坏（衰减带副作用、去掉风格裁决、
+自测里最有价值的不是「全绿」，是那 22 条**突变审计**：故意把实现弄坏（衰减带副作用、去掉风格裁决、
 假语义全零向量、白名单失效、结构熵写死……），断言必须变红。其中一条自己写错过 ——
 用 `lr=1.0` 制造「无惯性」，结果一步撞天花板，饱和伪装成惯性；已改成常数学习率的反事实并写进注释。
 
@@ -389,13 +389,13 @@ Mem0 / Zep(Graphiti) / Letta / Cognee / TencentDB Agent Memory / progressive-mem
 这一块最容易被质疑，所以给数字而不是形容词。
 
 **进程内（多线程）**：所有公共入口持一把 `RLock`，图遍历返回物化副本
-（`all_nodes()` 是 `list(...)`，不是活视图）。实测：
+（`all_nodes()` / `edges()` 都是 `list(...)`，不是活视图）。实测：
 
 | 场景 | 结果 |
 |---|---|
 | 5 线程 × 40 次读同一条记忆 | `access_count` **恰好** +200，零丢失 |
 | 9 线程同时 `remember` / `recall` / `gc` / `run_cycle` | **0 异常**，钉死记忆不被误删 |
-| 边增删边 `graph.to_dict()` 300 次 | **0 异常**（这条曾经会抛 `RuntimeError`，0.9.3 修了） |
+| 边增删边 `graph.to_dict()` 300 次 | **0 异常**（0.9.3 修了两个活视图遍历：节点表与邻接表） |
 
 **跨进程：不行，且不假装行。** JSON + `os.replace` 只保证「单次写是原子的」，
 不保证「两个人各读一份再各写一份」不互相覆盖 —— 那是 Last-Write-Wins，不报错。
@@ -413,7 +413,7 @@ Mem0 / Zep(Graphiti) / Letta / Cognee / TencentDB Agent Memory / progressive-mem
 |---|---|---|
 | 设计完整度 | 9/10 | 机制闭环，次序有理由，边界写在 docstring 里 |
 | 工程实现 | 8/10 | 原子写、RLock、零依赖、状态迁移、基准、稀疏索引；但**没有跨进程文件锁** |
-| 测试可信度 | 8/10 | 395 断言 + 21 变异体检（绿灯审计，0 漏洞）；仍无语义评测集 |
+| 测试可信度 | 8/10 | 395 断言 + 22 变异体检（绿灯审计，0 漏洞）；仍无语义评测集 |
 | 可维护性 | 6/10 | `palace.py` 1300+ 行、`demo.py` 2100+ 行；剧本兼任测试 |
 | 生产就绪 | 3/10 | 单写者、无性能 SLA、无语义评测集、API 未冻结 |
 

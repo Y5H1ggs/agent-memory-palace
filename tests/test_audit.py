@@ -368,6 +368,9 @@ def test_concurrent_write_read_gc() -> None:
     palace = MemoryPalace(clock=MutableClock(2_010_500_000.0), project="audit")
     palace.remember("rule", "钉死规则", tags=("硬规则",), tier="core", pinned=True)
     errors: list[str] = []
+    # 同上：把 GIL 切换压到 1µs，让「边建边拆」真的会交错，而不是靠运气
+    previous_interval = sys.getswitchinterval()
+    sys.setswitchinterval(1e-6)
 
     def writer(idx: int) -> None:
         try:
@@ -405,6 +408,7 @@ def test_concurrent_write_read_gc() -> None:
         t.start()
     for t in threads:
         t.join()
+    sys.setswitchinterval(previous_interval)
 
     check(
         "9 个线程同时读/写/删/代谢，零异常",
@@ -520,6 +524,12 @@ def test_graph_serialization_without_lock() -> None:
     print("\n图序列化：无锁调用也不许抛「迭代中字典变大小」")
     from memory_palace.core import MemoryGraph, MemoryNode
 
+    # 默认 GIL 切换间隔是 5ms，而一次 to_dict() 只有几微秒 —— 两个线程几乎不会交错，
+    # 竞态窗口靠运气才撞上（CI 上撞到了，本机跑 10 轮都没撞到）。
+    # 把切换间隔压到 1µs 让交错变得频繁，这条断言才不是「说它有就有」。
+    previous_interval = sys.getswitchinterval()
+    sys.setswitchinterval(1e-6)
+
     graph = MemoryGraph()
     for i in range(60):
         node = MemoryNode(name=f"n{i}", content=f"第{i}条", created_at=1.0, last_accessed=1.0)
@@ -555,6 +565,7 @@ def test_graph_serialization_without_lock() -> None:
     reader.join()
     stop.set()
     writer.join()
+    sys.setswitchinterval(previous_interval)
     check(
         "边增删、边序列化 300 次，零异常",
         not errors,
