@@ -18,6 +18,7 @@
 """
 from __future__ import annotations
 
+import math
 import os
 
 OUT = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "docs", "images")
@@ -102,12 +103,27 @@ def card(x, y, w, h, fill=WHITE, stroke=LINE, r=12, dash=None, width=1.2):
 
 
 def arrow(x1, y1, x2, y2, color=MUTED, width=1.6, dash=None, head=True):
-    marker = ' marker-end="url(#arrowhead)"' if head else ""
+    """线 + 三角形，**不用 marker/url(#id)**。
+
+    GitHub 把 SVG 当图片渲染时会先过一遍清洗器，`<defs>` 里的 marker 与
+    `url(#…)` 引用不保证留下 —— 留下的是空线，箭头凭空消失。三角形自己画，
+    只依赖 d 属性，任何渲染器都不会丢。
+    """
     dash_attr = f' stroke-dasharray="{dash}"' if dash else ""
-    return (
+    body = (
         f'<line x1="{x1}" y1="{y1}" x2="{x2}" y2="{y2}" stroke="{color}" '
-        f'stroke-width="{width}"{dash_attr}{marker}/>'
+        f'stroke-width="{width}"{dash_attr}/>'
     )
+    if head:
+        angle = math.atan2(y2 - y1, x2 - x1)
+        length, half = 9.0, 4.2
+        bx, by = x2 - length * math.cos(angle), y2 - length * math.sin(angle)
+        px, py = -math.sin(angle) * half, math.cos(angle) * half
+        body += (
+            f'<path d="M{x2:.2f},{y2:.2f} L{bx + px:.2f},{by + py:.2f} '
+            f'L{bx - px:.2f},{by - py:.2f} z" fill="{color}"/>'
+        )
+    return body
 
 
 def defs() -> str:

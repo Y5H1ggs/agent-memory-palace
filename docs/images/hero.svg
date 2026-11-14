@@ -38,7 +38,7 @@
 <text x="680" y="311" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif" font-size="14" fill="#1a7f37" font-weight="700" text-anchor="start">给</text>
 <text x="712" y="311" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif" font-size="12.8" fill="#1f2328" font-weight="400" text-anchor="start">按预算注入：树状，折叠显式标注</text>
 <text x="664" y="336" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif" font-size="12.2" fill="#57606a" font-weight="400" text-anchor="start">旧事实会到期，不是被删 —— 所以「当时我是这么想的」也留得住</text>
-<line x1="578" y1="226" x2="626" y2="226" stroke="#1a7f37" stroke-width="2" marker-end="url(#arrowhead)"/>
+<line x1="578" y1="226" x2="626" y2="226" stroke="#1a7f37" stroke-width="2"/><path d="M626.00,226.00 L617.00,230.20 L617.00,221.80 z" fill="#1a7f37"/>
 <rect x="40" y="372" width="214.0" height="26" rx="13" fill="#e8f1fd" stroke="#0969da" stroke-width="1.2"/>
 <text x="52" y="390" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif" font-size="12.5" fill="#0969da" font-weight="600" text-anchor="start">零依赖（stdlib only）</text>
 <rect x="266.0" y="372" width="249.625" height="26" rx="13" fill="#e8f1fd" stroke="#0969da" stroke-width="1.2"/>
