@@ -665,80 +665,80 @@ MIT © 2026 Howard
 
 | 路径 | 行数 | sha256 | 说明 |
 |---|---|---|---|
-| `AGENTS.md` | 102 | `03cc8668` |  |
-| `CHANGELOG.md` | 832 | `f2cb18ee` | 版本账本（最新一节在最上面） |
-| `README.md` | 467 | `e90b3fe2` | 人读的现状（能力 / 数字 / 边界） |
+| `AGENTS.md` | 102 | `ce9b7cfa` |  |
+| `CHANGELOG.md` | 832 | `9c50b34c` | 版本账本（最新一节在最上面） |
+| `README.md` | 467 | `d9650775` | 人读的现状（能力 / 数字 / 边界） |
 | `conftest.py` | 6 | `f5b7f82a` | 让未安装的源码目录也能被 pytest 直接导入（CI 里装了包，这行是多余的但无害）。 |
-| `llms.txt` | 146 | `4e2cbbb0` | 机器读的现状（权威摘要） |
-| `pyproject.toml` | 58 | `f08db608` |  |
+| `llms.txt` | 146 | `d13b242e` | 机器读的现状（权威摘要） |
+| `pyproject.toml` | 58 | `df48ad07` |  |
 | `.pytest_cache/README.md` | 9 | `73fd6fcc` | 人读的现状（能力 / 数字 / 边界） |
-| `docs/AGENT_INTEGRATION.md` | 135 | `27e62e2c` |  |
+| `docs/AGENT_INTEGRATION.md` | 135 | `67df3036` |  |
 | `docs/ARCHITECTURE.md` | 113 | `cca95cc5` |  |
-| `docs/COMPETITIVE_ANALYSIS.md` | 178 | `a2058d5e` |  |
-| `docs/CRITIQUE_RESPONSE.md` | 298 | `213b45eb` |  |
-| `docs/INTEGRATIONS.md` | 263 | `41b39c69` |  |
-| `docs/LEXICON.md` | 131 | `21685bee` |  |
+| `docs/COMPETITIVE_ANALYSIS.md` | 178 | `9051ef5f` |  |
+| `docs/CRITIQUE_RESPONSE.md` | 298 | `a42d0296` |  |
+| `docs/INTEGRATIONS.md` | 263 | `a9a2a42f` |  |
+| `docs/LEXICON.md` | 131 | `774e1ac1` |  |
 | `docs/PRAGMATICS.md` | 145 | `0e50f629` |  |
 | `docs/RELEASE_NOTES_v0.1.0.md` | 45 | `052f889a` |  |
-| `docs/REVIEW_2026-11-14_QWEN.md` | 175 | `6514cf52` |  |
-| `docs/STORAGE.md` | 169 | `64d76d6d` |  |
+| `docs/REVIEW_2026-11-14_QWEN.md` | 175 | `e6256e02` |  |
+| `docs/STORAGE.md` | 169 | `d82b8442` |  |
 | `dsh/README.md` | 81 | `ca0e936c` | 人读的现状（能力 / 数字 / 边界） |
 | `dsh/cordis.yml` | 25 | `40cef781` |  |
-| `examples/custom_encoder.py` | 104 | `3c287dfc` | 换掉默认的字符 bigram，接一个真语义编码器。 |
-| `examples/make_diagrams.py` | 453 | `ca566574` | 生成 README 里的说明图（SVG，可复现）。 |
+| `examples/custom_encoder.py` | 104 | `698c3680` | 换掉默认的字符 bigram，接一个真语义编码器。 |
+| `examples/make_diagrams.py` | 453 | `c392f41e` | 生成 README 里的说明图（SVG，可复现）。 |
 | `examples/make_images.py` | 243 | `57ff7673` | 生成 README 用的图（截图脚本，可复现）。 |
 | `examples/quickstart.py` | 62 | `80fc4b19` | 60 行看完这套记忆系统在做什么。 |
-| `examples/showcase.py` | 206 | `64dc3da0` | 生成一份「真实感」的记忆库，并渲染成可发布的面板。 |
-| `memory_palace/__init__.py` | 190 | `7f6be5c0` | memory_palace - 会遗忘、会被情绪加固、会讲自己故事的记忆系统。 |
+| `examples/showcase.py` | 206 | `41e16dd2` | 生成一份「真实感」的记忆库，并渲染成可发布的面板。 |
+| `memory_palace/__init__.py` | 190 | `25da7c7f` | memory_palace - 会遗忘、会被情绪加固、会讲自己故事的记忆系统。 |
 | `memory_palace/_console.py` | 29 | `c79a0833` | 让中文输出在非 UTF-8 控制台上也能打印（不炸 UnicodeEncodeError）。 |
-| `memory_palace/affect.py` | 291 | `533c5ab8` | 情感权重：记忆里那个「疼」或「亮」的分量。 |
-| `memory_palace/bench.py` | 168 | `19b827d9` | 基准：写入、检索、注入、代谢各花多少时间与 token。 |
-| `memory_palace/cli.py` | 1283 | `a1c04243` | 把记忆系统做成 agent 能直接调用的命令行工具。 |
-| `memory_palace/consolidation.py` | 316 | `b4616718` | 记忆沉淀：把反复共现的碎片压成稳定的语义节点。 |
-| `memory_palace/core.py` | 1085 | `5ac03881` | 记忆节点、共现图、幂等衰减、配置与原子持久化。 |
-| `memory_palace/demo.py` | 2212 | `56a9f7ad` | 完整剧本 + 自测。运行：python -m memory_palace.demo |
-| `memory_palace/embedding.py` | 474 | `b3725b3a` | 嵌入通道：固定维度稠密向量，可换成本地模型或远程 API。 |
-| `memory_palace/evaluation.py` | 938 | `0394577e` | 组件级评测集：把「我觉得它变好了」换成「这些指标说它变好了」。 |
-| `memory_palace/http_api.py` | 313 | `8cfcd462` | 把记忆系统暴露成本地 HTTP 服务（含 OpenAPI 3.0，零第三方依赖）。 |
+| `memory_palace/affect.py` | 291 | `7ca5995b` | 情感权重：记忆里那个「疼」或「亮」的分量。 |
+| `memory_palace/bench.py` | 168 | `3dda4aa7` | 基准：写入、检索、注入、代谢各花多少时间与 token。 |
+| `memory_palace/cli.py` | 1283 | `60009a98` | 把记忆系统做成 agent 能直接调用的命令行工具。 |
+| `memory_palace/consolidation.py` | 316 | `a70903e1` | 记忆沉淀：把反复共现的碎片压成稳定的语义节点。 |
+| `memory_palace/core.py` | 1085 | `fda8a7c1` | 记忆节点、共现图、幂等衰减、配置与原子持久化。 |
+| `memory_palace/demo.py` | 2212 | `e3d0a864` | 完整剧本 + 自测。运行：python -m memory_palace.demo |
+| `memory_palace/embedding.py` | 474 | `ac2414de` | 嵌入通道：固定维度稠密向量，可换成本地模型或远程 API。 |
+| `memory_palace/evaluation.py` | 938 | `4607fbf1` | 组件级评测集：把「我觉得它变好了」换成「这些指标说它变好了」。 |
+| `memory_palace/http_api.py` | 313 | `cf72419f` | 把记忆系统暴露成本地 HTTP 服务（含 OpenAPI 3.0，零第三方依赖）。 |
 | `memory_palace/journal.py` | 296 | `af08821b` | 追加式日志（WAL）：让「已经写下去的」不会因为一次坏写而消失。 |
-| `memory_palace/lexicon.py` | 175 | `f9890fd9` | 词法层：分词、归一、IDF 权重、否定词。 |
-| `memory_palace/llm.py` | 354 | `0923db91` | 把「规则监控」升级成「LLM 反思」：模型提假设，代码管边界。 |
-| `memory_palace/locking.py` | 325 | `68aea93f` | 跨进程写锁：让「同一份记忆被多个进程写」从不可能变成可证明。 |
+| `memory_palace/lexicon.py` | 175 | `0b3c5634` | 词法层：分词、归一、IDF 权重、否定词。 |
+| `memory_palace/llm.py` | 354 | `f6ba5097` | 把「规则监控」升级成「LLM 反思」：模型提假设，代码管边界。 |
+| `memory_palace/locking.py` | 325 | `e2acfc37` | 跨进程写锁：让「同一份记忆被多个进程写」从不可能变成可证明。 |
 | `memory_palace/logic.py` | 277 | `676b598d` | 逻辑关联：不是「一起被想起过」，而是「从它能推出什么」。 |
-| `memory_palace/mcp_server.py` | 501 | `e96cedb8` | 把记忆系统暴露成 MCP 服务（stdio，零第三方依赖）。 |
-| `memory_palace/memory_model.py` | 175 | `b85c6876` | 一套记忆模型：不是一种衰减律，而是五种寿命。 |
+| `memory_palace/mcp_server.py` | 501 | `aa816ba3` | 把记忆系统暴露成 MCP 服务（stdio，零第三方依赖）。 |
+| `memory_palace/memory_model.py` | 175 | `631129cd` | 一套记忆模型：不是一种衰减律，而是五种寿命。 |
 | `memory_palace/narrative.py` | 315 | `a149919e` | 自我叙事：不是把所有记忆倒出来，而是「挑几条、排个序、讲成一个故事」。 |
-| `memory_palace/palace.py` | 2055 | `e93f78c2` | 顶层编排：把情感、沉淀、遗忘、叙事、风格、反思串成一个可运行的生命周期。 |
-| `memory_palace/persona.py` | 790 | `82ab77ce` | 基座 → 人格 → 人设 → 变更：四层**不同的**可变性。 |
-| `memory_palace/pragmatics.py` | 279 | `4cb731f2` | 语用层：一句话是**什么行为**，有多强，为什么这么说。 |
-| `memory_palace/reflection.py` | 427 | `a9ae4515` | 自我反思：回看系统自己的历史，量化「我这套策略还好使吗」。 |
-| `memory_palace/render.py` | 622 | `1d99e8ff` | 展现层：把「记忆库现在的样子」变成人能看的东西。 |
-| `memory_palace/scope.py` | 156 | `a6066a8b` | 记忆属于谁：全局 / 某个项目 / 本次会话。 |
-| `memory_palace/selfcorrect.py` | 622 | `332959a1` | 自修正：能发现自己错了，并且改得起、退得回。 |
-| `memory_palace/semantics.py` | 798 | `8be44b42` | 可解释的语义检索层（零第三方依赖）。 |
-| `memory_palace/sqlite_store.py` | 898 | `bce84e1b` | SQLite（WAL）后端：行级存储、单写多读、崩溃自前滚。 |
-| `memory_palace/store.py` | 679 | `b094b511` | 持久化门面：SQLite（默认）与 JSON（可移植/旧库）两个后端。 |
-| `memory_palace/style.py` | 327 | `c1f397f9` | 风格固化与冲突裁决。 |
-| `memory_palace/tree.py` | 260 | `089614c7` | 树状记忆：根常驻、枝按需展开、其余折叠。 |
-| `memory_palace/value.py` | 290 | `a82b2aea` | 选择：记住什么、遗忘什么，以及「选择」本身的形状。 |
-| `tests/test_audit.py` | 600 | `902c9a81` | 一轮代码审计的结论，每条发现配一条断言。 |
-| `tests/test_cli.py` | 258 | `1e090b27` | CLI 的端到端断言（不依赖 pytest，也能被 pytest 收集）。 |
-| `tests/test_docs.py` | 130 | `f886efd9` | 文档与代码的一致性。 |
-| `tests/test_embedding.py` | 361 | `50bc5a30` | 嵌入通道：确定性、归一化、混合检索是否真的更好。 |
-| `tests/test_eval.py` | 186 | `188311f9` | 评测集自身的可靠性。 |
+| `memory_palace/palace.py` | 2055 | `4c10726a` | 顶层编排：把情感、沉淀、遗忘、叙事、风格、反思串成一个可运行的生命周期。 |
+| `memory_palace/persona.py` | 790 | `a8de1f9c` | 基座 → 人格 → 人设 → 变更：四层**不同的**可变性。 |
+| `memory_palace/pragmatics.py` | 279 | `7bc82708` | 语用层：一句话是**什么行为**，有多强，为什么这么说。 |
+| `memory_palace/reflection.py` | 427 | `54ccabb0` | 自我反思：回看系统自己的历史，量化「我这套策略还好使吗」。 |
+| `memory_palace/render.py` | 622 | `a086c0f9` | 展现层：把「记忆库现在的样子」变成人能看的东西。 |
+| `memory_palace/scope.py` | 156 | `c216bd16` | 记忆属于谁：全局 / 某个项目 / 本次会话。 |
+| `memory_palace/selfcorrect.py` | 622 | `8aa4ed80` | 自修正：能发现自己错了，并且改得起、退得回。 |
+| `memory_palace/semantics.py` | 798 | `d38728ea` | 可解释的语义检索层（零第三方依赖）。 |
+| `memory_palace/sqlite_store.py` | 898 | `c51ca603` | SQLite（WAL）后端：行级存储、单写多读、崩溃自前滚。 |
+| `memory_palace/store.py` | 679 | `a3a69cdc` | 持久化门面：SQLite（默认）与 JSON（可移植/旧库）两个后端。 |
+| `memory_palace/style.py` | 327 | `5f5215d6` | 风格固化与冲突裁决。 |
+| `memory_palace/tree.py` | 260 | `6d4e7682` | 树状记忆：根常驻、枝按需展开、其余折叠。 |
+| `memory_palace/value.py` | 290 | `de5efa76` | 选择：记住什么、遗忘什么，以及「选择」本身的形状。 |
+| `tests/test_audit.py` | 600 | `d3a9ec25` | 一轮代码审计的结论，每条发现配一条断言。 |
+| `tests/test_cli.py` | 258 | `86d43aa4` | CLI 的端到端断言（不依赖 pytest，也能被 pytest 收集）。 |
+| `tests/test_docs.py` | 130 | `91b18580` | 文档与代码的一致性。 |
+| `tests/test_embedding.py` | 361 | `bb9461e9` | 嵌入通道：确定性、归一化、混合检索是否真的更好。 |
+| `tests/test_eval.py` | 186 | `c5d3191d` | 评测集自身的可靠性。 |
 | `tests/test_extensions.py` | 232 | `463270b8` | 两个扩展点的契约：语义编码器、外部反思。 |
 | `tests/test_guardrails.py` | 145 | `b74b614a` | 自修正的多目标护栏：主指标变好，但不许拿别的指标去换。 |
-| `tests/test_integrations.py` | 224 | `bda2bb48` | MCP 与 HTTP 两条通用接入层的契约自测。 |
-| `tests/test_lexicon.py` | 215 | `9e70fe71` | 词法层：归一、分词、否定词、IDF。 |
+| `tests/test_integrations.py` | 224 | `26f909c9` | MCP 与 HTTP 两条通用接入层的契约自测。 |
+| `tests/test_lexicon.py` | 215 | `2bfdb776` | 词法层：归一、分词、否定词、IDF。 |
 | `tests/test_llm.py` | 153 | `cae5ac1f` | LLM 反思的边界：结构化、可降级、绝不改配置。 |
-| `tests/test_locking.py` | 148 | `4a209746` | 跨进程写锁：真的跨进程，不是「同一个对象加两次」。 |
-| `tests/test_pragmatics.py` | 249 | `491cd968` | 语用层：一句话是什么行为，有多硬，为什么说。 |
-| `tests/test_scope.py` | 264 | `5ae9610d` | 跨项目记忆的断言：分层、隔离、提升、迁移。 |
+| `tests/test_locking.py` | 148 | `74cbdc36` | 跨进程写锁：真的跨进程，不是「同一个对象加两次」。 |
+| `tests/test_pragmatics.py` | 249 | `dd7311ea` | 语用层：一句话是什么行为，有多硬，为什么说。 |
+| `tests/test_scope.py` | 264 | `a334372f` | 跨项目记忆的断言：分层、隔离、提升、迁移。 |
 | `tests/test_selfcheck.py` | 15 | `20bc6d87` | pytest 入口：把剧本式自测接进 pytest / CI。 |
-| `tests/test_store.py` | 493 | `f7710973` | 持久化后端的契约：并发、增量、崩溃、导出、体检。 |
-| `tests/test_temporal.py` | 268 | `64646330` | 双时态、写入去重、弃答的断言（含反事实验证）。 |
-| `tools/greenlight_audit.py` | 394 | `9a33db62` | 绿灯效应体检：把实现故意弄坏，看测试会不会变红。 |
-| `tools/make_review_bundle.py` | 163 | `805fdbcf` | 把「仓库现状」压成一份可以直接粘给模型的文件。 |
+| `tests/test_store.py` | 493 | `37968eb3` | 持久化后端的契约：并发、增量、崩溃、导出、体检。 |
+| `tests/test_temporal.py` | 268 | `7257fe8f` | 双时态、写入去重、弃答的断言（含反事实验证）。 |
+| `tools/greenlight_audit.py` | 394 | `92eabd5b` | 绿灯效应体检：把实现故意弄坏，看测试会不会变红。 |
+| `tools/make_review_bundle.py` | 169 | `372a8665` | 把「仓库现状」压成一份可以直接粘给模型的文件。 |
 
 ========================================================================
 

@@ -35,8 +35,14 @@ SKIP_SUFFIX = (".pyc", ".png", ".jpg", ".sqlite", ".db", ".pyo")
 
 
 def _read(path: str) -> str:
-    with open(path, "r", encoding="utf-8") as f:
-        return f.read()
+    """按「通用换行」读，并把换行统一成 \n。
+
+    这是跨平台一致性的根：git 在 Windows 上检出 CRLF、在 Linux 上检出 LF，
+    同一份代码会算出两个 sha256（第一次跑 CI 就是这么红的）。
+    包里存哈希是为了自证完整，那就必须对换行不敏感。
+    """
+    with open(path, "r", encoding="utf-8", newline=None) as f:
+        return f.read().replace("\r\n", "\n").replace("\r", "\n")
 
 
 def _first_docline(path: str) -> str:
@@ -73,11 +79,11 @@ def _inventory() -> list[str]:
             if rel == "llms-full.txt":
                 continue
             try:
-                raw = open(full, "rb").read()
-            except OSError:
+                text = _read(full)
+            except (OSError, UnicodeDecodeError):
                 continue
-            lines = raw.count(b"\n") + 1
-            digest = hashlib.sha256(raw).hexdigest()[:8]
+            lines = text.count("\n") + 1
+            digest = hashlib.sha256(text.encode("utf-8")).hexdigest()[:8]
             note = _first_docline(full) if name.endswith(".py") else ""
             if name == "README.md":
                 note = "人读的现状（能力 / 数字 / 边界）"
