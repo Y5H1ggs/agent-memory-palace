@@ -158,6 +158,17 @@ def main(argv: list[str]) -> int:
         current = _read(OUT)
         if current != content:
             print("llms-full.txt 已过期：代码/文档变了但没重新生成。")
+            # 只说「过期」等于让人猜。指出第一处不同的行，必要时连期望值一起给。
+            old_lines = current.splitlines()
+            new_lines = content.splitlines()
+            for index in range(max(len(old_lines), len(new_lines))):
+                old = old_lines[index] if index < len(old_lines) else "<缺少该行>"
+                new = new_lines[index] if index < len(new_lines) else "<多出该行>"
+                if old != new:
+                    print(f"  第一处不同在第 {index + 1} 行：")
+                    print(f"    文件里：{old[:120]}")
+                    print(f"    应为  ：{new[:120]}")
+                    break
             print("修法：python tools/make_review_bundle.py")
             return 1
         print(f"llms-full.txt 是最新的（{len(content.encode('utf-8')) / 1024:.0f} KB）")
