@@ -1,0 +1,53 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 442" width="1200" height="442" role="img" aria-label="SQLite 存储结构">
+<title>SQLite 存储结构</title>
+<rect x="0" y="0" width="1200" height="442" fill="#ffffff"/>
+<defs>
+<marker id="arrowhead" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+  <path d="M0,0 L10,5 L0,10 z" fill="#57606a"/>
+</marker>
+<marker id="arrowgreen" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+  <path d="M0,0 L10,5 L0,10 z" fill="#1a7f37"/>
+</marker>
+</defs>
+<text x="40" y="44" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif" font-size="20" fill="#1f2328" font-weight="700" text-anchor="start">存储：SQLite（WAL 模式），一条记忆一行</text>
+<text x="40" y="70" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif" font-size="13" fill="#57606a" font-weight="400" text-anchor="start">默认后端。JSON 仍在（--backend json），作为可移植的单文件快照与冷备。</text>
+<rect x="40" y="96" width="560" height="34" rx="12" fill="#ffffff" stroke="#d0d7de" stroke-width="1.2"/>
+<text x="56" y="118" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,'Cascadia Mono',monospace" font-size="13.5" fill="#1a7f37" font-weight="700" text-anchor="start">nodes</text>
+<text x="150" y="118" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif" font-size="12.5" fill="#57606a" font-weight="400" text-anchor="start">一条记忆一行 + 4 个索引</text>
+<rect x="40" y="138" width="560" height="34" rx="12" fill="#ffffff" stroke="#d0d7de" stroke-width="1.2"/>
+<text x="56" y="160" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,'Cascadia Mono',monospace" font-size="13.5" fill="#1a7f37" font-weight="700" text-anchor="start">edges</text>
+<text x="150" y="160" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif" font-size="12.5" fill="#57606a" font-weight="400" text-anchor="start">共现边：(a,b) 主键</text>
+<rect x="40" y="180" width="560" height="34" rx="12" fill="#ffffff" stroke="#d0d7de" stroke-width="1.2"/>
+<text x="56" y="202" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,'Cascadia Mono',monospace" font-size="13.5" fill="#9a6700" font-weight="700" text-anchor="start">tombstones</text>
+<text x="150" y="202" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif" font-size="12.5" fill="#57606a" font-weight="400" text-anchor="start">被显式丢弃的记忆（可恢复）</text>
+<rect x="40" y="222" width="560" height="34" rx="12" fill="#ffffff" stroke="#d0d7de" stroke-width="1.2"/>
+<text x="56" y="244" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,'Cascadia Mono',monospace" font-size="13.5" fill="#0969da" font-weight="700" text-anchor="start">blobs</text>
+<text x="150" y="244" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif" font-size="12.5" fill="#57606a" font-weight="400" text-anchor="start">引擎状态：config / 叙事 / 人格 / 自修正</text>
+<rect x="40" y="264" width="560" height="34" rx="12" fill="#ffffff" stroke="#d0d7de" stroke-width="1.2"/>
+<text x="56" y="286" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,'Cascadia Mono',monospace" font-size="13.5" fill="#0969da" font-weight="700" text-anchor="start">events</text>
+<text x="150" y="286" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif" font-size="12.5" fill="#57606a" font-weight="400" text-anchor="start">只追加。内存会 trim，库里不会</text>
+<rect x="40" y="306" width="560" height="34" rx="12" fill="#ffffff" stroke="#d0d7de" stroke-width="1.2"/>
+<text x="56" y="328" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,'Cascadia Mono',monospace" font-size="13.5" fill="#8250df" font-weight="700" text-anchor="start">commits</text>
+<text x="150" y="328" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif" font-size="12.5" fill="#57606a" font-weight="400" text-anchor="start">提交账本：谁、何时、为什么、写了多少行</text>
+<rect x="40" y="348" width="560" height="34" rx="12" fill="#ffffff" stroke="#d0d7de" stroke-width="1.2"/>
+<text x="56" y="370" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,'Cascadia Mono',monospace" font-size="13.5" fill="#8250df" font-weight="700" text-anchor="start">snapshots</text>
+<text x="150" y="370" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif" font-size="12.5" fill="#57606a" font-weight="400" text-anchor="start">每 50 次提交留一份完整快照</text>
+<rect x="636" y="100" width="524" height="268" rx="12" fill="#f6f8fa" stroke="#d0d7de" stroke-width="1.2"/>
+<text x="660" y="130" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif" font-size="14.5" fill="#1f2328" font-weight="700" text-anchor="start">一次提交的顺序（不可交换）</text>
+<text x="660" y="152" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,'Cascadia Mono',monospace" font-size="12" fill="#57606a" font-weight="700" text-anchor="start">1</text>
+<text x="680" y="152" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,'Cascadia Mono',monospace" font-size="12.5" fill="#1a7f37" font-weight="700" text-anchor="start">BEGIN IMMEDIATE</text>
+<text x="680" y="169" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif" font-size="11.8" fill="#57606a" font-weight="400" text-anchor="start">第一毫秒就声明「我是写者」，不给锁升级留窗口</text>
+<text x="660" y="194" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,'Cascadia Mono',monospace" font-size="12" fill="#57606a" font-weight="700" text-anchor="start">2</text>
+<text x="680" y="194" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,'Cascadia Mono',monospace" font-size="12.5" fill="#1a7f37" font-weight="700" text-anchor="start">读到别人的提交？</text>
+<text x="680" y="211" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif" font-size="11.8" fill="#57606a" font-weight="400" text-anchor="start">比 meta.revision 新 → 先重载，再改</text>
+<text x="660" y="236" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,'Cascadia Mono',monospace" font-size="12" fill="#57606a" font-weight="700" text-anchor="start">3</text>
+<text x="680" y="236" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,'Cascadia Mono',monospace" font-size="12.5" fill="#1a7f37" font-weight="700" text-anchor="start">只写脏行</text>
+<text x="680" y="253" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif" font-size="11.8" fill="#57606a" font-weight="400" text-anchor="start">节点带 _dirty，改一条 = 1 行</text>
+<text x="660" y="278" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,'Cascadia Mono',monospace" font-size="12" fill="#57606a" font-weight="700" text-anchor="start">4</text>
+<text x="680" y="278" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,'Cascadia Mono',monospace" font-size="12.5" fill="#1a7f37" font-weight="700" text-anchor="start">INSERT commits</text>
+<text x="680" y="295" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif" font-size="11.8" fill="#57606a" font-weight="400" text-anchor="start">记账：原因、写者、写入行数、摘要</text>
+<text x="660" y="320" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,'Cascadia Mono',monospace" font-size="12" fill="#57606a" font-weight="700" text-anchor="start">5</text>
+<text x="680" y="320" font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,'Cascadia Mono',monospace" font-size="12.5" fill="#1a7f37" font-weight="700" text-anchor="start">COMMIT</text>
+<text x="680" y="337" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif" font-size="11.8" fill="#57606a" font-weight="400" text-anchor="start">WAL + synchronous=FULL，落盘后才返回</text>
+<text x="40" y="420" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif" font-size="12.5" fill="#57606a" font-weight="400" text-anchor="start">写一次 = 一次行级增量 + 一条审计记录；改一条的代价与库的大小基本无关。</text>
+</svg>

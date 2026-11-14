@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 436" width="1200" height="436" role="img" aria-label="写入延迟对比">
+<title>写入延迟对比</title>
+<rect x="0" y="0" width="1200" height="436" fill="#ffffff"/>
+<defs>
+<marker id="arrowhead" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+  <path d="M0,0 L10,5 L0,10 z" fill="#57606a"/>
+</marker>
+<marker id="arrowgreen" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+  <path d="M0,0 L10,5 L0,10 z" fill="#1a7f37"/>
+</marker>
+</defs>
+<text x="40" y="44" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif" font-size="20" fill="#1f2328" font-weight="700" text-anchor="start">写入延迟：换后端的真正理由</text>
+<text x="40" y="70" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif" font-size="13" fill="#57606a" font-weight="400" text-anchor="start">1000 条记忆，单次 remember（含提交）的本机耗时，越短越好。</text>
+<text x="190" y="142" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif" font-size="13" fill="#1f2328" font-weight="700" text-anchor="end">JSON（0.9.x）</text>
+<rect x="210" y="108" width="510" height="24" rx="6" fill="#eef1f4" stroke="none" stroke-width="1.2"/>
+<rect x="210" y="108" width="256" height="24" rx="6" fill="#9a6700" stroke="none" stroke-width="1.2"/>
+<text x="202" y="125" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif" font-size="11.5" fill="#57606a" font-weight="400" text-anchor="end">p50</text>
+<text x="476" y="125" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif" font-size="12.5" fill="#1f2328" font-weight="700" text-anchor="start">28.2 ms</text>
+<rect x="210" y="142" width="510" height="24" rx="6" fill="#eef1f4" stroke="none" stroke-width="1.2"/>
+<rect x="210" y="142" width="434" height="24" rx="6" fill="#e3c07a" stroke="none" stroke-width="1.2"/>
+<text x="202" y="159" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif" font-size="11.5" fill="#57606a" font-weight="400" text-anchor="end">p95</text>
+<text x="654" y="159" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif" font-size="12.5" fill="#1f2328" font-weight="700" text-anchor="start">47.7 ms</text>
+<text x="190" y="238" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif" font-size="13" fill="#1f2328" font-weight="700" text-anchor="end">SQLite（0.10）</text>
+<rect x="210" y="204" width="510" height="24" rx="6" fill="#eef1f4" stroke="none" stroke-width="1.2"/>
+<rect x="210" y="204" width="10" height="24" rx="6" fill="#1a7f37" stroke="none" stroke-width="1.2"/>
+<text x="202" y="221" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif" font-size="11.5" fill="#57606a" font-weight="400" text-anchor="end">p50</text>
+<text x="230" y="221" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif" font-size="12.5" fill="#1f2328" font-weight="700" text-anchor="start">1.2 ms</text>
+<rect x="210" y="238" width="510" height="24" rx="6" fill="#eef1f4" stroke="none" stroke-width="1.2"/>
+<rect x="210" y="238" width="19" height="24" rx="6" fill="#8cc7a0" stroke="none" stroke-width="1.2"/>
+<text x="202" y="255" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif" font-size="11.5" fill="#57606a" font-weight="400" text-anchor="end">p95</text>
+<text x="239" y="255" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif" font-size="12.5" fill="#1f2328" font-weight="700" text-anchor="start">2.1 ms</text>
+<text x="210" y="294" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif" font-size="20" fill="#1a7f37" font-weight="700" text-anchor="start">→ 24×</text>
+<text x="284" y="294" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif" font-size="12.5" fill="#57606a" font-weight="400" text-anchor="start">同样的写入，代价从「重写全库」变成「改一行」</text>
+<rect x="770" y="104" width="390" height="176" rx="12" fill="#f6f8fa" stroke="#d0d7de" stroke-width="1.2"/>
+<text x="792" y="130" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif" font-size="13" fill="#1f2328" font-weight="700" text-anchor="start">代价（如实）</text>
+<text x="792" y="158" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif" font-size="12.2" fill="#57606a" font-weight="400" text-anchor="start">读库 1000 条：45 ms → 46 ms（基本持平）</text>
+<text x="792" y="184" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif" font-size="12.2" fill="#57606a" font-weight="400" text-anchor="start">磁盘：2.0 MB → 4.5 MB</text>
+<text x="792" y="210" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif" font-size="11.5" fill="#57606a" font-weight="400" text-anchor="start">（行存储 + 4 个索引）</text>
+<text x="792" y="242" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif" font-size="12.2" fill="#1f2328" font-weight="400" text-anchor="start">换到的是：写放大消失、并发安全、</text>
+<text x="792" y="264" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif" font-size="12.2" fill="#1f2328" font-weight="400" text-anchor="start">可查询的提交历史。</text>
+<rect x="40" y="322" width="1120" height="92" rx="12" fill="#e9f5ec" stroke="#8cc7a0" stroke-width="1.2"/>
+<text x="60" y="348" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif" font-size="13" fill="#1a7f37" font-weight="700" text-anchor="start">为什么之前是 28ms：</text>
+<text x="60" y="372" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif" font-size="12.8" fill="#1f2328" font-weight="400" text-anchor="start">JSON 后端每次写入都要把整份库重新序列化并替换文件（1000 条约 2.0 MB）。</text>
+<text x="60" y="396" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif" font-size="12.8" fill="#1f2328" font-weight="400" text-anchor="start">SQLite 只写变动的那一行 —— 改一条的代价与库的大小基本无关。</text>
+</svg>

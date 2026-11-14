@@ -21,3 +21,6 @@ Thumbs.db
 # 本地工作区（WorkBuddy 的项目数据，含个人笔记，绝不入库）
 .workbuddy/
 outputs/
+
+# 演示库的运行时旁路文件（showcase 每次跑都会改，不该入库）
+examples/showcase-store*

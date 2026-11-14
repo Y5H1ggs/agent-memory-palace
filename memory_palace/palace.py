@@ -17,7 +17,9 @@ from __future__ import annotations
 
 import functools
 import os
+import random
 import threading
+import time
 from collections import Counter
 from contextlib import contextmanager
 from typing import Any, Callable, Iterator
@@ -86,8 +88,11 @@ def _mutating(reason: str = ""):
     def wrap(fn: Callable[..., Any]) -> Callable[..., Any]:
         @functools.wraps(fn)
         def inner(self: "MemoryPalace", *args: Any, **kwargs: Any) -> Any:
-            with self._txn(reason or fn.__name__):
-                return fn(self, *args, **kwargs)
+            def attempt() -> Any:
+                with self._txn(reason or fn.__name__):
+                    return fn(self, *args, **kwargs)
+
+            return self._retry_locked(attempt, reason or fn.__name__)
 
         return inner
 
@@ -281,6 +286,28 @@ class MemoryPalace:
                     self._store.commit()
             finally:
                 self._txn_depth -= 1
+
+    def _retry_locked(self, call: Callable[[], Any], label: str, attempts: int = 3) -> Any:
+        """写锁等不到时重试几次，而不是把用户的写入直接判死。
+
+        这个重试是 CI 逼出来的：4 个进程在 2 核 runner 上并发写时，
+        持锁的那个会被操作系统调度走，其他人干等到 10s 超时 —— 写入失败，
+        但数据本身完全正常，只是「排队排久了」。对一个记忆系统来说，
+        「这次没记住」比「晚 200ms 记住」严重得多。
+
+        只在事务**未能开启**时重试（`_txn_depth == 0`）：一旦进入事务再失败，
+        重试会把已经执行了一半的修改再做一遍。
+        """
+        last: BaseException | None = None
+        for index in range(max(1, attempts)):
+            try:
+                return call()
+            except LockBusy as exc:
+                if self._txn_depth > 0 or index == attempts - 1:
+                    raise
+                last = exc
+                time.sleep(0.05 * (2**index) + random.uniform(0.0, 0.05))
+        raise last if last else LockBusy(label, 0.0, None)  # pragma: no cover
 
     def refresh(self, force: bool = False) -> bool:
         """把别人的提交读进来（只读路径也调用）。
@@ -1890,7 +1917,7 @@ class MemoryPalace:
             target = path or self._path
             if not target:
                 raise ValueError("未指定持久化路径")
-            self._save_unlocked(target, reason=reason)
+            self._retry_locked(lambda: self._save_unlocked(target, reason=reason), "save")
             return target
 
     REQUIRED_STATE_KEYS: tuple[str, ...] = (

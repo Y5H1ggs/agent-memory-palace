@@ -153,6 +153,50 @@ def test_delta_serialization_is_bounded() -> None:
         palace.close()
 
 
+def test_write_retries_when_lock_is_held_briefly() -> None:
+    """写锁被别人短暂占着时，`remember` 应该等一会儿再成，而不是直接失败。
+
+    这是 CI 逼出来的：4 个进程在 2 核 runner 上并发写，持锁的那个被调度走，
+    其他人干等到超时 —— 数据没坏，只是「排队排久了」。对记忆系统来说，
+    「这次没记住」比「晚 200ms 记住」严重得多。
+    """
+    from memory_palace.core import PalaceConfig
+
+    with tempfile.TemporaryDirectory(prefix="mp-retry-") as tmp:
+        path = os.path.join(tmp, "store.sqlite")
+        cfg = PalaceConfig(lock_timeout=0.05)  # 故意把单次等待设得很短
+        writer = MemoryPalace(path=path, autosave=True, config=cfg)
+        writer.remember("a", "先写一条：仓位按半凯利", tags=("仓位",))
+        blocker = MemoryPalace(path=path, config=cfg)
+
+        started = threading.Event()
+        release = threading.Event()
+
+        def hold_lock() -> None:
+            blocker._store.begin("test-hold")  # 直接占住写事务
+            started.set()
+            release.wait(timeout=5)
+            blocker._store.commit()
+
+        thread = threading.Thread(target=hold_lock)
+        thread.start()
+        try:
+            assert started.wait(timeout=5)
+            release_timer = threading.Timer(0.25, release.set)  # 0.25s 后放锁
+            release_timer.start()
+            node = writer.remember("b", "被锁挡了一下，但应该重试成功", tags=("仓位",))
+            assert node.name == "b"
+            release_timer.cancel()
+        finally:
+            release.set()
+            thread.join(timeout=10)
+        checker = MemoryPalace(path=path)
+        assert set(checker.graph.nodes()) == {"a", "b"}
+        checker.close()
+        writer.close()
+        blocker.close()
+
+
 def test_reader_sees_other_writers() -> None:
     """两个客户端：A 写完，B 不重开也应该看得见。
 

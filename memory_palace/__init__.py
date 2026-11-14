@@ -93,7 +93,7 @@ from .llm import CallableProvider, HttpChatProvider, LLMReflector, LLMError, mak
 from .style import Adjudication, StyleEngine, StyleRule
 from .value import ValueModel
 
-__version__ = "0.10.1"
+__version__ = "0.10.2"
 
 __all__ = [
     "__version__",

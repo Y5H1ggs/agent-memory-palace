@@ -1,0 +1,49 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 448" width="1200" height="448" role="img" aria-label="memory-palace 是什么">
+<title>memory-palace 是什么</title>
+<rect x="0" y="0" width="1200" height="448" fill="#ffffff"/>
+<defs>
+<marker id="arrowhead" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+  <path d="M0,0 L10,5 L0,10 z" fill="#57606a"/>
+</marker>
+<marker id="arrowgreen" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+  <path d="M0,0 L10,5 L0,10 z" fill="#1a7f37"/>
+</marker>
+</defs>
+<text x="40" y="46" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif" font-size="26" fill="#1f2328" font-weight="700" text-anchor="start">memory-palace</text>
+<text x="40" y="74" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif" font-size="14.5" fill="#57606a" font-weight="400" text-anchor="start">会遗忘、会被情绪加固、会讲自己故事的记忆系统 · 零第三方依赖</text>
+<rect x="40" y="104" width="520" height="244" rx="12" fill="#f6f8fa" stroke="#d0d7de" stroke-width="1.2"/>
+<text x="64" y="136" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif" font-size="15" fill="#57606a" font-weight="700" text-anchor="start">普通向量库 / RAG</text>
+<rect x="64" y="158" width="472" height="44" rx="12" fill="#ffffff" stroke="#d0d7de" stroke-width="1.2"/>
+<text x="80" y="186" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif" font-size="15" fill="#57606a" font-weight="700" text-anchor="start">存</text>
+<text x="112" y="186" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif" font-size="13.5" fill="#1f2328" font-weight="400" text-anchor="start">全量入库，只增不减</text>
+<rect x="64" y="216" width="472" height="44" rx="12" fill="#ffffff" stroke="#d0d7de" stroke-width="1.2"/>
+<text x="80" y="244" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif" font-size="15" fill="#57606a" font-weight="700" text-anchor="start">检</text>
+<text x="112" y="244" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif" font-size="13.5" fill="#1f2328" font-weight="400" text-anchor="start">每次全库相似度检索</text>
+<rect x="64" y="274" width="472" height="44" rx="12" fill="#ffffff" stroke="#d0d7de" stroke-width="1.2"/>
+<text x="80" y="302" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif" font-size="15" fill="#57606a" font-weight="700" text-anchor="start">塞</text>
+<text x="112" y="302" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif" font-size="13.5" fill="#1f2328" font-weight="400" text-anchor="start">把最像的几条塞进 prompt</text>
+<text x="64" y="336" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif" font-size="12.5" fill="#57606a" font-weight="400" text-anchor="start">没有时间、没有取舍、也没有「当时是什么」</text>
+<rect x="640" y="104" width="520" height="244" rx="12" fill="#e9f5ec" stroke="#8cc7a0" stroke-width="1.2"/>
+<text x="664" y="136" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif" font-size="15" fill="#1a7f37" font-weight="700" text-anchor="start">memory-palace</text>
+<rect x="664" y="150" width="472" height="36" rx="12" fill="#ffffff" stroke="#b7dcc3" stroke-width="1.2"/>
+<text x="680" y="173" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif" font-size="14" fill="#1a7f37" font-weight="700" text-anchor="start">写</text>
+<text x="712" y="173" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif" font-size="12.8" fill="#1f2328" font-weight="400" text-anchor="start">情绪与语用由文本推断，带依据</text>
+<rect x="664" y="196" width="472" height="36" rx="12" fill="#ffffff" stroke="#b7dcc3" stroke-width="1.2"/>
+<text x="680" y="219" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif" font-size="14" fill="#1a7f37" font-weight="700" text-anchor="start">算</text>
+<text x="712" y="219" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif" font-size="12.8" fill="#1f2328" font-weight="400" text-anchor="start">权重 = 锚点 + 时间（纯函数，幂等）</text>
+<rect x="664" y="242" width="472" height="36" rx="12" fill="#ffffff" stroke="#b7dcc3" stroke-width="1.2"/>
+<text x="680" y="265" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif" font-size="14" fill="#1a7f37" font-weight="700" text-anchor="start">选</text>
+<text x="712" y="265" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif" font-size="12.8" fill="#1f2328" font-weight="400" text-anchor="start">沉淀 / 遗忘 / 抓取，每条判决都有理由</text>
+<rect x="664" y="288" width="472" height="36" rx="12" fill="#ffffff" stroke="#b7dcc3" stroke-width="1.2"/>
+<text x="680" y="311" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif" font-size="14" fill="#1a7f37" font-weight="700" text-anchor="start">给</text>
+<text x="712" y="311" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif" font-size="12.8" fill="#1f2328" font-weight="400" text-anchor="start">按预算注入：树状，折叠显式标注</text>
+<text x="664" y="336" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif" font-size="12.2" fill="#57606a" font-weight="400" text-anchor="start">旧事实会到期，不是被删 —— 所以「当时我是这么想的」也留得住</text>
+<line x1="578" y1="226" x2="626" y2="226" stroke="#1a7f37" stroke-width="2" marker-end="url(#arrowhead)"/>
+<rect x="40" y="372" width="214.0" height="26" rx="13" fill="#e8f1fd" stroke="#0969da" stroke-width="1.2"/>
+<text x="52" y="390" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif" font-size="12.5" fill="#0969da" font-weight="600" text-anchor="start">零依赖（stdlib only）</text>
+<rect x="266.0" y="372" width="249.625" height="26" rx="13" fill="#e8f1fd" stroke="#0969da" stroke-width="1.2"/>
+<text x="278.0" y="390" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif" font-size="12.5" fill="#0969da" font-weight="600" text-anchor="start">SQLite / WAL · 行级增量</text>
+<rect x="527.625" y="372" width="214.0" height="26" rx="13" fill="#e8f1fd" stroke="#0969da" stroke-width="1.2"/>
+<text x="539.625" y="390" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif" font-size="12.5" fill="#0969da" font-weight="600" text-anchor="start">MCP · HTTP · CLI</text>
+<text x="40" y="424" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif" font-size="12" fill="#57606a" font-weight="400" text-anchor="start">1e4 条量级 · 单机 · 单写者（多进程可排队写同一份记忆）</text>
+</svg>
