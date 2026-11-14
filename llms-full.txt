@@ -19,7 +19,7 @@
 - 许可：MIT
 - Python：>= 3.10
 - 第三方依赖：**0**（`sentence-transformers` 仅在显式选用 provider=st 时需要）
-- 仓库：https://github.com/Y5H1ggs/memory-palace
+- 仓库：https://github.com/Y5H1ggs/agent-memory-palace
 
 ## 它是什么
 
@@ -156,22 +156,29 @@ python tools/greenlight_audit.py          # 绿灯审计：故意改坏实现，
 
 ========================================================================
 
-# memory-palace
+# Memory Palace · 给 AI Agent 的长期记忆库
 
-**一个会遗忘的记忆库。** 不是把所有文本塞进向量库，而是给每条记忆一个寿命、一个价值、
+**会遗忘、会弃答、零依赖。** 不是把所有文本塞进向量库，而是给每条记忆一个寿命、一个价值、
 一个「什么时候该忘」的判决；想不起来的时候，它会说「我没有」，而不是端几条最像的上来。
+
+> **Long-term memory for LLM agents** — a dependency-free memory lifecycle with a forgetting
+> curve, abstention, and a SQLite/WAL backend. Cross-session memory for Claude Code / Cursor /
+> any MCP client. No vector database, no embedding service, no `pip install` required.
 
 零第三方依赖（Python 标准库）· 默认 SQLite/WAL · 单机多进程可写 · MCP / HTTP / CLI 三面接入
 
-[![CI](https://github.com/Y5H1ggs/memory-palace/actions/workflows/ci.yml/badge.svg)](https://github.com/Y5H1ggs/memory-palace/actions/workflows/ci.yml)
+[![CI](https://github.com/Y5H1ggs/agent-memory-palace/actions/workflows/ci.yml/badge.svg)](https://github.com/Y5H1ggs/agent-memory-palace/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](pyproject.toml)
 [![deps: 0](https://img.shields.io/badge/dependencies-0-brightgreen.svg)](pyproject.toml)
 
+**关键词**：AI Agent 记忆 · LLM 长期记忆 · 跨会话记忆 · MCP 记忆服务器 · 遗忘曲线 ·
+向量库替代 · SQLite 记忆库 · 零依赖 · agent memory · long-term memory · memory MCP server
+
 <img src="docs/images/hero.svg" alt="它和向量库的区别" width="100%">
 
 > 给读这个仓库的模型：机器可读的现状在 **[llms.txt](llms.txt)**；要整份交给评审模型，用
-> **[llms-full.txt](llms-full.txt)**（约 50 KB，含文件清单与全部测试用例名）。
+> **[llms-full.txt](llms-full.txt)**（约 41 KB，含文件清单与全部测试用例名）。
 > `docs/` 里带「时效声明」的两篇是历史文档，描述的是 0.5.x / 0.9，不是现状。
 
 ---
@@ -179,7 +186,7 @@ python tools/greenlight_audit.py          # 绿灯审计：故意改坏实现，
 ## 先看它怎么用（30 秒）
 
 ```bash
-git clone https://github.com/Y5H1ggs/memory-palace.git && cd memory-palace
+git clone https://github.com/Y5H1ggs/agent-memory-palace.git && cd agent-memory-palace
 python -m memory_palace.demo      # 六幕演示，20 条断言，约 1 秒
 ```
 
@@ -233,6 +240,23 @@ memory-palace cycle                                            # 会话结束：
 
 `run_cycle()` 的次序是设计的一部分：沉淀早于遗忘（否则要结晶的碎片先被扫走）、
 抓取早于遗忘（否则想留的留不下）、自述晚于遗忘（否则会讲到已经不在的东西）。
+
+---
+
+## 你可能在找的几类方案（以及这里的取舍）
+
+搜「AI 记忆」的人通常落在下面三类里。这里不做评测，只说**能力边界**：
+按公开文档的能力维度对比，不是跑分。
+
+| 你在找的 | 它们擅长 | 这里的取舍 |
+|---|---|---|
+| Mem0 / Zep 这类托管记忆服务 | 开箱即用、有控制台、团队协作 | 零依赖、库是你磁盘上的一个文件、全部代码可读；没有托管面版 |
+| Chroma / Qdrant / Milvus / pgvector | 百万级向量 ANN、过滤、分布式 | 1e4 条内够用（靠剪枝，10k 热查询 20ms）；再往上建议把向量层外挂给它们 |
+| LangChain / LlamaIndex 的 memory 组件 | 生态广、可拼装 | 只做一件事：记忆的**生命周期与取舍**，不绑框架 |
+| 自己拿 SQLite 存文本 + 关键词搜 | 简单、可控 | 多了衰减、沉淀、双时态、弃答与并发写事务 |
+
+一句话：**如果你要的是「最快的向量检索」，这里不是答案；如果你要的是「三个月后还记得对的事，
+并且敢说不知道」，这里是。**
 
 ---
 
@@ -531,10 +555,10 @@ MIT © 2026 Howard
 |---|---|---|---|
 | `AGENTS.md` | 102 | `ce9b7cfa` |  |
 | `CHANGELOG.md` | 989 | `84dfa32d` | 版本账本（最新一节在最上面） |
-| `README.md` | 299 | `913a902f` | 人读的现状（能力 / 数字 / 边界） |
+| `README.md` | 323 | `2d5871e8` | 人读的现状（能力 / 数字 / 边界） |
 | `conftest.py` | 6 | `f5b7f82a` | 让未安装的源码目录也能被 pytest 直接导入（CI 里装了包，这行是多余的但无害）。 |
-| `llms.txt` | 149 | `c7798fef` | 机器读的现状（权威摘要） |
-| `pyproject.toml` | 58 | `3e06ac50` |  |
+| `llms.txt` | 149 | `9270649e` | 机器读的现状（权威摘要） |
+| `pyproject.toml` | 65 | `50b921c4` |  |
 | `docs/AGENT_INTEGRATION.md` | 135 | `67df3036` |  |
 | `docs/ARCHITECTURE.md` | 113 | `cca95cc5` |  |
 | `docs/COMPETITIVE_ANALYSIS.md` | 178 | `9051ef5f` |  |

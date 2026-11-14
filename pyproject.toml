@@ -5,21 +5,28 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "memory-palace"
 version = "0.13.0"
-description = "A dependency-free memory lifecycle with a SQLite/WAL backend, row-level writes, multi-process safety, pluggable embeddings, component benchmarks and bounded self-correction."
+description = "Long-term memory for LLM agents and AI assistants: forgetting curve, abstention, SQLite/WAL backend, multi-process writes, MCP server, zero third-party dependencies."
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
 authors = [{ name = "Howard", email = "110075474+Y5H1ggs@users.noreply.github.com" }]
 keywords = [
-    "memory",
+    "ai-memory",
     "agent-memory",
-    "cognitive-architecture",
+    "llm-memory",
+    "long-term-memory",
+    "cross-session-memory",
+    "memory-mcp-server",
+    "mcp",
     "forgetting-curve",
-    "self-narrative",
-    "python",
+    "abstention",
+    "rag-alternative",
+    "vector-database-alternative",
     "sqlite",
-    "durable",
+    "sqlite-wal",
+    "cognitive-architecture",
     "zero-dependencies",
+    "python",
 ]
 classifiers = [
     "Development Status :: 4 - Beta",
@@ -44,10 +51,10 @@ memory-palace-http = "memory_palace.http_api:main"
 dev = ["pytest>=8"]
 
 [project.urls]
-Homepage = "https://github.com/Y5H1ggs/memory-palace"
-Source = "https://github.com/Y5H1ggs/memory-palace"
-Changelog = "https://github.com/Y5H1ggs/memory-palace/blob/main/CHANGELOG.md"
-Issues = "https://github.com/Y5H1ggs/memory-palace/issues"
+Homepage = "https://github.com/Y5H1ggs/agent-memory-palace"
+Source = "https://github.com/Y5H1ggs/agent-memory-palace"
+Changelog = "https://github.com/Y5H1ggs/agent-memory-palace/blob/main/CHANGELOG.md"
+Issues = "https://github.com/Y5H1ggs/agent-memory-palace/issues"
 
 [tool.setuptools.packages.find]
 include = ["memory_palace*"]

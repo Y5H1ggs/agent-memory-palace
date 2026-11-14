@@ -12,7 +12,7 @@
 - 许可：MIT
 - Python：>= 3.10
 - 第三方依赖：**0**（`sentence-transformers` 仅在显式选用 provider=st 时需要）
-- 仓库：https://github.com/Y5H1ggs/memory-palace
+- 仓库：https://github.com/Y5H1ggs/agent-memory-palace
 
 ## 它是什么
 
