@@ -37,6 +37,10 @@ jobs:
         run: python tests/test_temporal.py
       - name: 跨项目作用域自测
         run: python tests/test_scope.py
+      - name: 扩展点自测（编码器 / 外部反思）
+        run: python tests/test_extensions.py
+      - name: 编码器示例可跑
+        run: python examples/custom_encoder.py
       - name: 基准冒烟（200 条）
         run: python -m memory_palace.bench 200
       - name: 演示库可生成

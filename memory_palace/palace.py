@@ -80,6 +80,7 @@ class MemoryPalace:
         encoder: Encoder | None = None,
         autosave: bool = False,
         project: str | None = None,
+        reflector: Callable[[dict[str, Any]], list[str]] | None = None,
     ) -> None:
         self._lock = threading.RLock()
         self._clock: Clock = clock or wall_clock
@@ -96,7 +97,9 @@ class MemoryPalace:
         self.consolidation = ConsolidationEngine(
             self._config, summarizer, vector_lookup=self._vector_of
         )
-        self.reflection = ReflectionEngine(self._config)
+        # 外部反思钩子：传了就用（例如接一次 LLM），不传就是规则化监控。
+        # 它只产出文字，不改配置 —— 让模型直接改参数等于让它改自己的人格。
+        self.reflection = ReflectionEngine(self._config, reflector=reflector)
         self.affect = AffectEngine(self._config)
         self.logic = LogicGraph()
         self.value = ValueModel(self._config)
@@ -1576,7 +1579,7 @@ class MemoryPalace:
         self.consolidation = ConsolidationEngine(
             cfg, self._summarizer, vector_lookup=self._vector_of
         )
-        self.reflection = ReflectionEngine(cfg)
+        self.reflection = ReflectionEngine(cfg, reflector=self.reflection.reflector)
         self.affect = AffectEngine(cfg)
         self.value = ValueModel(cfg)
         self.narrative = NarrativeEngine.from_dict(state.get("narrative"), cfg)

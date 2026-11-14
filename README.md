@@ -12,7 +12,7 @@
 
 <p align="center"><sub>↑ 由 <code>memory-palace render</code> 从一份 120 天的演示库直接生成（<a href="docs/sample-palace.html">在线样例</a>）。图上的每个数字都能用一条命令复现。</sub></p>
 
-**TL;DR (English)** — A dependency-free Python implementation of a *memory lifecycle*: idempotent decay, affect that both hardens and distorts recall, consolidation with a one-way door, value-based forgetting with a fixed attention budget, self-narrative as a projection, tree-shaped injection to save tokens, and self-correction bounded by whitelist + value ranges + anti-lag verification. Ships MCP / HTTP / CLI. 309 assertions, 18 mutation audits. Not a vector database; not production-ready.
+**TL;DR (English)** — A dependency-free Python implementation of a *memory lifecycle*: idempotent decay, affect that both hardens and distorts recall, consolidation with a one-way door, value-based forgetting with a fixed attention budget, self-narrative as a projection, tree-shaped injection to save tokens, and self-correction bounded by whitelist + value ranges + anti-lag verification. Ships MCP / HTTP / CLI. 323 assertions, 18 mutation audits. Not a vector database; not production-ready.
 
 ---
 
@@ -225,12 +225,45 @@ python tests/test_cli.py            # 30 项 CLI 契约（含树状注入 / 作�
 python tests/test_integrations.py   # 17 项 MCP / HTTP 协议层契约（含 slim 档）
 python tests/test_temporal.py       # 23 项 双时态 / 去重 / 弃答（含反事实）
 python tests/test_scope.py          # 24 项 跨项目分层 / 隔离 / 提升 / 迁移
+python tests/test_extensions.py     # 14 项 编码器 / 外部反思的契约
 python -m memory_palace.bench       # 性能与 token 基准
 ```
 
 自测里最有价值的不是「全绿」，是那 18 条**突变审计**：故意把实现弄坏（衰减带副作用、去掉风格裁决、
 假语义全零向量、白名单失效、结构熵写死……），断言必须变红。其中一条自己写错过 ——
 用 `lr=1.0` 制造「无惯性」，结果一步撞天花板，饱和伪装成惯性；已改成常数学习率的反事实并写进注释。
+
+## 两个扩展点：默认零依赖，但你可以换掉
+
+默认实现是明码标价的取舍，不是天花板。两个钩子都在构造函数上，不传就是当前行为。
+
+**① 语义编码器** —— 默认是「概念种子 + 字符 bigram」，抓不到同义改写：
+
+```python
+class BgeEncoder:                      # 任意 embedding：本地 ONNX / API 都行
+    dim = 512
+    def encode(self, text): return model.encode(text, normalize_embeddings=True).tolist()
+
+palace = MemoryPalace(encoder=BgeEncoder())   # 沉淀与检索**同时**换掉
+```
+
+实测：同义改写 cosine 0.057 → 0.949；标签不同也能聚成一类。
+`python examples/custom_encoder.py` 可直接看对比输出。
+
+**② 外部反思** —— 默认是规则化监控（阈值 → finding），不是 LLM 反思：
+
+```python
+palace = MemoryPalace(reflector=lambda payload: ask_llm(json.dumps(payload)))
+```
+
+三条护栏：只追加观察并标来源、**不能改配置**（参数仍归规则与自修正）、
+失败只记 `reflector_error` 不炸穿代谢。
+
+为什么不是默认开：加上模型就不是零依赖了。为什么保留：规则监控只能发现"预设的问题"，
+发现不了"我没预料到的模式"—— 后者才是反思。
+
+三条常见批评的逐条核查（含一条被截断的代码引用）见
+[docs/CRITIQUE_RESPONSE.md](docs/CRITIQUE_RESPONSE.md)。
 
 ## 与同类项目的取舍
 
@@ -251,7 +284,7 @@ Mem0 / Zep(Graphiti) / Letta / Cognee / TencentDB Agent Memory / progressive-mem
 |---|---|---|
 | 设计完整度 | 9/10 | 机制闭环，次序有理由，边界写在 docstring 里 |
 | 工程实现 | 7/10 | 原子写、RLock、零依赖、状态迁移、基准；但**没有跨进程文件锁** |
-| 测试可信度 | 7/10 | 309 断言 + 18 突变 + 3 条反事实；但断言是作者自证，无覆盖率门槛、无语义评测集 |
+| 测试可信度 | 7/10 | 323 断言 + 18 突变 + 3 条反事实；但断言是作者自证，无覆盖率门槛、无语义评测集 |
 | 可维护性 | 6/10 | `palace.py` 1300+ 行、`demo.py` 2100+ 行；剧本兼任测试 |
 | 生产就绪 | 3/10 | 单写者、无性能 SLA、无语义评测集、API 未冻结 |
 
@@ -288,14 +321,17 @@ memory_palace/
 examples/quickstart.py   60 行示例
 examples/showcase.py     生成 120 天演示库与面板
 examples/make_images.py  重新生成 README 配图（截图脚本）
+examples/custom_encoder.py 换掉默认编码器（同义改写 → 可聚类）
 docs/ARCHITECTURE.md     设计细节与次序的理由
 docs/INTEGRATIONS.md     各宿主接入配置（含 DSH）
 docs/AGENT_INTEGRATION.md 三种时机、成本、不该用的场景
 docs/COMPETITIVE_ANALYSIS.md 同类项目调研：融合了什么、拒绝了什么、还缺什么
+docs/CRITIQUE_RESPONSE.md 三条批评的逐条核查：哪条成立、哪条论据被截断
 dsh/                     DeepSeek Harness 插件（host 半 + cordis 挂载配置 + 面板）
 AGENTS.md                agent 读得懂的约定
 tests/test_temporal.py   双时态 / 去重 / 弃答（含反事实断言）
 tests/test_scope.py      跨项目分层 / 隔离 / 提升 / 旧快照迁移
+tests/test_extensions.py 编码器 / 外部反思两个扩展点的契约
 ```
 
 ## 版本

@@ -6,7 +6,7 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
-from typing import Any
+from typing import Any, Callable
 
 from .core import DAY, Event, MemoryGraph, PalaceConfig
 from .style import StyleEngine
@@ -26,8 +26,24 @@ class ReflectionReport:
 
 
 class ReflectionEngine:
-    def __init__(self, config: PalaceConfig) -> None:
+    """指标化回看。
+
+    默认是**规则化监控**（阈值 → finding），不是 LLM 反思 —— 这两件事名字像，
+    能力差很远，过去我在文档里没把这条界线说清楚，是表述问题。
+
+    真正的"发现未知问题"需要能读事件序列并自己提假设，所以留了一个钩子：
+    `reflector(payload) -> list[str]`。接一次 LLM 就能从"阈值告警"升级成"事后复盘"，
+    代价是引入模型依赖 —— 因此它是**可选项**，默认关闭，且只产出文字，不碰配置。
+    """
+
+    def __init__(
+        self,
+        config: PalaceConfig,
+        reflector: Callable[[dict[str, Any]], list[str]] | None = None,
+    ) -> None:
         self.config = config
+        self.reflector = reflector
+        self.reflector_error: str | None = None
 
     @staticmethod
     def _num(value: Any, default: float = 0.0) -> float:
@@ -350,6 +366,30 @@ class ReflectionEngine:
                 f"{churn.get('per_hour')} 次，其中无理由 {churn.get('unjustified')} 次。"
                 "有理由的切换是适应场合，无理由的频繁切换是不知道自己是谁。"
             )
+        # 外部反思（可选）：只追加观察，不改 suggestions、不碰配置。
+        # 失败绝不能炸穿一轮代谢 —— 与 autosave 同一原则：外部依赖坏了，主流程照跑，
+        # 但要留下可观测的痕迹（reflector_error 进 snapshot）。
+        self.reflector_error = None
+        if self.reflector is not None:
+            payload = {
+                "metrics": dict(metrics),
+                "recent_events": [e.to_dict() for e in window[-40:]],
+                "nodes": len(nodes),
+                "narrative": {
+                    "coherence": context.get("narrative_coherence"),
+                    "reliability": context.get("narrative_reliability"),
+                    "monopoly": context.get("narrative_monopoly"),
+                },
+            }
+            try:
+                produced = self.reflector(payload) or []
+                for item in produced:
+                    text = str(item).strip()
+                    if text:
+                        findings.append(f"〔外部反思〕{text}")
+            except Exception as exc:  # noqa: BLE001
+                self.reflector_error = f"{type(exc).__name__}: {exc}"
+
         if not findings:
             findings.append("本轮无异常信号：召回、沉淀、遗忘与风格演化均在预期区间。")
         narrative = (
