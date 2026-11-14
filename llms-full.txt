@@ -459,7 +459,6 @@ MIT © 2026 Howard
 | `conftest.py` | 6 | `f5b7f82a` | 让未安装的源码目录也能被 pytest 直接导入（CI 里装了包，这行是多余的但无害）。 |
 | `llms.txt` | 145 | `e83aa4e3` | 机器读的现状（权威摘要） |
 | `pyproject.toml` | 58 | `eefcc17b` |  |
-| `.pytest_cache/README.md` | 9 | `73fd6fcc` | 人读的现状（能力 / 数字 / 边界） |
 | `docs/AGENT_INTEGRATION.md` | 135 | `67df3036` |  |
 | `docs/ARCHITECTURE.md` | 113 | `cca95cc5` |  |
 | `docs/COMPETITIVE_ANALYSIS.md` | 178 | `9051ef5f` |  |
@@ -471,7 +470,7 @@ MIT © 2026 Howard
 | `docs/REVIEW_2026-11-14_QWEN.md` | 175 | `e6256e02` |  |
 | `docs/REVIEW_2026-11-14_QWEN_MICRO.md` | 162 | `3e34b14d` |  |
 | `docs/STORAGE.md` | 169 | `d82b8442` |  |
-| `dsh/README.md` | 81 | `ca0e936c` | 人读的现状（能力 / 数字 / 边界） |
+| `dsh/README.md` | 81 | `ca0e936c` |  |
 | `dsh/cordis.yml` | 25 | `40cef781` |  |
 | `examples/custom_encoder.py` | 104 | `698c3680` | 换掉默认的字符 bigram，接一个真语义编码器。 |
 | `examples/make_diagrams.py` | 489 | `c52dc16f` | 生成 README 里的说明图（SVG，可复现）。 |
@@ -528,7 +527,7 @@ MIT © 2026 Howard
 | `tests/test_store.py` | 522 | `6ff328f7` | 持久化后端的契约：并发、增量、崩溃、导出、体检。 |
 | `tests/test_temporal.py` | 268 | `7257fe8f` | 双时态、写入去重、弃答的断言（含反事实验证）。 |
 | `tools/greenlight_audit.py` | 406 | `ec24c8ef` | 绿灯效应体检：把实现故意弄坏，看测试会不会变红。 |
-| `tools/make_review_bundle.py` | 169 | `372a8665` | 把「仓库现状」压成一份可以直接粘给模型的文件。 |
+| `tools/make_review_bundle.py` | 174 | `21274199` | 把「仓库现状」压成一份可以直接粘给模型的文件。 |
 
 ========================================================================
 

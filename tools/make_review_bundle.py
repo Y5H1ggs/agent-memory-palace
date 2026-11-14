@@ -30,7 +30,12 @@ import sys
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OUT = os.path.join(ROOT, "llms-full.txt")
 
-SKIP_DIRS = {".git", "__pycache__", ".workbuddy", "outputs", ".venv", "node_modules", ".github"}
+SKIP_DIRS = {
+    ".git", "__pycache__", ".workbuddy", "outputs", ".venv", "node_modules", ".github",
+    # 这些目录只在本地存在：CI 上没有 `.pytest_cache`，本地有。
+    # 一旦把它写进清单，`--check` 会在 CI 上永远报「已过期」—— 而且看不出为什么。
+    ".pytest_cache", ".mypy_cache", ".ruff_cache", "build", "dist", ".idea",
+}
 SKIP_SUFFIX = (".pyc", ".png", ".jpg", ".sqlite", ".db", ".pyo")
 
 
@@ -85,7 +90,7 @@ def _inventory() -> list[str]:
             lines = text.count("\n") + 1
             digest = hashlib.sha256(text.encode("utf-8")).hexdigest()[:8]
             note = _first_docline(full) if name.endswith(".py") else ""
-            if name == "README.md":
+            if rel == "README.md":
                 note = "人读的现状（能力 / 数字 / 边界）"
             elif name == "llms.txt":
                 note = "机器读的现状（权威摘要）"
