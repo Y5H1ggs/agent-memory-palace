@@ -197,6 +197,53 @@ def test_unknown_synchronous_rejected():
         PalaceConfig(store_synchronous="OFF").validate()
 
 
+def test_old_snapshot_without_new_keys_still_opens():
+    """旧库必须能打开：新增配置项不能把老快照判成损坏。
+
+    0.13 加 `store_synchronous` 时踩过：0.12 建的库一打开就
+    `快照缺少配置项: ['store_synchronous']` —— 一个纯新增字段让升级变成灾难。
+    """
+    raw = PalaceConfig().to_dict()
+    raw.pop("store_synchronous", None)
+    raw.pop("embedding_provider", None)
+    cfg = PalaceConfig.from_dict(raw)
+    assert cfg.store_synchronous == "FULL", "缺字段要用默认值补齐，不是报错"
+    assert cfg.embedding_provider == "auto"
+    assert cfg._migrated_missing == ("embedding_provider", "store_synchronous")
+
+
+def test_unknown_key_is_still_rejected():
+    """反方向不能松：快照比代码新，读不懂就该响。"""
+    raw = PalaceConfig().to_dict()
+    raw["no_such_field"] = 1
+    with pytest.raises(ValueError, match="未知配置项"):
+        PalaceConfig.from_dict(raw)
+
+
+def test_real_old_store_file_opens(tmp_path):
+    """不只是 dict 层：真写一个缺字段的库文件，确认 CLI 路径能打开。"""
+    import json
+    import sqlite3
+
+    palace = MemoryPalace(clock=MutableClock())
+    palace.remember("old", "旧版本写的记忆", tags=("旧",))
+    path = str(tmp_path / "old.sqlite")
+    palace.save(path)
+
+    # 把快照里的新字段抠掉，模拟 0.12 建的库
+    conn = sqlite3.connect(path)
+    row = conn.execute("SELECT json FROM blobs WHERE key='config'").fetchone()
+    raw = json.loads(row[0])
+    raw.pop("store_synchronous", None)
+    conn.execute("UPDATE blobs SET json=? WHERE key='config'", (json.dumps(raw),))
+    conn.commit()
+    conn.close()
+
+    reopened = MemoryPalace(path=path, clock=MutableClock())
+    assert reopened._config.store_synchronous == "FULL"
+    assert [n.name for n in reopened.recall(query="旧版本")] == ["old"]
+
+
 def test_synchronous_reaches_sqlite(tmp_path):
     """配置项必须真的到 PRAGMA 上，不能只是 dataclass 里的一个字段。"""
     for mode, expected in (("NORMAL", 1), ("FULL", 2)):

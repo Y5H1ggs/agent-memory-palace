@@ -504,14 +504,30 @@ class PalaceConfig:
 
     @classmethod
     def from_dict(cls, d: dict[str, Any], strict: bool = True) -> "PalaceConfig":
+        """从快照恢复配置。
+
+        两个方向必须区别对待，早先版本把它们混成了一条 `strict` 规则：
+
+        · **未知字段** = 快照比代码新，读不懂就是读不懂 → 报错。
+        · **缺少字段** = 快照比代码旧（升级时新加了配置项） → 用默认值补齐。
+
+        第二条踩过一次：0.13 加了 `store_synchronous`，结果 0.12 建的库一打开就
+        `快照缺少配置项: ['store_synchronous']` —— 一个纯新增字段把老库判成了损坏。
+        这与「升 STATE_VERSION 并保留旧版本迁移」的承诺直接冲突：既然承诺旧库能开，
+        就不能要求它预先知道自己还不知道的键。
+
+        补默认值是安全的：dataclass 里每个字段都有默认值，而补齐之后照样跑 `validate()`，
+        坏值（越界、类型不对）一个都跑不掉。
+        """
         fields = dataclass_field_names(cls)
         unknown, missing = set(d) - fields, fields - set(d)
         if strict and unknown:
             raise ValueError(f"快照含未知配置项（版本不匹配？）: {sorted(unknown)}")
-        if strict and missing:
-            raise ValueError(f"快照缺少配置项: {sorted(missing)}")
         cfg = cls(**{k: v for k, v in d.items() if k in fields})
         cfg.validate()
+        if missing:
+            # 留痕但不阻断：迁移过哪些键，出问题时能对得上账
+            object.__setattr__(cfg, "_migrated_missing", tuple(sorted(missing)))
         return cfg
 
 

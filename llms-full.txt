@@ -1,5 +1,5 @@
 # memory-palace — 仓库现状全文（给评审/模型用）
-> 版本 **0.13.0**。本文件由 `tools/make_review_bundle.py` 生成，内容与仓库逐字对应。
+> 版本 **0.13.1**。本文件由 `tools/make_review_bundle.py` 生成，内容与仓库逐字对应。
 > 如果你只收到这一份文件，它已经包含：权威摘要、README、文件清单（含行数与哈希）、
 > 测试清单、最新变更。**不要**据此猜测「某个文件不存在」——先在这份清单里查。
 
@@ -14,7 +14,7 @@
 > 含本文件 + README + 文件清单（行数与哈希）+ 测试清单 + 最新 CHANGELOG）。
 > 如果仓库里的 docs/ 与你看到的这段冲突，以本文件 + README + CHANGELOG 顶部为准。
 
-- 版本：0.13.0
+- 版本：0.13.1
 - 日期：2026-11-14
 - 许可：MIT
 - Python：>= 3.10
@@ -466,7 +466,7 @@ LLM 白名单失效、忽略护栏、相似度丢掉余弦通道…… 断言必
 
 ## 版本与结构
 
-当前 `0.13.0`。`0.x` 期间 API 可能变。升到 `1.0.0` 的条件见 [CHANGELOG](CHANGELOG.md)：
+当前 `0.13.1`。`0.x` 期间 API 可能变。升到 `1.0.0` 的条件见 [CHANGELOG](CHANGELOG.md)：
 外部使用者 ≥ 1（未达）· CI 三平台 ✅ · 公开评测集与基线数字 ✅ · 跨进程写锁 ✅。
 
 ```
@@ -496,97 +496,28 @@ MIT © 2026 Howard
 
 ## CHANGELOG（最新一节）
 
-## [0.13.0] - 2026-11-14
+## [0.13.1] - 2026-11-16
 
-针对外部评审的三条批评做的一轮：**开箱体验**、**反思闭环**、**并发与规模边界**。
-三条里两条是真问题，一条（LLM 白名单）是设计意图被误读 —— 但误读的那条也指出了
-一个真实缺陷：拒绝之后没有反馈，模型永远不知道发生了什么。
+### 修：0.13.0 让老库打不开
 
-### 嵌入：默认 `auto`，但绝不假装有语义
+0.13.0 给 `PalaceConfig` 加了 `store_synchronous`，而 `from_dict(strict=True)` 把
+「快照缺少配置项」当成了损坏 —— 于是 **0.12 及以前建的库一升级就**
+`ValueError: 快照缺少配置项: ['store_synchronous']`。
 
-- `embedding_provider` 默认值从 `""` 改为 **`auto`**：先查本机是否装了
-  sentence-transformers（`find_spec`，不 import torch），再探本机 ollama 的
-  `/api/tags`（连接被拒是毫秒级返回，不拖启动）。
-- **关键取舍：`auto` 探不到真模型时返回 `None`，不退回 `hashing`。**
-  评审说「默认是玩具级」—— 根子不是 hashing 存在（它零依赖、确定性，对未登录词有平滑），
-  而是它被当成了默认答案。悄悄开一个读字面不读意思的通道，会让 `dense=True`、
-  让用户以为语义检索已经生效 —— 比明说「现在走词法」糟得多。
-- 构造失败要降级：装了 st 但没下过模型、又断网，是最常见的现场。用户点名了模型
-  → 失败就是失败；没点名 → 允许退回 ollama。
-- `embed --check` 增加 `advice`：判决之外给一句能照着做的话。
+一个纯新增字段把老库判成损坏，和「升 STATE_VERSION 并保留旧版本迁移」的承诺直接冲突。
+现在两个方向分开处理：
 
-### 反思：把「被拒」告诉模型
+- **未知字段**（快照比代码新）→ 仍然报错，读不懂就是读不懂；
+- **缺少字段**（快照比代码旧）→ 用默认值补齐，补完照样 `validate()`，坏值跑不掉。
 
-- `LLMReflector(max_rounds=2)`：第一轮出现白名单外/方向非法的提案时，
-  带着拒绝原因再问一轮，要求它只从清单里重选。**只在真的越界时才付第二次调用。**
-- 白名单外的东西不再只剩一个参数名：`insights` 保留原话与理由，标成「需人工裁决」，
-  `reflect` 命令会打印出来。白名单是「不许它生效」，不是「不许它说话」。
-- `ALLOWED_PARAMS` 改为由 `PARAM_BOUNDS` 派生（单一真相源）。分开写时存在
-  「白名单有、值域没有」的洞，`PARAM_BOUNDS.get(p, (1e-4,1))` 会用通用区间悄悄放行。
-- 第二轮失败不推翻第一轮 —— 有结论比「全绿但没有」好。
+迁移过的键记在 `cfg._migrated_missing` 里，出问题能对账。
 
-### 并发：实测拐点，而不是形容词
+### 为什么测试没抓到
 
-- 新增 `tools/concurrency_bench.py`：N 进程 × M 次逐条落盘的吞吐/p50/p95 曲线。
-  本机（12 核 / Windows / WAL / FULL）实测：
-  `1 写者 33 条/秒 → 4 写者 113 → 8 写者 154（拐点）→ 16 写者 135`。
-  **写锁不是主要成本，p50 恒定 1.1ms**；16 写者时的尾延迟（~1s）来自 CPU 争抢与排队叠加。
-- 写入的瞬态重连从 1 次提到 3 次（带退避）。16 进程并发写时实测出现过
-  `attempt to write a readonly database`，一次重连不够 —— 新连接仍可能落在
-  别人切换 WAL 的窗口里。修完后 320/320 全成功（原 300/320）。
-- 新增配置 `store_synchronous`（`FULL`/`NORMAL`，默认 `FULL`）。
-  WAL + NORMAL 下每次 COMMIT 不 fsync，崩溃最多丢最近几个事务、不损坏库；
-  实测 NORMAL 把 p50 从 1.11ms 压到 0.58ms，吞吐基本不变。**默认仍给 FULL** ——
-  这个库存的是不可再生数据，吞吐不够时再换，换法写进了 README。
+`tests/` 里所有用例都从**新库**开始建。这类 bug 只会在「旧快照 → 新代码」时出现，
+而它恰好是最重要的一条路径：用户不会为了升级去重建记忆库。
 
-### 检索：10k 从 50ms 到 4.8ms，100k 从外推 500ms 到 62–126ms
-
-四层剪枝，每一层都能单独说明「为什么不会漏」：
-
-1. **倒排候选**（`SemanticIndex._postings`）：两个稀疏向量的点积只可能在共享分量上
-   非零，所以没共享任何分量的记忆分数必然是 0 —— 以前要对全库每条跑一遍点积才得出
-   这个 0。候选从「全库」缩到「至少沾一个词」的那些（10k 25%、100k 38%）。
-   桶用 `dict[str, None]` 而不是 `set`：删除 O(1)，比 set 省三成内存。
-   所有写入口统一走 `_put/_drop`，绕过就会出现「向量在、候选里没有」的幽灵 ——
-   查得到却召回不到，而且不报错。
-2. **只遍历候选**：没有标签条件时直接拿倒排候选，不再走全图
-   （`is_valid_at` + `set(tags)` 以前对每条都要跑）。20k 条实测省掉近一半。
-3. **上界剪枝**：`总分 = α·sem + β·tag + γ·rec`，而 `rec ≤ 1`。若
-   `α·sem + β·tag + γ` 都够不到召回门槛，`effective_weight`（exp/log1p）不必算。
-4. **两阶段早停**：按「不含时近」的分数降序遍历，一旦它小于当前第 k 名的总分就停 ——
-   因为 `total ≥ base`，这是严格上界，不是经验值。
-
-`MemoryNode._static_stability()`：稳定性里不随 now 变的那一半（层级 × 类型 ×
-访问历史）按 `(tier, kind, access_count, last_accessed, created_at)` 缓存。
-缓存写入走 `object.__setattr__`，绕开脏标记 —— 一次查询把全库标脏，
-下一次保存就会全量重写，那比慢更糟。
-
-**行为变化（会掉分，但是对的）**：`lexical_scores` 不再返回 0 分条目。
-以前「一个词都没命中」的查询会返回全库（全是 0 分），`recall@5` 会因为 0 分条目
-按字典序占了前五而偶然命中 —— 「猫不爱喝水怎么办」在 `zh-cat` 上就是这么「命中」的，
-它的 top5 全是 0 分的 `cat-litter / cat-scratch / cat-stress`，而 gold 是 `cat-water`。
-现在这类查询诚实返回空。代价是账面数字：**recall 0.899 → 0.850，MRR 0.817 → 0.803**，
-弃答 F1 不变。掉的是虚高，不是能力。
-
-等价性验证：倒排候选与全量扫描逐键相同、top-k 逐位相同；两阶段早停在
-7 个查询 × 3 种 limit 下与全量结果完全一致。
-
-实测（12 核 / Windows / 内存库 / 每条都落盘）：
-
-| 条数 | 典型查询 | 最广查询 | 冷建索引 |
-|---|---|---|---|
-| 3,000 | 1.2 ms | 4 ms | 0.1 s |
-| 10,000 | 4.8 ms | 11 ms | 0.7 s |
-| 50,000 | 33 ms | 70 ms | 4.2 s |
-| 100,000 | 62 ms | 126 ms | 7.8 s |
-
-### 文档
-
-- README 增加「能存多少条」：给出 3k/10k/50k/100k 的实测数字与「什么时候该换外部向量库」。
-- README 增加「你可能在找的几类方案」：Mem0/Zep、Chroma/Qdrant/Milvus、LangChain memory、
-  自己写 SQLite —— 只比能力边界，不做评测。
-- 仓库改名 `agent-memory-palace`（包名与 import 路径不变），description 与 15 个 topics
-  按搜索习惯重写。
+补了三条断言：dict 层缺字段能开、未知字段仍然拒、**真写一个缺字段的 sqlite 文件再打开**。
 
 ---
 
@@ -597,11 +528,11 @@ MIT © 2026 Howard
 | 路径 | 行数 | sha256 | 说明 |
 |---|---|---|---|
 | `AGENTS.md` | 102 | `ce9b7cfa` |  |
-| `CHANGELOG.md` | 1019 | `6cf88dd0` | 版本账本（最新一节在最上面） |
-| `README.md` | 336 | `6766f447` | 人读的现状（能力 / 数字 / 边界） |
+| `CHANGELOG.md` | 1044 | `94abfa21` | 版本账本（最新一节在最上面） |
+| `README.md` | 336 | `cae65051` | 人读的现状（能力 / 数字 / 边界） |
 | `conftest.py` | 6 | `f5b7f82a` | 让未安装的源码目录也能被 pytest 直接导入（CI 里装了包，这行是多余的但无害）。 |
-| `llms.txt` | 149 | `26fc75de` | 机器读的现状（权威摘要） |
-| `pyproject.toml` | 65 | `50b921c4` |  |
+| `llms.txt` | 149 | `510586d5` | 机器读的现状（权威摘要） |
+| `pyproject.toml` | 65 | `bd63204c` |  |
 | `docs/AGENT_INTEGRATION.md` | 135 | `67df3036` |  |
 | `docs/ARCHITECTURE.md` | 113 | `cca95cc5` |  |
 | `docs/COMPETITIVE_ANALYSIS.md` | 178 | `9051ef5f` |  |
@@ -620,13 +551,13 @@ MIT © 2026 Howard
 | `examples/make_images.py` | 243 | `57ff7673` | 生成 README 用的图（截图脚本，可复现）。 |
 | `examples/quickstart.py` | 62 | `80fc4b19` | 60 行看完这套记忆系统在做什么。 |
 | `examples/showcase.py` | 206 | `41e16dd2` | 生成一份「真实感」的记忆库，并渲染成可发布的面板。 |
-| `memory_palace/__init__.py` | 190 | `18c81a8b` | memory_palace - 会遗忘、会被情绪加固、会讲自己故事的记忆系统。 |
+| `memory_palace/__init__.py` | 190 | `e50c9406` | memory_palace - 会遗忘、会被情绪加固、会讲自己故事的记忆系统。 |
 | `memory_palace/_console.py` | 29 | `c79a0833` | 让中文输出在非 UTF-8 控制台上也能打印（不炸 UnicodeEncodeError）。 |
 | `memory_palace/affect.py` | 291 | `7ca5995b` | 情感权重：记忆里那个「疼」或「亮」的分量。 |
 | `memory_palace/bench.py` | 168 | `3dda4aa7` | 基准：写入、检索、注入、代谢各花多少时间与 token。 |
 | `memory_palace/cli.py` | 1319 | `1f62eb81` | 把记忆系统做成 agent 能直接调用的命令行工具。 |
 | `memory_palace/consolidation.py` | 346 | `e0a9f14d` | 记忆沉淀：把反复共现的碎片压成稳定的语义节点。 |
-| `memory_palace/core.py` | 1120 | `dcb6c161` | 记忆节点、共现图、幂等衰减、配置与原子持久化。 |
+| `memory_palace/core.py` | 1136 | `d07a14e4` | 记忆节点、共现图、幂等衰减、配置与原子持久化。 |
 | `memory_palace/demo.py` | 401 | `cc20bcee` | 一次跑完，把「这套东西到底在做什么」演给你看。 |
 | `memory_palace/embedding.py` | 600 | `5ac9869f` | 嵌入通道：固定维度稠密向量，可换成本地模型或远程 API。 |
 | `memory_palace/evaluation.py` | 1047 | `27146ec2` | 组件级评测集：把「我觉得它变好了」换成「这些指标说它变好了」。 |
@@ -665,7 +596,7 @@ MIT © 2026 Howard
 | `tests/test_lexicon.py` | 215 | `2bfdb776` | 词法层：归一、分词、否定词、IDF。 |
 | `tests/test_llm.py` | 153 | `cae5ac1f` | LLM 反思的边界：结构化、可降级、绝不改配置。 |
 | `tests/test_locking.py` | 148 | `74cbdc36` | 跨进程写锁：真的跨进程，不是「同一个对象加两次」。 |
-| `tests/test_openbox.py` | 210 | `13a1e5e0` | 「开箱能不能用」与「反思能不能纠错」两块契约。 |
+| `tests/test_openbox.py` | 257 | `84d067ce` | 「开箱能不能用」与「反思能不能纠错」两块契约。 |
 | `tests/test_pragmatics.py` | 249 | `dd7311ea` | 语用层：一句话是什么行为，有多硬，为什么说。 |
 | `tests/test_scope.py` | 264 | `a334372f` | 跨项目记忆的断言：分层、隔离、提升、迁移。 |
 | `tests/test_selfcheck.py` | 15 | `20bc6d87` | pytest 入口：把剧本式自测接进 pytest / CI。 |
@@ -691,7 +622,7 @@ MIT © 2026 Howard
 - `tests/test_lexicon.py`（6 个用例）：test_normalize、test_tokens、test_negation_weight、test_idf、test_idf_fixes_false_merge、test_retrieval_requires_lexical_evidence
 - `tests/test_llm.py`（10 个用例）：test_parse_valid_json、test_parse_fenced_json、test_parse_garbage_degrades、test_empty_json_degrades、test_provider_failure_degrades_instead_of_raising、test_prompt_respects_budget、test_system_prompt_forbids_extra_params、test_reflection_does_not_touch_config、test_llm_reflector_wired_from_config、test_no_llm_configured_means_no_hook
 - `tests/test_locking.py`（5 个用例）：test_cross_process_exclusion、test_reentrant_same_thread、test_other_thread_blocks_until_release、test_timeout_is_total_not_per_try、test_stale_lock_metadata_reports_missing_pid
-- `tests/test_openbox.py`（11 个用例）：test_auto_does_not_silently_fall_back_to_hashing、test_auto_picks_local_ollama、test_auto_prefers_sentence_transformers、test_explicit_empty_provider_stays_lexical、test_param_whitelist_is_derived_from_bounds、test_out_of_scope_proposal_gets_a_second_round、test_single_round_cost_when_disabled、test_second_round_failure_keeps_first_round、test_clean_first_round_never_pays_twice、test_unknown_synchronous_rejected、test_synchronous_reaches_sqlite
+- `tests/test_openbox.py`（14 个用例）：test_auto_does_not_silently_fall_back_to_hashing、test_auto_picks_local_ollama、test_auto_prefers_sentence_transformers、test_explicit_empty_provider_stays_lexical、test_param_whitelist_is_derived_from_bounds、test_out_of_scope_proposal_gets_a_second_round、test_single_round_cost_when_disabled、test_second_round_failure_keeps_first_round、test_clean_first_round_never_pays_twice、test_unknown_synchronous_rejected、test_old_snapshot_without_new_keys_still_opens、test_unknown_key_is_still_rejected、test_real_old_store_file_opens、test_synchronous_reaches_sqlite
 - `tests/test_pragmatics.py`（8 个用例）：test_classification、test_withdrawal_is_not_consent、test_hint_is_not_rule、test_hedge_downgrades、test_register、test_storage_integration、test_roundtrip_and_merge、test_counterfactual
 - `tests/test_scope.py`（5 个用例）：test_project_id、test_layers、test_context_and_promote、test_consolidation_isolation、test_legacy_snapshot
 - `tests/test_selfcheck.py`（1 个用例）：test_selfcheck_suite
