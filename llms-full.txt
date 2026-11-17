@@ -1,5 +1,5 @@
 # memory-palace — 仓库现状全文（给评审/模型用）
-> 版本 **0.15.0**。本文件由 `tools/make_review_bundle.py` 生成，内容与仓库逐字对应。
+> 版本 **0.15.1**。本文件由 `tools/make_review_bundle.py` 生成，内容与仓库逐字对应。
 > 如果你只收到这一份文件，它已经包含：权威摘要、README、文件清单（含行数与哈希）、
 > 测试清单、最新变更。**不要**据此猜测「某个文件不存在」——先在这份清单里查。
 
@@ -14,7 +14,7 @@
 > 含本文件 + README + 文件清单（行数与哈希）+ 测试清单 + 最新 CHANGELOG）。
 > 如果仓库里的 docs/ 与你看到的这段冲突，以本文件 + README + CHANGELOG 顶部为准。
 
-- 版本：0.15.0
+- 版本：0.15.1
 - 日期：2026-11-14
 - 许可：MIT
 - Python：>= 3.10
@@ -198,6 +198,8 @@ demo 依次演：写入与检索、存储行级写、4 进程并发写、嵌入�
 ```bash
 python -m memory_palace.cli console --out console.html   # 单文件控制台，双击即开
 ```
+
+要搬到另一台机器（含记忆库、ollama、远程端点）：**[docs/PORTABLE.md](docs/PORTABLE.md)**。
 
 当库用：
 
@@ -534,7 +536,7 @@ LLM 白名单失效、忽略护栏、相似度丢掉余弦通道…… 断言必
 
 ## 版本与结构
 
-当前 `0.15.0`。`0.x` 期间 API 可能变。升到 `1.0.0` 的条件见 [CHANGELOG](CHANGELOG.md)：
+当前 `0.15.1`。`0.x` 期间 API 可能变。升到 `1.0.0` 的条件见 [CHANGELOG](CHANGELOG.md)：
 外部使用者 ≥ 1（未达）· CI 三平台 ✅ · 公开评测集与基线数字 ✅ · 跨进程写锁 ✅。
 
 ```
@@ -564,56 +566,29 @@ MIT © 2026 Howard
 
 ## CHANGELOG（最新一节）
 
-## [0.15.0] - 2026-11-17
+## [0.15.1] - 2026-11-17
 
-### 注入：从「给几条」变成「给全，但大部分只给索引」
+### 新增 `docs/PORTABLE.md`：怎么把这套东西搬到另一台机器
 
-原来的 `context` 只给 3–6 条全文，其余条目在提示里写着「另有 N 条未入选」——
-模型知道**有**，但不知道**是什么**，于是要么不问，要么重新检索一遍。
+不是「安装说明」——它是零依赖的，没有安装可言。这份文档回答的是搬过去才会遇到的问题：
 
-现在分两级：
+- **代码与记忆分开搬**：`export` / `import`（带校验和）或直接拷 `store.sqlite*`，以及
+  为什么不能只拷主文件、为什么不能放网络盘。
+- **嵌入的三条路**：本机 ollama / 本机 st / 任意 OpenAI 兼容端点，各自的配置与代价。
+- **DeepSeek 的 API 能不能用**：能，但只能做**反思**，不能做**嵌入** ——
+  它的 API 没有 embeddings 端点（截至 2026-10 只有 chat / responses / FIM / models / balance / files）。
+- **`--set` 的顺序**：先填 endpoint / model，最后切 provider。反了会立刻报
+  「必须提供 endpoint」，而那看起来像配置项不存在。
+- 六条真踩过的坑（编码、路径空格、`.home`、阈值没重扫……）。
 
-- **全文**：真正相关的 3–6 条（语义命中 + 最多 2 条背景），不相关的仍然不硬凑；
-- **索引**：其余条目每条只给 `[标签] 前 26 字…`，独立预算（主预算 1/3，上限 360 字）。
+### 修：`config --set` 校验失败时吐 traceback
 
-条目 > 20 时自动升级成**分类索引**：一类一行 + 一个代表 + 条数，放不下的类别合并成
-「其余 N 类共 M 条」——**不许静默少报**，否则模型会以为库就这么大。
+反序配置（先切 provider 后填地址）会直接抛 `ValueError` 栈，用户看到的是一段 Python 报错，
+而不是「你该先填哪个」。现在：
 
-实测（条目字数，不含标题与提示）：
-
-| 条数 | 全文 + 索引 | 若全展开 | 省 |
-|---|---|---|---|
-| 10 | 274 | 360 | 24% |
-| 60 | 386 | 2,210 | 83% |
-| 200 | 393 | 7,490 | **95%** |
-
-并且不随库增长：分类索引的行数被标签数卡住，不是被条数。
-
-### 新增 `--level index` / `--no-index-tail`
-
-- `--level index`：全部只给索引行，条数放宽到 12，用于「先扫一遍库里有什么」；
-- `--no-index-tail`：关掉索引尾巴（默认开）。
-
-### 预算可见
-
-用超 90% 时 `context` 会明确提示「调大 --budget，或换 --level index」。
-这是从 Letta/MemGPT 抄的一条：**让模型看见自己的预算**，别让它下次撞墙还以为是检索变差。
-
-### 文档
-
-- 新增 `docs/MEMORY_LAYERS.md`：四层结构（物理 / 结构 / 注入 / 调用）、实测数字、
-  神经记忆的定位、与 Letta / MemoryPlugin / A-MEM / Mem0 / RAPTOR 的逐项对照，
-  以及三条明确「不抄」的理由。
-- README 增加对应摘要。
-
-### 调研结论（写下来，免得下次重跑）
-
-- **Letta/MemGPT 的 core/recall/archival 三层**值得学的是「预算可见」与「按需分页」，
-  不值得学的是「让模型自己改记忆块」—— 那会让审计变难。
-- **MemoryPlugin 的类别索引**（4–6 类摘要 + 「这里还有什么」）是省 token 的正解，
-  已吸收；它的门槛「< 30 条直接全给」说明**小库加索引是负收益**，这里把门槛下调到 8 并保留判断。
-- **A-MEM 的记忆演化**（新笔记改写旧笔记的上下文）已有对应物：`supersedes` + `cycle` 沉淀。
-- **RAPTOR 的摘要树不做**：摘要丢掉的恰恰是名字和数字，而那正是记忆最该保真的部分。
+- 捕获并回滚内存里的值；
+- 打印一句人话 + 对这个具体错误的下一步提示；
+- 退出码 2（用法错误），与其他参数错误一致。
 
 ---
 
@@ -624,11 +599,11 @@ MIT © 2026 Howard
 | 路径 | 行数 | sha256 | 说明 |
 |---|---|---|---|
 | `AGENTS.md` | 102 | `ce9b7cfa` |  |
-| `CHANGELOG.md` | 1135 | `b3109c42` | 版本账本（最新一节在最上面） |
-| `README.md` | 404 | `764cd284` | 人读的现状（能力 / 数字 / 边界） |
+| `CHANGELOG.md` | 1161 | `8a852358` | 版本账本（最新一节在最上面） |
+| `README.md` | 406 | `cb8f1af6` | 人读的现状（能力 / 数字 / 边界） |
 | `conftest.py` | 6 | `f5b7f82a` | 让未安装的源码目录也能被 pytest 直接导入（CI 里装了包，这行是多余的但无害）。 |
-| `llms.txt` | 149 | `6dff9eff` | 机器读的现状（权威摘要） |
-| `pyproject.toml` | 65 | `d43ea9cf` |  |
+| `llms.txt` | 149 | `ae984ed0` | 机器读的现状（权威摘要） |
+| `pyproject.toml` | 65 | `a465af7c` |  |
 | `docs/AGENT_INTEGRATION.md` | 135 | `67df3036` |  |
 | `docs/ARCHITECTURE.md` | 113 | `cca95cc5` |  |
 | `docs/COMPETITIVE_ANALYSIS.md` | 178 | `9051ef5f` |  |
@@ -636,6 +611,7 @@ MIT © 2026 Howard
 | `docs/INTEGRATIONS.md` | 263 | `a9a2a42f` |  |
 | `docs/LEXICON.md` | 131 | `774e1ac1` |  |
 | `docs/MEMORY_LAYERS.md` | 112 | `2202ff76` |  |
+| `docs/PORTABLE.md` | 152 | `18baf161` |  |
 | `docs/PRAGMATICS.md` | 145 | `0e50f629` |  |
 | `docs/RELEASE_NOTES_v0.1.0.md` | 45 | `052f889a` |  |
 | `docs/REVIEW_2026-11-14_QWEN.md` | 175 | `e6256e02` |  |
@@ -648,11 +624,11 @@ MIT © 2026 Howard
 | `examples/make_images.py` | 243 | `57ff7673` | 生成 README 用的图（截图脚本，可复现）。 |
 | `examples/quickstart.py` | 62 | `80fc4b19` | 60 行看完这套记忆系统在做什么。 |
 | `examples/showcase.py` | 206 | `41e16dd2` | 生成一份「真实感」的记忆库，并渲染成可发布的面板。 |
-| `memory_palace/__init__.py` | 190 | `46f20b9e` | memory_palace - 会遗忘、会被情绪加固、会讲自己故事的记忆系统。 |
+| `memory_palace/__init__.py` | 190 | `a7118a4f` | memory_palace - 会遗忘、会被情绪加固、会讲自己故事的记忆系统。 |
 | `memory_palace/_console.py` | 29 | `c79a0833` | 让中文输出在非 UTF-8 控制台上也能打印（不炸 UnicodeEncodeError）。 |
 | `memory_palace/affect.py` | 291 | `7ca5995b` | 情感权重：记忆里那个「疼」或「亮」的分量。 |
 | `memory_palace/bench.py` | 168 | `3dda4aa7` | 基准：写入、检索、注入、代谢各花多少时间与 token。 |
-| `memory_palace/cli.py` | 1491 | `a5a5b766` | 把记忆系统做成 agent 能直接调用的命令行工具。 |
+| `memory_palace/cli.py` | 1504 | `0ae52766` | 把记忆系统做成 agent 能直接调用的命令行工具。 |
 | `memory_palace/console.py` | 938 | `3bea74d8` | 配套控制台：一个自包含的 HTML 文件，双击即开。 |
 | `memory_palace/consolidation.py` | 346 | `e0a9f14d` | 记忆沉淀：把反复共现的碎片压成稳定的语义节点。 |
 | `memory_palace/core.py` | 1136 | `d07a14e4` | 记忆节点、共现图、幂等衰减、配置与原子持久化。 |

@@ -41,6 +41,8 @@ demo 依次演：写入与检索、存储行级写、4 进程并发写、嵌入�
 python -m memory_palace.cli console --out console.html   # 单文件控制台，双击即开
 ```
 
+要搬到另一台机器（含记忆库、ollama、远程端点）：**[docs/PORTABLE.md](docs/PORTABLE.md)**。
+
 当库用：
 
 ```python
@@ -376,7 +378,7 @@ LLM 白名单失效、忽略护栏、相似度丢掉余弦通道…… 断言必
 
 ## 版本与结构
 
-当前 `0.15.0`。`0.x` 期间 API 可能变。升到 `1.0.0` 的条件见 [CHANGELOG](CHANGELOG.md)：
+当前 `0.15.1`。`0.x` 期间 API 可能变。升到 `1.0.0` 的条件见 [CHANGELOG](CHANGELOG.md)：
 外部使用者 ≥ 1（未达）· CI 三平台 ✅ · 公开评测集与基线数字 ✅ · 跨进程写锁 ✅。
 
 ```

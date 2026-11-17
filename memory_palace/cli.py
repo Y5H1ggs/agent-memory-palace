@@ -1257,8 +1257,21 @@ def cmd_config(args) -> int:
         except ValueError:
             print(f"值类型不对: {key}={raw!r}", file=sys.stderr)
             return 2
+        backup = getattr(cfg, key)
         setattr(cfg, key, value)
-        cfg.validate()
+        try:
+            cfg.validate()
+        except ValueError as exc:
+            # 回滚内存里的值：不 save 就不会落盘，但同一进程接下来还会用到这个对象
+            setattr(cfg, key, backup)
+            print(f"配置不合法：{exc}", file=sys.stderr)
+            if key in ("embedding_provider", "llm_provider"):
+                print(
+                    "提示：先填 endpoint / model，最后再切 provider —— "
+                    "provider=http 会立刻要求地址已就位。",
+                    file=sys.stderr,
+                )
+            return 2
         palace.save(reason="config")
         print(f"已设置 {key} = {value!r}（写入快照）")
         return 0
