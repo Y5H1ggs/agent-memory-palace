@@ -195,8 +195,15 @@ def _finish() -> None:
         ))
         return
     print("=" * 56)
+    missing_store = any(
+        r["check"] == "记忆库文件" and r["state"] == WARN for r in _rows
+    )
     if fails:
         print(f"结论：{len(fails)} 项没通过，先按上面的 → 处理，别急着接宿主。")
+    elif missing_store:
+        # 「库不存在」和「有库但没开语义」是两件事：前者什么都干不了，
+        # 后者已经能用了。混成一句「可以开始用」会让人以为已经好了。
+        print("结论：代码没问题，但还没有记忆库 —— 先 `import data/` 里的导出，或 `remember` 一条。")
     elif warns:
         print(f"结论：可以开始用（{len(warns)} 项是提示，不是故障）。")
     else:
