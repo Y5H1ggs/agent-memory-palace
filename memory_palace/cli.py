@@ -150,6 +150,23 @@ def _fmt_affect(node) -> str:
 # ---------------------------------------------------------------- 上下文块
 
 
+def _clip_index(text: str, limit: int = 26) -> str:
+    """索引行截断：优先在标点处断开，并**保留省略号**。
+
+    截在「（154」这种地方，读者会以为原记忆就到这儿了 —— 一个没有省略号的截断
+    比不截断更误导。
+    """
+    flat = " ".join(str(text).split())
+    if len(flat) <= limit:
+        return flat
+    head = flat[:limit]
+    for mark in ("；", "。", "，", "、", "：", " "):
+        cut = head.rfind(mark)
+        if cut >= max(8, limit // 2):
+            return head[:cut] + "…"
+    return head + "…"
+
+
 def build_context(
     palace: MemoryPalace,
     query: str | None = None,
@@ -157,6 +174,8 @@ def build_context(
     budget: int = 900,
     names: list[str] | None = None,
     scope_mode: str = "auto",
+    level: str = "full",
+    index_tail: bool = True,
 ) -> dict[str, Any]:
     """把「现在该想起什么」变成一段受预算约束的文本。
 
@@ -170,6 +189,13 @@ def build_context(
 
     预算按字符算；钉死条目超预算时仍然保留，并在提示里说明超了多少。
     """
+    # `index` 模式：每条只给一行索引（约 20 字），条数放宽到 12 条。
+    # 它的用途是「先扫一遍库里有什么」，命中之后再用 recall --name 取全文 ——
+    # 这就是「多层调用」里最省 token 的那一层：覆盖全，但不展开。
+    if level not in ("full", "index"):
+        raise ValueError(f"level 只能是 full/index，实际 {level!r}")
+    if level == "index":
+        limit = max(limit, 12)
     # 长驻进程（MCP/HTTP）里，别的进程可能刚写过：先对齐再取上下文
     palace.refresh()
     now = palace.now()
@@ -259,13 +285,19 @@ def build_context(
         return 0.6 * sem + 0.4 * imp
 
     if not names:
-        pool = list(reasons)
+        if level == "index":
+            # 索引层的任务是「扫一遍库里有什么」，不是「回答这个问题」：
+            # 只取相关的那两三条，扫出来的东西就还是那两三条，这一层白加。
+            pool = sorted(assessment, key=lambda n: (-blend(n), n))
+        else:
+            pool = list(reasons)
     pool.sort(key=lambda n: (0 if reasons.get(n) == "钉死" else 1, -blend(n), n))
 
     # budget <= 0 的语义就是「什么都不要」：调用方明确不要时，不该用「至少给一条」
     # 的兜底覆盖它。原来 budget=0 也会返回一条，等于让预算参数说了不算。
     if budget <= 0:
         pool = []
+        index_tail = False  # 预算为 0 时索引同样是「内容」，不能绕开预算偷偷给
     items: list[dict[str, Any]] = []
     used = 0
     for name in pool:
@@ -294,6 +326,9 @@ def build_context(
             markers.append("撤回（不等于同意）")
         if markers:
             line += "（" + "；".join(markers) + "）"
+        if level == "index":
+            # 索引层不带标记：它只负责「让你知道有这条」，细节留给 recall
+            line = f"- [{label}] {_clip_index(node.content, 26)}"
         pinned_line = reasons.get(name) == "钉死"
         if not pinned_line and used + len(line) > budget and items:
             break
@@ -311,8 +346,80 @@ def build_context(
         )
         used += len(line)
 
-    head = palace.narrative_head()
+    # —— 二级索引 ——
+    #
+    # 「省 token」不等于「少给信息」。一条完整记忆 40~60 字（含标记），
+    # 一行索引只要 20 字；把没入选的那批压成索引，模型就知道库里还有什么，
+    # 需要时 `recall --name` 深挖。10 条全展开约 500 字，3 条展开 + 7 条索引约 340 字，
+    # 而**覆盖面是一样的**。
+    #
+    # 独立预算：不能从主预算里切，否则「多给索引」就会「少给正文」，变成零和。
+    index_budget = min(360, max(180, budget // 2))
+    index_items: list[dict[str, Any]] = []
+    # 少量候选时**不要**加索引：库里只有 10 条，索引成本比收益高。
+    # 这是抄来的门槛（MemoryPlugin 的做法是「< 30 条直接全给」），我们因为还要做
+    # 相关性过滤，门槛下调到 8 —— 低于它时「全给」本来就不贵。
+    if index_tail and level == "full" and not abstain and len(assessment) > 8:
+        shown = {item["name"] for item in items}
+        rest = [n for n in sorted(
+            (n for n in assessment if n not in shown),
+            key=lambda n: (-assessment[n]["total"], n),
+        ) if palace.graph.get(n) is not None]
+        spent_index = 0
+        if len(rest) > 20:
+            # 条目多到逐条列会变成一堵墙时，改成**按标签聚合**：
+            # 一类一行 + 三个代表，6~7 行就能覆盖几百条。
+            # 这就是「类别摘要」那个思路的最小实现 —— 它省的不是字数，是行数。
+            groups: dict[str, list[Any]] = {}
+            for name in rest:
+                node = palace.graph.get(name)
+                key = node.tags[0] if node.tags else ("规则" if node.tier == "core" else "记忆")
+                groups.setdefault(key, []).append(node)
+            ordered = sorted(groups.items(), key=lambda kv: -len(kv[1]))
+            skipped: list[Any] = []
+            for index, (key, nodes) in enumerate(ordered):
+                if index and len(ordered) - index >= 2 and spent_index + 40 > index_budget:
+                    skipped = [pair for pair in ordered[index:]]
+                    break
+                head = _clip_index(nodes[0].content, 14)
+                text = f"- [{key}] {len(nodes)} 条：{head}"
+                if spent_index + len(text) > index_budget:
+                    skipped = [pair for pair in ordered[index:]]
+                    break
+                index_items.append(
+                    {"name": f"tag:{key}", "text": text, "why": "分类索引", "count": len(nodes)}
+                )
+                spent_index += len(text)
+            if skipped:
+                # 放不下的类别不逐条列，但**不能假装它们不存在** ——
+                # 少报覆盖数比多报危险得多：模型会以为库就这么大。
+                total_skip = sum(len(nodes) for _key, nodes in skipped)
+                text = f"- 其余 {len(skipped)} 类共 {total_skip} 条（未展开）"
+                index_items.append(
+                    {"name": "tag:__rest__", "text": text, "why": "分类索引", "count": total_skip}
+                )
+        else:
+            for name in rest:
+                node = palace.graph.get(name)
+                label = node.tags[0] if node.tags else ("规则" if node.tier == "core" else "记忆")
+                text = f"- [{label}] {_clip_index(node.content, 26)}"
+                if spent_index + len(text) > index_budget:
+                    break
+                index_items.append(
+                    {"name": name, "text": text, "why": reasons.get(name, "索引")}
+                )
+                spent_index += len(text)
+
+    # 预算为 0 时连自述也不给：它不是「记忆条目」，但一样吃 token。
+    head = palace.narrative_head() if budget > 0 else None
     warnings: list[str] = []
+    # 让预算可见，而不是让调用方自己算：烧到 90% 时提醒换一层，
+    # 免得下次多写两句话就撞墙、还以为是检索变差了。
+    if budget > 0 and used >= budget * 0.9 and not abstain:
+        warnings.append(
+            f"预算已用 {used}/{budget} 字；要更多全文就调大 --budget，"
+            "只要覆盖就用 --level index"
+        )
     if used > budget:
         warnings.append(f"钉死规则较长，已超出预算 {used - budget} 字（规则优先于预算）")
     unreliable = [i for i in items if i["fidelity"] < cfg.narrative_reliability_warn]
@@ -325,6 +432,12 @@ def build_context(
     if dropped > 0:
         if abstain:
             warnings.append(f"另有 {dropped} 条与本问题不相关，已排除")
+        elif index_items:
+            covered = sum(int(i.get("count") or 1) for i in index_items)
+            warnings.append(
+                f"另有 {dropped} 条未展开，索引覆盖 {covered} 条（见上），"
+                "需要全文用 recall --name"
+            )
         else:
             warnings.append(f"另有 {dropped} 条未入选（预算/排序），需要时用 recall 深挖")
 
@@ -347,6 +460,9 @@ def build_context(
 
     if abstain:
         warnings.insert(0, f"没有找到与「{query}」相关的记忆：不要凭印象补全，宁可说不知道或反问")
+    if budget <= 0:
+        # 预算 0 是「这次什么都不要」，连提示也不给 —— 否则「0 字」是假的。
+        warnings = []
 
     return {
         "how": how,
@@ -355,6 +471,9 @@ def build_context(
         "used": used,
         "total_candidates": len(assessment),
         "items": items,
+        "index": index_items,
+        "index_used": sum(len(i["text"]) for i in index_items),
+        "level": level,
         "narrative": head,
         "warnings": warnings,
         "abstain": abstain,
@@ -368,11 +487,16 @@ def format_context(ctx: dict[str, Any]) -> str:
         + (f"，{SCOPE_VIEW_ZH.get(ctx.get('scope', 'auto'), '')}" if ctx.get("scope") else "")
         + "）"
     ]
-    if not ctx["items"]:
+    if not ctx["items"] and not ctx.get("abstain"):
         lines.append("（空：这套记忆里还没有相关条目）")
     else:
         lines.append("")
         lines.extend(item["text"] for item in ctx["items"])
+    index = ctx.get("index") or []
+    if index:
+        lines.append("")
+        lines.append(f"## 索引（另 {len(index)} 条，只给标题，需要全文用 recall --name）")
+        lines.extend(item["text"] for item in index)
     if ctx.get("abstain"):
         lines.append("")
         lines.append("（没有相关记忆。不要凭印象补全；不确定就说不确定，或反问。）")
@@ -491,8 +615,14 @@ def cmd_context(args) -> int:
         budget=args.budget,
         names=list(args.name) if args.name else None,
         scope_mode=args.scope,
+        level=getattr(args, "level", "full"),
+        index_tail=not getattr(args, "no_index_tail", False),
     )
     if args.tree:
+        if getattr(args, "level", "full") != "full":
+            # 树本身已经是「根常驻 / 枝展开 / 其余折叠」的分层，再套一层 index 没有意义。
+            # 但不能静默忽略：参数没生效却不说，比报错更让人困惑。
+            print("提示：--tree 已经自带分层，--level 在树模式下不生效", file=sys.stderr)
         scores = {
             r["name"]: r["score"]
             for r in palace.score_breakdown(args.query)
@@ -1208,6 +1338,10 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--tree", action="store_true", help="改用树状注入（根常驻、枝按需展开、其余折叠）")
     p.add_argument("--expand", type=int, default=1, help="树状模式下展开几个枝（默认 1）")
     p.add_argument("--compare", action="store_true", help="同时算出扁平注入的用量，报告省了多少字")
+    p.add_argument("--level", default="full", choices=["full", "index"],
+                   help="full=给正文（默认）；index=每条只给一行标题，用来先扫一遍")
+    p.add_argument("--no-index-tail", action="store_true",
+                   help="不给「另有 N 条」的二级索引（默认给：约 20 字换一条覆盖）")
     p.set_defaults(func=cmd_context)
 
     p = sub.add_parser("view", parents=[common], help="终端视图：谁重要、谁快被忘掉")

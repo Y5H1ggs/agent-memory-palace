@@ -1,5 +1,5 @@
 # memory-palace — 仓库现状全文（给评审/模型用）
-> 版本 **0.14.0**。本文件由 `tools/make_review_bundle.py` 生成，内容与仓库逐字对应。
+> 版本 **0.15.0**。本文件由 `tools/make_review_bundle.py` 生成，内容与仓库逐字对应。
 > 如果你只收到这一份文件，它已经包含：权威摘要、README、文件清单（含行数与哈希）、
 > 测试清单、最新变更。**不要**据此猜测「某个文件不存在」——先在这份清单里查。
 
@@ -14,7 +14,7 @@
 > 含本文件 + README + 文件清单（行数与哈希）+ 测试清单 + 最新 CHANGELOG）。
 > 如果仓库里的 docs/ 与你看到的这段冲突，以本文件 + README + CHANGELOG 顶部为准。
 
-- 版本：0.14.0
+- 版本：0.15.0
 - 日期：2026-11-14
 - 许可：MIT
 - Python：>= 3.10
@@ -280,6 +280,37 @@ memory-palace cycle                                            # 会话结束：
 
 ---
 
+## 四层记忆：为什么它不必把整个库塞进 prompt
+
+<p align="center"><em>存得多不等于给得多。给多少，由「这次要回答什么」决定。</em></p>
+
+| 层 | 管什么 | 付钱的时候 |
+|---|---|---|
+| **L1 物理** | 权重、衰减、情绪加固、遗忘线 | 从不付（不注入） |
+| **L2 结构** | 层级 / 类型 / 作用域 / 有效期 / 取代链 | 只在检索时算 |
+| **L3 注入** | 这一次让模型看到什么 | **每轮**都付 token |
+| **L4 调用** | `recall` / `explain` / `--as-of` | 按需付，不查不花 |
+
+省 token 的正确姿势不是「少存」，是**把东西留在 L4，只把索引放进 L3**：
+
+| 条数 | 全文 + 索引 | 若全展开 | 省 |
+|---|---|---|---|
+| 10 | 274 字 | 360 | 24% |
+| 60 | 386 字 | 2,210 | 83% |
+| 200 | 393 字 | 7,490 | **95%** |
+
+而且它**不随库增长**：分类索引的行数被标签数卡住，不是被条数。
+
+```bash
+memory-palace context --query "..." --budget 800              # 全文 + 索引尾巴（默认）
+memory-palace context --query "..." --level index --budget 400 # 只给索引，先扫一遍
+```
+
+机制、实测、与 Letta / MemoryPlugin / A-MEM / Mem0 的对照，见
+**[docs/MEMORY_LAYERS.md](docs/MEMORY_LAYERS.md)**。
+
+---
+
 ## 存储与并发
 
 <img src="docs/images/storage.svg" alt="SQLite 存储结构" width="100%">
@@ -503,7 +534,7 @@ LLM 白名单失效、忽略护栏、相似度丢掉余弦通道…… 断言必
 
 ## 版本与结构
 
-当前 `0.14.0`。`0.x` 期间 API 可能变。升到 `1.0.0` 的条件见 [CHANGELOG](CHANGELOG.md)：
+当前 `0.15.0`。`0.x` 期间 API 可能变。升到 `1.0.0` 的条件见 [CHANGELOG](CHANGELOG.md)：
 外部使用者 ≥ 1（未达）· CI 三平台 ✅ · 公开评测集与基线数字 ✅ · 跨进程写锁 ✅。
 
 ```
@@ -533,41 +564,56 @@ MIT © 2026 Howard
 
 ## CHANGELOG（最新一节）
 
-## [0.14.0] - 2026-11-17
+## [0.15.0] - 2026-11-17
 
-### 新增：配套控制台
+### 注入：从「给几条」变成「给全，但大部分只给索引」
 
-```bash
-memory-palace console --out console.html
-```
+原来的 `context` 只给 3–6 条全文，其余条目在提示里写着「另有 N 条未入选」——
+模型知道**有**，但不知道**是什么**，于是要么不问，要么重新检索一遍。
 
-**自包含单文件**：没有 CDN、没有构建、没有要起的服务，断网能看、发给别人能看。
-数据在生成时内嵌，所以它不是实时面板，而是一张可以归档的截面。
+现在分两级：
 
-五个视图：总览（状态 / 注意力份额 / 自述 / 通道）、记忆（搜索 + 筛选 + 排序 + 展开详情）、
-老化（未来 60 天谁先跌破遗忘线）、代谢（事件流，每个类型单独翻成人话）、墓碑。
-地址栏 `#memories` / `#aging` / `#events` / `#tombs` 可以直达某个视图。
+- **全文**：真正相关的 3–6 条（语义命中 + 最多 2 条背景），不相关的仍然不硬凑；
+- **索引**：其余条目每条只给 `[标签] 前 26 字…`，独立预算（主预算 1/3，上限 360 字）。
 
-几个具体决定：
+条目 > 20 时自动升级成**分类索引**：一类一行 + 一个代表 + 条数，放不下的类别合并成
+「其余 N 类共 M 条」——**不许静默少报**，否则模型会以为库就这么大。
 
-- **不做成 Web 应用**。这个库的第一条约束是零依赖；一个要构建、要装依赖、要跑进程的控制台，
-  等于给「下载下来就能跑」加三道门槛。而且记忆是个人数据，能离线的单文件比要开端口的东西更让人放心。
-- **只读**。改配置、删记忆回命令行。控制台是看板的，不是驾驶舱 —— 一个能误删东西的看板，
-  迟早会误删东西。
-- **注意力按标签聚合**，不是一条一行：同一枚「硬规则」出现在两条记忆上时，拆成两个 11%
-  会让人以为「有两件事各占一成」，其实是一类事占了两成。
-- **衰减曲线用统一量程**。各自归一化会让「掉得慢的」和「掉得快的」长得一样，那这张图就只是装饰。
-- **事件流按类型翻译**。`gc` 的 `deleted`、`narrate` 的 `reliability`、`selfcorrect_*` 的
-  `before/after` 语义完全不同，通用键名扫描出来的是一串没有主语的名词。
-- **墓碑时间取「被放下」的时刻**，不是 `last_accessed`（那是「最后一次被想起」）。
+实测（条目字数，不含标题与提示）：
 
-顺带修了一处观察偏差：控制台是只读的，但索引不一定是热的 —— 不 `sync` 的话
-「词法通道 0 条已索引」会让人以为语义层坏了，其实只是没热身。
+| 条数 | 全文 + 索引 | 若全展开 | 省 |
+|---|---|---|---|
+| 10 | 274 | 360 | 24% |
+| 60 | 386 | 2,210 | 83% |
+| 200 | 393 | 7,490 | **95%** |
+
+并且不随库增长：分类索引的行数被标签数卡住，不是被条数。
+
+### 新增 `--level index` / `--no-index-tail`
+
+- `--level index`：全部只给索引行，条数放宽到 12，用于「先扫一遍库里有什么」；
+- `--no-index-tail`：关掉索引尾巴（默认开）。
+
+### 预算可见
+
+用超 90% 时 `context` 会明确提示「调大 --budget，或换 --level index」。
+这是从 Letta/MemGPT 抄的一条：**让模型看见自己的预算**，别让它下次撞墙还以为是检索变差。
 
 ### 文档
 
-- README 增加「控制台」一节，配一张真实截图（演示库，非渲染稿）。
-- 版本号与 `llms.txt` 同步。
+- 新增 `docs/MEMORY_LAYERS.md`：四层结构（物理 / 结构 / 注入 / 调用）、实测数字、
+  神经记忆的定位、与 Letta / MemoryPlugin / A-MEM / Mem0 / RAPTOR 的逐项对照，
+  以及三条明确「不抄」的理由。
+- README 增加对应摘要。
+
+### 调研结论（写下来，免得下次重跑）
+
+- **Letta/MemGPT 的 core/recall/archival 三层**值得学的是「预算可见」与「按需分页」，
+  不值得学的是「让模型自己改记忆块」—— 那会让审计变难。
+- **MemoryPlugin 的类别索引**（4–6 类摘要 + 「这里还有什么」）是省 token 的正解，
+  已吸收；它的门槛「< 30 条直接全给」说明**小库加索引是负收益**，这里把门槛下调到 8 并保留判断。
+- **A-MEM 的记忆演化**（新笔记改写旧笔记的上下文）已有对应物：`supersedes` + `cycle` 沉淀。
+- **RAPTOR 的摘要树不做**：摘要丢掉的恰恰是名字和数字，而那正是记忆最该保真的部分。
 
 ---
 
@@ -578,17 +624,18 @@ memory-palace console --out console.html
 | 路径 | 行数 | sha256 | 说明 |
 |---|---|---|---|
 | `AGENTS.md` | 102 | `ce9b7cfa` |  |
-| `CHANGELOG.md` | 1082 | `030539c2` | 版本账本（最新一节在最上面） |
-| `README.md` | 373 | `d5a2a84d` | 人读的现状（能力 / 数字 / 边界） |
+| `CHANGELOG.md` | 1135 | `b3109c42` | 版本账本（最新一节在最上面） |
+| `README.md` | 404 | `764cd284` | 人读的现状（能力 / 数字 / 边界） |
 | `conftest.py` | 6 | `f5b7f82a` | 让未安装的源码目录也能被 pytest 直接导入（CI 里装了包，这行是多余的但无害）。 |
-| `llms.txt` | 149 | `e34717e6` | 机器读的现状（权威摘要） |
-| `pyproject.toml` | 65 | `8b169771` |  |
+| `llms.txt` | 149 | `6dff9eff` | 机器读的现状（权威摘要） |
+| `pyproject.toml` | 65 | `d43ea9cf` |  |
 | `docs/AGENT_INTEGRATION.md` | 135 | `67df3036` |  |
 | `docs/ARCHITECTURE.md` | 113 | `cca95cc5` |  |
 | `docs/COMPETITIVE_ANALYSIS.md` | 178 | `9051ef5f` |  |
 | `docs/CRITIQUE_RESPONSE.md` | 298 | `a42d0296` |  |
 | `docs/INTEGRATIONS.md` | 263 | `a9a2a42f` |  |
 | `docs/LEXICON.md` | 131 | `774e1ac1` |  |
+| `docs/MEMORY_LAYERS.md` | 112 | `2202ff76` |  |
 | `docs/PRAGMATICS.md` | 145 | `0e50f629` |  |
 | `docs/RELEASE_NOTES_v0.1.0.md` | 45 | `052f889a` |  |
 | `docs/REVIEW_2026-11-14_QWEN.md` | 175 | `e6256e02` |  |
@@ -601,11 +648,11 @@ memory-palace console --out console.html
 | `examples/make_images.py` | 243 | `57ff7673` | 生成 README 用的图（截图脚本，可复现）。 |
 | `examples/quickstart.py` | 62 | `80fc4b19` | 60 行看完这套记忆系统在做什么。 |
 | `examples/showcase.py` | 206 | `41e16dd2` | 生成一份「真实感」的记忆库，并渲染成可发布的面板。 |
-| `memory_palace/__init__.py` | 190 | `97cf35f3` | memory_palace - 会遗忘、会被情绪加固、会讲自己故事的记忆系统。 |
+| `memory_palace/__init__.py` | 190 | `46f20b9e` | memory_palace - 会遗忘、会被情绪加固、会讲自己故事的记忆系统。 |
 | `memory_palace/_console.py` | 29 | `c79a0833` | 让中文输出在非 UTF-8 控制台上也能打印（不炸 UnicodeEncodeError）。 |
 | `memory_palace/affect.py` | 291 | `7ca5995b` | 情感权重：记忆里那个「疼」或「亮」的分量。 |
 | `memory_palace/bench.py` | 168 | `3dda4aa7` | 基准：写入、检索、注入、代谢各花多少时间与 token。 |
-| `memory_palace/cli.py` | 1357 | `5d228188` | 把记忆系统做成 agent 能直接调用的命令行工具。 |
+| `memory_palace/cli.py` | 1491 | `a5a5b766` | 把记忆系统做成 agent 能直接调用的命令行工具。 |
 | `memory_palace/console.py` | 938 | `3bea74d8` | 配套控制台：一个自包含的 HTML 文件，双击即开。 |
 | `memory_palace/consolidation.py` | 346 | `e0a9f14d` | 记忆沉淀：把反复共现的碎片压成稳定的语义节点。 |
 | `memory_palace/core.py` | 1136 | `d07a14e4` | 记忆节点、共现图、幂等衰减、配置与原子持久化。 |
@@ -626,7 +673,7 @@ memory-palace console --out console.html
 | `memory_palace/persona.py` | 790 | `a8de1f9c` | 基座 → 人格 → 人设 → 变更：四层**不同的**可变性。 |
 | `memory_palace/pragmatics.py` | 279 | `7bc82708` | 语用层：一句话是**什么行为**，有多强，为什么这么说。 |
 | `memory_palace/reflection.py` | 428 | `32486e47` | 自我反思：回看系统自己的历史，量化「我这套策略还好使吗」。 |
-| `memory_palace/render.py` | 622 | `a086c0f9` | 展现层：把「记忆库现在的样子」变成人能看的东西。 |
+| `memory_palace/render.py` | 624 | `0f871610` | 展现层：把「记忆库现在的样子」变成人能看的东西。 |
 | `memory_palace/scope.py` | 156 | `c216bd16` | 记忆属于谁：全局 / 某个项目 / 本次会话。 |
 | `memory_palace/selfcorrect.py` | 610 | `1d682f60` | 自修正：能发现自己错了，并且改得起、退得回。 |
 | `memory_palace/semantics.py` | 875 | `2041c1b1` | 可解释的语义检索层（零第三方依赖）。 |
@@ -645,6 +692,7 @@ memory-palace console --out console.html
 | `tests/test_guardrails.py` | 145 | `b74b614a` | 自修正的多目标护栏：主指标变好，但不许拿别的指标去换。 |
 | `tests/test_integrations.py` | 224 | `26f909c9` | MCP 与 HTTP 两条通用接入层的契约自测。 |
 | `tests/test_inverted.py` | 132 | `3e93eb16` | 倒排索引与剪枝的契约。 |
+| `tests/test_layers.py` | 100 | `518d460f` | 两级注入的契约：该省的地方省，该全的地方全。 |
 | `tests/test_lexicon.py` | 215 | `2bfdb776` | 词法层：归一、分词、否定词、IDF。 |
 | `tests/test_llm.py` | 153 | `cae5ac1f` | LLM 反思的边界：结构化、可降级、绝不改配置。 |
 | `tests/test_locking.py` | 148 | `74cbdc36` | 跨进程写锁：真的跨进程，不是「同一个对象加两次」。 |
@@ -672,6 +720,7 @@ memory-palace console --out console.html
 - `tests/test_guardrails.py`（7 个用例）：test_patch_records_guard_baseline、test_improvement_with_guardrail_sacrifice_is_reverted、test_improvement_without_sacrifice_is_kept、test_guard_direction_matters、test_small_guardrail_drift_is_tolerated、test_status_exposes_guardrail_evidence、test_guard_metrics_are_real_reflection_metrics
 - `tests/test_integrations.py`（2 个用例）：test_mcp_contract、test_http_contract
 - `tests/test_inverted.py`（7 个用例）：test_candidates_cover_every_nonzero_score、test_zero_score_entries_are_not_returned、test_forget_clears_postings、test_rebuild_matches_incremental、test_upsert_with_same_components_keeps_postings、test_two_stage_pruning_equals_full_ranking、test_tag_channel_still_scans_whole_graph
+- `tests/test_layers.py`（7 个用例）：test_small_palace_gets_no_index、test_medium_palace_lists_items_one_by_one、test_large_palace_uses_category_index_and_covers_all、test_index_mode_covers_more_than_full_mode、test_budget_visibility_warns_near_limit、test_index_lines_carry_ellipsis、test_index_block_is_rendered_before_warnings
 - `tests/test_lexicon.py`（6 个用例）：test_normalize、test_tokens、test_negation_weight、test_idf、test_idf_fixes_false_merge、test_retrieval_requires_lexical_evidence
 - `tests/test_llm.py`（10 个用例）：test_parse_valid_json、test_parse_fenced_json、test_parse_garbage_degrades、test_empty_json_degrades、test_provider_failure_degrades_instead_of_raising、test_prompt_respects_budget、test_system_prompt_forbids_extra_params、test_reflection_does_not_touch_config、test_llm_reflector_wired_from_config、test_no_llm_configured_means_no_hook
 - `tests/test_locking.py`（5 个用例）：test_cross_process_exclusion、test_reentrant_same_thread、test_other_thread_blocks_until_release、test_timeout_is_total_not_per_try、test_stale_lock_metadata_reports_missing_pid

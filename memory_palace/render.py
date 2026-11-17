@@ -79,8 +79,10 @@ def status_line(ctx: dict[str, Any], rev: int | None = None, abstain: bool = Fal
     items = ctx.get("items") or []
     pinned = sum(1 for i in items if i.get("pinned"))
     shaky = sum(1 for i in items if i.get("fidelity", 1.0) < 0.7)
+    indexed = len(ctx.get("index") or [])
     parts = [
-        f"记忆 {len(items)}/{ctx.get('total_candidates', 0)}",
+        f"记忆 {len(items)}/{ctx.get('total_candidates', 0)}"
+        + (f"（+{indexed} 索引）" if indexed else ""),
         f"钉死 {pinned}" if pinned else "",
         f"存疑 {shaky}" if shaky else "",
         f"{ctx.get('used', 0)}/{ctx.get('budget', 0)}字",
