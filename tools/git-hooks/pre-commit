@@ -1,0 +1,30 @@
+#!/bin/sh
+# 提交前自检：评审包（llms-full.txt）是不是最新的。
+#
+# 为什么需要这个钩子：CI 的「文档一致性」这一步失败过一次两次三次 ——
+# 原因永远是同一个：改了代码或文档，忘了 `python tools/make_review_bundle.py`。
+# 这个错误本地测试发现不了（pytest 只在你主动跑 test_docs 时才会撞见），
+# 但 CI 六格会一起红，排查一次约十分钟。
+#
+# 退出码非 0 会拦住提交。确实不想重建（比如只改了个错别字且不打算跑 CI）：
+#   git commit --no-verify
+#
+# 安装：sh tools/git-hooks/install.sh
+
+set -e
+
+PY=python
+command -v python >/dev/null 2>&1 || PY=python3
+
+if ! "$PY" tools/make_review_bundle.py --check >/tmp/mp-bundle-check.log 2>&1; then
+    echo "" >&2
+    echo "✗ 评审包过期，提交已拦下。" >&2
+    echo "" >&2
+    tail -4 /tmp/mp-bundle-check.log >&2
+    echo "" >&2
+    echo "  修法：$PY tools/make_review_bundle.py && git add llms-full.txt" >&2
+    echo "  绕过：git commit --no-verify（CI 会红，别怪没人提醒）" >&2
+    exit 1
+fi
+
+exit 0

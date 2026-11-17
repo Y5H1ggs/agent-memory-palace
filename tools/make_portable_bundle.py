@@ -140,10 +140,26 @@ def main(argv: list[str] | None = None) -> int:
 
     # 2) 技能
     if not args.no_skill and os.path.isdir(SKILL):
+        dst = os.path.join(bundle, "skill", "memory-palace")
         shutil.copytree(
-            SKILL, os.path.join(bundle, "skill", "memory-palace"),
-            ignore=shutil.ignore_patterns("__pycache__", "*.pyc"),
+            SKILL, dst, ignore=shutil.ignore_patterns("__pycache__", "*.pyc"),
         )
+        # `.home` 存的是**制作机器**上的绝对路径。搬到新机器后它必然失效，
+        # 而失效的表现是「找不到 memory_palace 库」——一个看起来像代码坏了的假故障。
+        # 与其留一个错的，不如删掉，让使用者显式写一次。
+        stale = os.path.join(dst, ".home")
+        if os.path.exists(stale):
+            os.remove(stale)
+        with open(os.path.join(dst, "SETUP.txt"), "w", encoding="utf-8") as fh:
+            fh.write(
+                "这个技能包还需要一步：告诉它代码在哪。\n\n"
+                "1) 把本文件删掉\n"
+                "2) 在同一目录新建 .home（注意前面有个点），内容一行：app/ 的绝对路径\n\n"
+                "例：\n"
+                "  D:/tools/agent-memory-palace/app\n\n"
+                "写完后再跑：python scripts/mp.py context --query 测试 --budget 200\n"
+                "如果报「找不到 memory_palace 库」，就是这一行写错了（它不猜路径）。\n"
+            )
 
     # 3) 记忆导出
     if not args.no_data:

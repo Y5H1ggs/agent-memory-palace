@@ -608,10 +608,11 @@ MIT © 2026 Howard
 | `docs/ARCHITECTURE.md` | 113 | `cca95cc5` |  |
 | `docs/COMPETITIVE_ANALYSIS.md` | 178 | `9051ef5f` |  |
 | `docs/CRITIQUE_RESPONSE.md` | 298 | `a42d0296` |  |
+| `docs/DEBUG.md` | 108 | `bdfee948` |  |
 | `docs/INTEGRATIONS.md` | 263 | `a9a2a42f` |  |
 | `docs/LEXICON.md` | 131 | `774e1ac1` |  |
 | `docs/MEMORY_LAYERS.md` | 112 | `2202ff76` |  |
-| `docs/PORTABLE.md` | 152 | `18baf161` |  |
+| `docs/PORTABLE.md` | 152 | `6c9caaff` |  |
 | `docs/PRAGMATICS.md` | 145 | `0e50f629` |  |
 | `docs/RELEASE_NOTES_v0.1.0.md` | 45 | `052f889a` |  |
 | `docs/REVIEW_2026-11-14_QWEN.md` | 175 | `e6256e02` |  |
@@ -680,7 +681,9 @@ MIT © 2026 Howard
 | `tests/test_temporal.py` | 268 | `7257fe8f` | 双时态、写入去重、弃答的断言（含反事实验证）。 |
 | `tools/concurrency_bench.py` | 160 | `7b3eb6fd` | 多进程同写一份记忆，到底能扛几个写者。 |
 | `tools/greenlight_audit.py` | 406 | `ec24c8ef` | 绿灯效应体检：把实现故意弄坏，看测试会不会变红。 |
+| `tools/make_portable_bundle.py` | 203 | `0ea11bd6` |  |
 | `tools/make_review_bundle.py` | 192 | `70932fb8` | 把「仓库现状」压成一份可以直接粘给模型的文件。 |
+| `tools/verify_portable.py` | 215 | `bcfbfdcb` |  |
 
 ========================================================================
 
