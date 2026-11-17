@@ -1,5 +1,5 @@
 # memory-palace — 仓库现状全文（给评审/模型用）
-> 版本 **0.13.1**。本文件由 `tools/make_review_bundle.py` 生成，内容与仓库逐字对应。
+> 版本 **0.14.0**。本文件由 `tools/make_review_bundle.py` 生成，内容与仓库逐字对应。
 > 如果你只收到这一份文件，它已经包含：权威摘要、README、文件清单（含行数与哈希）、
 > 测试清单、最新变更。**不要**据此猜测「某个文件不存在」——先在这份清单里查。
 
@@ -14,7 +14,7 @@
 > 含本文件 + README + 文件清单（行数与哈希）+ 测试清单 + 最新 CHANGELOG）。
 > 如果仓库里的 docs/ 与你看到的这段冲突，以本文件 + README + CHANGELOG 顶部为准。
 
-- 版本：0.13.1
+- 版本：0.14.0
 - 日期：2026-11-14
 - 许可：MIT
 - Python：>= 3.10
@@ -193,6 +193,12 @@ python -m memory_palace.demo      # 六幕演示，20 条断言，约 1 秒
 demo 依次演：写入与检索、存储行级写、4 进程并发写、嵌入自检、遗忘与沉淀、106 领域评测。
 每一幕最后都有一句「这一步的重点是什么」，不用先读代码。
 
+想看图形界面：
+
+```bash
+python -m memory_palace.cli console --out console.html   # 单文件控制台，双击即开
+```
+
 当库用：
 
 ```python
@@ -360,6 +366,37 @@ memory-palace embed --check   # 同义改写 vs 无关句，分不开就判不�
 
 ---
 
+## 控制台：一个 HTML 文件，双击就开
+
+<img src="docs/images/console.png" alt="控制台总览" width="100%">
+
+```bash
+memory-palace console --out console.html
+```
+
+生成的是**自包含单文件**：没有 CDN、没有 `npm install`、没有要起的服务，断网也能看，
+发给别人也能看。数据是采样时内嵌进去的，刷新不会变——它不是实时面板，是一张可以归档的截面。
+
+五个视图，各自回答一个问题：
+
+| 视图 | 回答 |
+|---|---|
+| 总览 | 这个库现在什么状态？注意力集中在谁身上？自述到第几版？ |
+| 记忆 | 搜、筛、排；点开看单条的强度 / 可靠度 / 被想起几次 / 衰减形状 |
+| 老化 | 未来 60 天谁先跌破遗忘线（钉死的单列，不参与衰减） |
+| 代谢 | 最近发生了什么：写入、清理、沉淀、自述改版、参数被回滚 |
+| 墓碑 | 被主动放下的东西，以及**什么时候**被放下 |
+
+地址栏加 `#memories` / `#aging` / `#events` / `#tombs` 可以直接打开对应视图，方便把某个视角发给别人。
+
+**为什么不做成 Web 应用**：这个库的第一条约束是零依赖。一个要构建、要装依赖、要跑进程的控制台，
+等于给「下载下来就能跑」加了三道门槛。而且记忆是个人的东西——一个能离线打开的单文件，
+比一个需要把数据传到某个端口的东西更让人放心。
+
+代价也说清楚：它是**只读**的。要改，回命令行。控制台是看板的，不是驾驶舱。
+
+---
+
 ## 评测：106 个领域，先打印最差的
 
 <img src="docs/images/eval.svg" alt="106 个领域的分布" width="100%">
@@ -466,7 +503,7 @@ LLM 白名单失效、忽略护栏、相似度丢掉余弦通道…… 断言必
 
 ## 版本与结构
 
-当前 `0.13.1`。`0.x` 期间 API 可能变。升到 `1.0.0` 的条件见 [CHANGELOG](CHANGELOG.md)：
+当前 `0.14.0`。`0.x` 期间 API 可能变。升到 `1.0.0` 的条件见 [CHANGELOG](CHANGELOG.md)：
 外部使用者 ≥ 1（未达）· CI 三平台 ✅ · 公开评测集与基线数字 ✅ · 跨进程写锁 ✅。
 
 ```
@@ -496,28 +533,41 @@ MIT © 2026 Howard
 
 ## CHANGELOG（最新一节）
 
-## [0.13.1] - 2026-11-16
+## [0.14.0] - 2026-11-17
 
-### 修：0.13.0 让老库打不开
+### 新增：配套控制台
 
-0.13.0 给 `PalaceConfig` 加了 `store_synchronous`，而 `from_dict(strict=True)` 把
-「快照缺少配置项」当成了损坏 —— 于是 **0.12 及以前建的库一升级就**
-`ValueError: 快照缺少配置项: ['store_synchronous']`。
+```bash
+memory-palace console --out console.html
+```
 
-一个纯新增字段把老库判成损坏，和「升 STATE_VERSION 并保留旧版本迁移」的承诺直接冲突。
-现在两个方向分开处理：
+**自包含单文件**：没有 CDN、没有构建、没有要起的服务，断网能看、发给别人能看。
+数据在生成时内嵌，所以它不是实时面板，而是一张可以归档的截面。
 
-- **未知字段**（快照比代码新）→ 仍然报错，读不懂就是读不懂；
-- **缺少字段**（快照比代码旧）→ 用默认值补齐，补完照样 `validate()`，坏值跑不掉。
+五个视图：总览（状态 / 注意力份额 / 自述 / 通道）、记忆（搜索 + 筛选 + 排序 + 展开详情）、
+老化（未来 60 天谁先跌破遗忘线）、代谢（事件流，每个类型单独翻成人话）、墓碑。
+地址栏 `#memories` / `#aging` / `#events` / `#tombs` 可以直达某个视图。
 
-迁移过的键记在 `cfg._migrated_missing` 里，出问题能对账。
+几个具体决定：
 
-### 为什么测试没抓到
+- **不做成 Web 应用**。这个库的第一条约束是零依赖；一个要构建、要装依赖、要跑进程的控制台，
+  等于给「下载下来就能跑」加三道门槛。而且记忆是个人数据，能离线的单文件比要开端口的东西更让人放心。
+- **只读**。改配置、删记忆回命令行。控制台是看板的，不是驾驶舱 —— 一个能误删东西的看板，
+  迟早会误删东西。
+- **注意力按标签聚合**，不是一条一行：同一枚「硬规则」出现在两条记忆上时，拆成两个 11%
+  会让人以为「有两件事各占一成」，其实是一类事占了两成。
+- **衰减曲线用统一量程**。各自归一化会让「掉得慢的」和「掉得快的」长得一样，那这张图就只是装饰。
+- **事件流按类型翻译**。`gc` 的 `deleted`、`narrate` 的 `reliability`、`selfcorrect_*` 的
+  `before/after` 语义完全不同，通用键名扫描出来的是一串没有主语的名词。
+- **墓碑时间取「被放下」的时刻**，不是 `last_accessed`（那是「最后一次被想起」）。
 
-`tests/` 里所有用例都从**新库**开始建。这类 bug 只会在「旧快照 → 新代码」时出现，
-而它恰好是最重要的一条路径：用户不会为了升级去重建记忆库。
+顺带修了一处观察偏差：控制台是只读的，但索引不一定是热的 —— 不 `sync` 的话
+「词法通道 0 条已索引」会让人以为语义层坏了，其实只是没热身。
 
-补了三条断言：dict 层缺字段能开、未知字段仍然拒、**真写一个缺字段的 sqlite 文件再打开**。
+### 文档
+
+- README 增加「控制台」一节，配一张真实截图（演示库，非渲染稿）。
+- 版本号与 `llms.txt` 同步。
 
 ---
 
@@ -528,11 +578,11 @@ MIT © 2026 Howard
 | 路径 | 行数 | sha256 | 说明 |
 |---|---|---|---|
 | `AGENTS.md` | 102 | `ce9b7cfa` |  |
-| `CHANGELOG.md` | 1044 | `94abfa21` | 版本账本（最新一节在最上面） |
-| `README.md` | 336 | `cae65051` | 人读的现状（能力 / 数字 / 边界） |
+| `CHANGELOG.md` | 1082 | `030539c2` | 版本账本（最新一节在最上面） |
+| `README.md` | 373 | `d5a2a84d` | 人读的现状（能力 / 数字 / 边界） |
 | `conftest.py` | 6 | `f5b7f82a` | 让未安装的源码目录也能被 pytest 直接导入（CI 里装了包，这行是多余的但无害）。 |
-| `llms.txt` | 149 | `510586d5` | 机器读的现状（权威摘要） |
-| `pyproject.toml` | 65 | `bd63204c` |  |
+| `llms.txt` | 149 | `e34717e6` | 机器读的现状（权威摘要） |
+| `pyproject.toml` | 65 | `8b169771` |  |
 | `docs/AGENT_INTEGRATION.md` | 135 | `67df3036` |  |
 | `docs/ARCHITECTURE.md` | 113 | `cca95cc5` |  |
 | `docs/COMPETITIVE_ANALYSIS.md` | 178 | `9051ef5f` |  |
@@ -551,11 +601,12 @@ MIT © 2026 Howard
 | `examples/make_images.py` | 243 | `57ff7673` | 生成 README 用的图（截图脚本，可复现）。 |
 | `examples/quickstart.py` | 62 | `80fc4b19` | 60 行看完这套记忆系统在做什么。 |
 | `examples/showcase.py` | 206 | `41e16dd2` | 生成一份「真实感」的记忆库，并渲染成可发布的面板。 |
-| `memory_palace/__init__.py` | 190 | `e50c9406` | memory_palace - 会遗忘、会被情绪加固、会讲自己故事的记忆系统。 |
+| `memory_palace/__init__.py` | 190 | `97cf35f3` | memory_palace - 会遗忘、会被情绪加固、会讲自己故事的记忆系统。 |
 | `memory_palace/_console.py` | 29 | `c79a0833` | 让中文输出在非 UTF-8 控制台上也能打印（不炸 UnicodeEncodeError）。 |
 | `memory_palace/affect.py` | 291 | `7ca5995b` | 情感权重：记忆里那个「疼」或「亮」的分量。 |
 | `memory_palace/bench.py` | 168 | `3dda4aa7` | 基准：写入、检索、注入、代谢各花多少时间与 token。 |
-| `memory_palace/cli.py` | 1319 | `1f62eb81` | 把记忆系统做成 agent 能直接调用的命令行工具。 |
+| `memory_palace/cli.py` | 1357 | `5d228188` | 把记忆系统做成 agent 能直接调用的命令行工具。 |
+| `memory_palace/console.py` | 938 | `3bea74d8` | 配套控制台：一个自包含的 HTML 文件，双击即开。 |
 | `memory_palace/consolidation.py` | 346 | `e0a9f14d` | 记忆沉淀：把反复共现的碎片压成稳定的语义节点。 |
 | `memory_palace/core.py` | 1136 | `d07a14e4` | 记忆节点、共现图、幂等衰减、配置与原子持久化。 |
 | `memory_palace/demo.py` | 401 | `cc20bcee` | 一次跑完，把「这套东西到底在做什么」演给你看。 |
@@ -586,6 +637,7 @@ MIT © 2026 Howard
 | `memory_palace/value.py` | 290 | `de5efa76` | 选择：记住什么、遗忘什么，以及「选择」本身的形状。 |
 | `tests/test_audit.py` | 695 | `79cdb71c` | 一轮代码审计的结论，每条发现配一条断言。 |
 | `tests/test_cli.py` | 258 | `86d43aa4` | CLI 的端到端断言（不依赖 pytest，也能被 pytest 收集）。 |
+| `tests/test_console.py` | 115 | `a8164d84` | 控制台的契约：真数据、可离线、坏输入不崩。 |
 | `tests/test_docs.py` | 130 | `75be88f3` | 文档与代码的一致性。 |
 | `tests/test_embedding.py` | 361 | `bb9461e9` | 嵌入通道：确定性、归一化、混合检索是否真的更好。 |
 | `tests/test_eval.py` | 211 | `84207b70` | 评测集自身的可靠性。 |
@@ -612,6 +664,7 @@ MIT © 2026 Howard
 
 - `tests/test_audit.py`（13 个用例）：test_sparse_matches_dense、test_early_exit_is_order_preserving、test_config_rejected_at_boundary、test_budget_zero_means_nothing、test_pinned_survives_history_retention、test_fill_missing_is_incremental、test_failed_encoding_not_retried、test_sync_is_free_when_clean、test_concurrent_access_count_is_exact、test_concurrent_write_read_gc、test_save_failure_rolls_back_config、test_graph_serialization_without_lock、test_similarity_matches_its_specification
 - `tests/test_cli.py`（1 个用例）：test_cli_contract
+- `tests/test_console.py`（7 个用例）：test_collect_matches_graph、test_html_is_truly_self_contained、test_embedded_json_parses_and_has_no_script_break、test_empty_palace_renders_guide、test_write_console_creates_file、test_event_detail_translates_every_internal_kind、test_cli_console_smoke
 - `tests/test_docs.py`（8 个用例）：test_version_is_consistent、test_readme_and_llms_state_current_version、test_llms_txt_covers_current_capabilities、test_no_doc_claims_json_is_the_default_store、test_historical_docs_are_marked、test_llms_full_is_current、test_llms_full_lists_storage_layer、test_readme_numbers_have_a_source
 - `tests/test_embedding.py`（15 个用例）：test_hashing_is_deterministic_across_processes、test_hashing_is_normalized_and_signed、test_unrelated_texts_score_low、test_dense_index_dimension_guard、test_make_embedder_from_config、test_hybrid_beats_lexical_on_labelled_data、test_http_embedder_batches_and_caches、test_http_embedder_cache_persists、test_http_failure_degrades_to_lexical、test_callable_embedder_dim_guard、test_ollama_new_api_batches_and_caches、test_ollama_falls_back_to_legacy_endpoint、test_ollama_failure_is_loud、test_self_check_separates_paraphrase_from_unrelated、test_config_accepts_neural_providers
 - `tests/test_eval.py`（13 个用例）：test_datasets_are_well_formed、test_domain_coverage、test_wide_domains_do_not_collide_in_names、test_metrics_math、test_suite_shape、test_retrieval_beats_random、test_calibration_finds_usable_thresholds、test_calibration_is_not_a_single_peak、test_dedupe_threshold_sweep_monotonic_input、test_abstain_separates_answerable_from_not、test_tag_only_queries_are_indexed、test_hash_collisions_do_not_fake_similarity、test_scale_benchmark_runs

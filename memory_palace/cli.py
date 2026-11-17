@@ -570,6 +570,34 @@ def cmd_render(args) -> int:
     return 0
 
 
+def cmd_console(args) -> int:
+    """生成配套控制台：单文件、可筛选、可排序、双击即开。
+
+    与 `render` 的分工：`render` 是一张报告（从头读到尾），`console` 是仪表盘
+    （带着问题进去找）。两者都是自包含单文件，区别在交互。
+    """
+    from .console import write_console, collect
+
+    palace = open_palace(resolve_store(args.store), getattr(args, "project", None))
+    if args.json:
+        print(json.dumps(
+            collect(palace, horizon_days=int(args.days), limit=args.limit,
+                    scope=getattr(args, "scope", "auto")),
+            ensure_ascii=False, indent=2,
+        ))
+        return 0
+    out = write_console(
+        palace, args.out, title=args.title,
+        horizon_days=int(args.days), limit=args.limit,
+        scope=getattr(args, "scope", "auto"),
+    )
+    size = os.path.getsize(out) / 1024
+    print(f"已生成 {out}（{size:.1f} KB，自包含，无需联网）")
+    if size > 2048:
+        print("体积偏大：用 --limit 或 --days 收一下曲线点数，或只导出当前项目（--scope project）")
+    return 0
+
+
 def cmd_cycle(args) -> int:
     path = resolve_store(args.store)
     palace = open_palace(path, getattr(args, "project", None))
@@ -1196,6 +1224,16 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--title", default="记忆宫殿")
     p.add_argument("--days", type=float, default=60, help="衰减曲线跨度（天）")
     p.set_defaults(func=cmd_render)
+
+    p = sub.add_parser("console", parents=[common], help="生成配套控制台（可筛选/排序的仪表盘）")
+    p.add_argument("--scope", default="auto", choices=list(SCOPE_MODES),
+                   help="auto（默认）/ global / project / all")
+    p.add_argument("--out", default="memory-palace-console.html", help="输出路径")
+    p.add_argument("--title", default="记忆宫殿 · 控制台")
+    p.add_argument("--days", type=float, default=60, help="衰减曲线跨度（天）")
+    p.add_argument("--limit", type=int, default=300, help="最多导出多少条记忆（默认 300）")
+    p.add_argument("--json", action="store_true", help="只打印数据，不生成 HTML")
+    p.set_defaults(func=cmd_console)
 
     p = sub.add_parser("cycle", parents=[common], help="跑一轮代谢（沉淀/遗忘/自述/反思/自修正）")
     p.add_argument("--json", action="store_true")
